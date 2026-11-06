@@ -160,8 +160,9 @@ func ward_spotted(ward: Unit, team: int) -> bool:
 
 ## Show or hide unit `u` on screen for the human's view (World.viewer_team).
 func apply_draw_visibility(u: Unit) -> void:
-	# A spectator (viewer_team -1) sees everything.
-	if world.viewer_team < 0:
+	# A spectator (viewer_team -1) sees everything, and so does anyone while the No fog option is on
+	# (FogOff). Only the drawing changes here: the masks and the vision are untouched.
+	if world.viewer_team < 0 or FogOff.is_on():
 		u.visible = true
 		return
 	# Structures (turrets, repair bays, motherships) stay drawn once seen,

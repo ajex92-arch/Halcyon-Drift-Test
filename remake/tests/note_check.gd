@@ -197,6 +197,7 @@ func _run() -> void:
 		_expect(str(s.get("preset")) == Game.preset and Game.preset == want_preset, "Enter", "the note names the preset played, '%s' (wanted '%s')" % [str(s.get("preset")), want_preset])
 		_expect(CouncilPresets.LABELS.has(want_preset) and str(s.get("rule_set")) == str(CouncilPresets.LABELS[want_preset]), "Enter", "the note's rule_set says '%s'" % str(s.get("rule_set")))
 		_expect(s.has("unlock_everything") and bool(s["unlock_everything"]) == Game.unlock_everything, "Enter", "the note records the Unlock everything switch (%s)" % str(s.get("unlock_everything")))
+		_expect(s.has("fog_off") and bool(s["fog_off"]) == Game.fog_off, "Enter", "the note records the No fog switch (%s)" % str(s.get("fog_off")))
 		var hm: Dictionary = note.get("human", {})
 		_expect(str(hm.get("role")) == world.human_role, "Enter", "the seat is %s" % str(hm.get("role")))
 		if ship != null:

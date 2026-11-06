@@ -20,7 +20,9 @@ extends RefCounted
 ##     (the hull's TurretShapes.HULL_TU times the hull's drawing scale, never
 ##     smaller than MIN_EXTENT_PX screen pixels so it stays readable on a small
 ##     ship), turns the prepared points to the gun's place and live angle with one
-##     multiplication, and draws the whole turret with one command.
+##     multiplication. The guns of one ship (or structure) are put into one batch (begin_batch(),
+##     flush_batch()): the same triangles in the same order, drawn with one command, because every
+##     command costs real time. A see-through turret (a tower still being built) is drawn alone.
 ##   - A ship drawn shorter than HIDE_SHIP_PX screen pixels shows no turrets.
 ##   - A structure (the mothership, a lane tower, the Repair Bay) gets its heads
 ##     from draw_unit_mounts(): the same silhouettes at the structure's own size,
@@ -58,6 +60,8 @@ const RIM := 0.12
 
 ## The prepared turrets: "style|class|team" -> prepared turret (see prepare()).
 static var _recs := {}
+## The numbers 0, 1, 2, ... (as many as the biggest batch so far needed), for flush_batch().
+static var _seq := PackedInt32Array()
 ## True = turrets are drawn (always, in play); false only while the gallery test
 ## measures.
 static var _on := true
@@ -83,13 +87,24 @@ static func class_of(m: WeaponMount) -> String:
 
 
 ## The prepared turret of weapon class `cls` for `team`, in the team's style
-## (Vhorr's thorned turrets for Cinder, the clean ones for everyone else).
+## (Vhorr's thorned turrets for Cinder, the jury-rigged scrap ones for the Scum, who are the
+## neutral team, and the clean ones for Aurelian). A class the Scum have no drawing for is drawn
+## the Aurelian way.
 static func turret(cls: String, team: int) -> Dictionary:
-	var style := "vhorr" if team == Rules.CINDER else "aurelian"
+	var style := "aurelian"
+	if team == Rules.CINDER:
+		style = "vhorr"
+	elif team == Rules.NEUTRAL and TurretShapes.SCUM.has(cls):
+		style = "scum"
 	var key := "%s|%s|%d" % [style, cls, team]
 	var rec = _recs.get(key)
 	if rec == null:
-		rec = prepare(TurretShapes.VHORR[cls] if style == "vhorr" else TurretShapes.AURELIAN[cls], style, Palette.team(team), cls)
+		var spec: Dictionary = TurretShapes.AURELIAN[cls]
+		if style == "vhorr":
+			spec = TurretShapes.VHORR[cls]
+		elif style == "scum":
+			spec = TurretShapes.SCUM[cls]
+		rec = prepare(spec, style, Palette.team(team), cls)
 		_recs[key] = rec
 	return rec
 
@@ -106,6 +121,14 @@ static func prepare(spec: Dictionary, style: String, rim: Color, cls: String) ->
 	var base_col := Palette.CINDER_SHADE if vhorr else Palette.TURRET_AUREL_BASE
 	var cap_col := Palette.CINDER_PLATE if vhorr else Palette.TURRET_AUREL_CAP
 	var barrel_col := Palette.TURRET_CINDER_BARREL if vhorr else Palette.TURRET_AUREL_BARREL
+	var tip_col: Color = TurretShapes.ACCENT[cls]
+	if style == "scum":
+		# The Scum: a strapped-on plate for a base, a rust cap, dark gunmetal pipes under a bare
+		# metal rim, and a hazard-yellow muzzle.
+		base_col = Palette.SCUM_PLATE
+		cap_col = Palette.SCUM_RUST
+		barrel_col = Palette.SCUM_IRON
+		tip_col = Palette.SCUM_HAZARD
 	var rim_col := Palette.with_alpha(rim, 0.9)
 	# The turret is built in four layers, back to front, each its own triangles: the rim of
 	# the base, the barrels with their rim, the base with its cap, and the coloured tip. The
@@ -127,7 +150,7 @@ static func prepare(spec: Dictionary, style: String, rim: Color, cls: String) ->
 	for poly: Array in spec["cap"]:
 		_add(PackedVector2Array(poly), cap_col, top[0], top[1], top[2])
 	for poly: Array in spec["accent"]:
-		_add(PackedVector2Array(poly), TurretShapes.ACCENT[cls], tip[0], tip[1], tip[2])
+		_add(PackedVector2Array(poly), tip_col, tip[0], tip[1], tip[2])
 	# The whole turret is the four layers one after the other: their points in this order in
 	# one array, and the triangles pointing into it. A turret is drawn from these arrays with
 	# one command, kicking or not.
@@ -147,7 +170,25 @@ static func prepare(spec: Dictionary, style: String, rim: Color, cls: String) ->
 	for i in range(pts.size() - (layers[3] as PackedVector2Array).size(), pts.size()):
 		var c := hot[i]
 		hot[i] = c.lerp(Color(1.0, 1.0, 1.0, c.a), GunKick.FLASH_WHITE)
-	return {"pts": pts, "idx": idx, "cols": cols, "extent": float(spec["extent"]), "layers": layers, "cols_hot": hot}
+	# The same triangles with no shared points (three points for every triangle): every layer
+	# on its own, then all of them together with their colours. A batch of turrets
+	# (begin_batch()) is put together from these, because lists of triangles with no
+	# shared points can simply be put one after the other.
+	var e_layers: Array = []
+	var e_pts := PackedVector2Array()
+	var e_cols := PackedColorArray()
+	for layer: Array in [under, gun, top, tip]:
+		var lp := PackedVector2Array()
+		for t: int in layer[1]:
+			lp.append((layer[0] as PackedVector2Array)[t])
+			e_cols.append((layer[2] as PackedColorArray)[t])
+		e_layers.append(lp)
+		e_pts.append_array(lp)
+	var e_hot := e_cols.duplicate()
+	for i in range(e_pts.size() - (e_layers[3] as PackedVector2Array).size(), e_pts.size()):
+		var c := e_hot[i]
+		e_hot[i] = c.lerp(Color(1.0, 1.0, 1.0, c.a), GunKick.FLASH_WHITE)
+	return {"pts": pts, "idx": idx, "cols": cols, "extent": float(spec["extent"]), "layers": layers, "cols_hot": hot, "e_layers": e_layers, "e_pts": e_pts, "e_cols": e_cols, "e_hot": e_hot}
 
 
 ## The points of prepared turret `rec`, as one array in the order of rec["pts"], with the
@@ -201,6 +242,7 @@ static func draw_mounts(ci: CanvasItem, ship: Ship, k: float, u: float, px: floa
 	var tu: float = float(TurretShapes.HULL_TU.get(ship.hull_id, TurretShapes.DEFAULT_TU))
 	var mounts := ship.mounts
 	var seen := kicks != null and kicks.ages.size() >= mounts.size()
+	var batch := begin_batch()
 	for i in mounts.size():
 		var m: WeaponMount = mounts[i]
 		if m.mount_type == WeaponMount.FIXED:
@@ -214,7 +256,8 @@ static func draw_mounts(ci: CanvasItem, ship: Ship, k: float, u: float, px: floa
 			var age: float = kicks.ages[i]
 			kick = GunKick.turret_back(cls, age)
 			flash = GunKick.is_flash(age)
-		draw_turret(ci, rec, (m.offset * k).rotated(rot), m.world_angle(), tu * u, px, 1.0, MIN_EXTENT_PX, kick, flash)
+		_add_to_batch(batch, rec, (m.offset * k).rotated(rot), m.world_angle(), tu * u, px, MIN_EXTENT_PX, kick, flash)
+	flush_batch(ci, batch)
 
 
 ## Draw every head of a structure's guns (`mounts`: its WeaponMounts) on `ci` (the
@@ -229,6 +272,9 @@ static func draw_unit_mounts(ci: CanvasItem, mounts: Array, team: int, size: flo
 	if not _on:
 		return
 	var seen := kicks != null and kicks.ages.size() >= mounts.size()
+	# A solid structure's heads go into one command (a see-through one draws them one by one).
+	var batched := alpha >= 1.0
+	var batch := begin_batch()
 	for last: bool in [false, true]:
 		for i in mounts.size():
 			var m: WeaponMount = mounts[i]
@@ -247,8 +293,53 @@ static func draw_unit_mounts(ci: CanvasItem, mounts: Array, team: int, size: flo
 				var age: float = kicks.ages[i]
 				kick = GunKick.turret_back(cls, age)
 				flash = GunKick.is_flash(age)
-			draw_turret(ci, rec, m.offset.rotated(rot), m.world_angle(), size, px, alpha, 0.0, kick, flash)
+			if batched:
+				_add_to_batch(batch, rec, m.offset.rotated(rot), m.world_angle(), size, px, 0.0, kick, flash)
+			else:
+				draw_turret(ci, rec, m.offset.rotated(rot), m.world_angle(), size, px, alpha, 0.0, kick, flash)
+	if batched:
+		flush_batch(ci, batch)
 
+
+## A new, empty batch of turret heads: [points, colours] of triangles with no shared points.
+## Put heads in with _add_to_batch() and draw them all with one command with flush_batch().
+static func begin_batch() -> Array:
+	return [PackedVector2Array(), PackedColorArray()]
+
+
+## Add prepared turret `rec` to `batch`, placed, turned, sized and kicked exactly as
+## draw_turret() would draw it (same arguments, solid), the same triangles in the same
+## order.
+static func _add_to_batch(batch: Array, rec: Dictionary, pos: Vector2, ang: float, size: float, px: float, min_px: float, kick: float, flash: bool) -> void:
+	var extent: float = rec["extent"]
+	var s := maxf(size, min_px * px / extent)
+	var at := Transform2D(ang, Vector2(s, s), 0.0, pos)
+	var pts: PackedVector2Array = batch[0]
+	var cols: PackedColorArray = batch[1]
+	if kick > 0.0:
+		var back := at.translated_local(Vector2(-kick, 0.0))
+		var layers: Array = rec["e_layers"]
+		pts.append_array(at * (layers[0] as PackedVector2Array))
+		pts.append_array(back * (layers[1] as PackedVector2Array))
+		pts.append_array(at * (layers[2] as PackedVector2Array))
+		pts.append_array(back * (layers[3] as PackedVector2Array))
+		cols.append_array(rec["e_hot"] if flash else rec["e_cols"])
+	else:
+		pts.append_array(at * (rec["e_pts"] as PackedVector2Array))
+		cols.append_array(rec["e_cols"])
+
+
+## Draw every head of `batch` on `ci` with one command (nothing when it is empty).
+static func flush_batch(ci: CanvasItem, batch: Array) -> void:
+	var pts: PackedVector2Array = batch[0]
+	var n := pts.size()
+	if n == 0:
+		return
+	# The triangles have no shared points, so the numbers pointing into them are 0, 1, 2, ...
+	if _seq.size() < n:
+		for i in range(_seq.size(), maxi(n, _seq.size() * 2 + 512)):
+			_seq.append(i)
+	RenderingServer.canvas_item_add_triangle_array(ci.get_canvas_item(), _seq.slice(0, n), pts, batch[1])
 
 ## Draw prepared turret `rec` at `pos` (in the Visual node's frame), turned to
 ## the world angle `ang`, `size` world units per turret unit big (raised so the

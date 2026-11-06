@@ -55,8 +55,15 @@ func respawn_time(p: PilotProfile) -> float:
 
 
 ## Called when pilot `p`'s ship dies: they are "dead", lose the hull and
-## modules they flew, and start the respawn countdown.
+## modules they flew, and start the respawn countdown. A crew (the profile of a
+## bought ship or a wingman) is not a pilot: it never respawns. Its squad record
+## drops the ship, the world files one "ship_lost" event (the squad's id, and
+## whether it was a wing ship) and the profile is erased.
 func on_pilot_died(p: PilotProfile) -> void:
+	# Step 0: a crew's ship is lost for good.
+	if p.is_crew:
+		_on_crew_died(p)
+		return
 	p.state = "dead"
 	p.ship = null
 	p.hull_id = ""
@@ -65,6 +72,36 @@ func on_pilot_died(p: PilotProfile) -> void:
 	# An admiral shot down in their own ship is back in the chair at once.
 	if p.role == "admiral":
 		world.teams[p.team].admiral_docked = true
+	# The pilot's wingmen (if any) fly home.
+	Squads.on_leader_lost(world, p)
+
+
+## The ship of crew `p` was lost. Step 1: the profile is done (no respawn timer,
+## and the hull is kept, since nothing reads it again). Step 2: the squad record
+## forgets the ship. Step 3: exactly one "ship_lost" event for the death
+## (RtsEvents leaves a crew ship to this code). Step 4: the profile leaves the
+## world's list, so no loop over the pilots sees it again.
+func _on_crew_died(p: PilotProfile) -> void:
+	var lost: Ship = p.ship
+	p.state = "dead"
+	p.ship = null
+	# Step 2: the record drops the uid; a wing record says it was a wing ship.
+	var wing := 0
+	var squad: Squad = world.squads.get(p.squad_id) as Squad
+	if squad != null:
+		if lost != null:
+			squad.member_uids.erase(lost.uid)
+		if squad.kind == "wing":
+			wing = 1
+	# Step 3: the event.
+	if world.events_rts != null:
+		var ev := {"kind": "ship_lost", "team": p.team, "data": {"squad": maxi(p.squad_id, 0), "wing": wing}}
+		if lost != null:
+			ev["pos"] = RtsEvents.point_of(lost.global_position)
+			ev["uid"] = lost.uid
+		world.events_rts.push(ev)
+	# Step 4: gone from the list.
+	world.profiles.erase(p)
 
 
 ## Called by World every tick: count down hyperspace spools and respawn

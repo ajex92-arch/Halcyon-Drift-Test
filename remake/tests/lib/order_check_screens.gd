@@ -1,13 +1,13 @@
 class_name OrderCheckScreens
 extends RefCounted
-## WHAT THIS IS: check (v) of tests/order_check.gd: each of the Admiral screens' 14 places
+## WHAT THIS IS: check (v) of tests/order_check.gd: each of the Admiral screens' places
 ## that give an order is driven once through its real node, in a run with the HUD
 ## (--force-hud --role=admiral), and the order record that reached the order queue is
 ## compared with the table row for it. A queued order must also show on the board by the
 ## next frame.
 ##
 ## HOW IT WORKS: run() opens the board, presses the board's buttons with pressed.emit() and
-## calls the map tools' apply_at(), order_at() and order_lane() on the overlay. After each
+## calls the map tools' apply_at() on the overlay. After each
 ## press it reads World.orders.last_submitted (the record submit() was given, accepted or
 ## not) and compares it with the expected record field by field. In a run with a window and
 ## --shots=<folder> it also saves a picture of the board with the toast of an accepted order and
@@ -46,7 +46,7 @@ static func find_button(node: Node, prefix: String) -> Button:
 	return null
 
 
-## Check (v): drive the 14 places and the refresh.
+## Check (v): drive the places and the refresh.
 static func run(t) -> void:
 	var w: World = t.world
 	var tree: SceneTree = t.get_tree()
@@ -89,13 +89,26 @@ static func run(t) -> void:
 	expect(t, "the module card", OrderKinds.MODULE, "id", "research", {})
 	(b._cards["tech:repairBays"] as CardButton).pressed.emit()
 	expect(t, "the research card", OrderKinds.RESEARCH, "id", "repairBays", {})
-	# The Fleet tab: a minion buy.
+
+	# The Yard tab: a buy button and the buttons of a list row.
 	b._set_tab("Fleet")
 	await tree.physics_frame
-	var launch := find_button(b, "Launch to")
-	launch.pressed.emit()
-	var got: Dictionary = w.orders.last_submitted
-	t.check("(v) the minion buy button sends MINION_BUY with its type and lane", got.get("kind") == OrderKinds.MINION_BUY and (got["settings"] as Dictionary).has("type") and (got["settings"] as Dictionary).has("lane") and got["target_kind"] == "none", str(got))
+	(b._cards["yard_buy:fighter"] as Button).pressed.emit()
+	expect(t, "the Fighter buy button", OrderKinds.PRODUCE, "none", 0, {"hull": "fighter", "count": 3, "repeat": 0, "rally": "mothership"})
+	(b._cards["yard_buy:destroyer"] as Button).pressed.emit()
+	expect(t, "the Destroyer buy button", OrderKinds.PRODUCE, "none", 0, {"hull": "destroyer", "count": 1, "repeat": 0, "rally": "mothership"})
+	await tree.physics_frame
+	await tree.physics_frame
+	var rows: Array = b._cards["yard_rows"]
+	var first: Dictionary = rows[0]
+	var first_id := str((first["row"] as Control).get_meta("item", ""))
+	t.check("(v) a queued ship shows as a row of the Yard tab", (first["row"] as Control).visible and first_id != "")
+	(first["hold"] as Button).pressed.emit()
+	expect(t, "the hold button of a row", OrderKinds.HOLD_ITEM, "item", first_id, {"hold": 1})
+	(first["down"] as Button).pressed.emit()
+	expect(t, "the down button of a row", OrderKinds.MOVE_ITEM, "item", first_id, {"dir": 1})
+	(first["cancel"] as Button).pressed.emit()
+	expect(t, "the cancel button of a row", OrderKinds.CANCEL, "item", first_id, {})
 	# The map tools: each is armed and clicked at a point.
 	var ov: CommandOverlay = hud.overlay
 	var p := w.mothership(team).global_position + Vector2(700.4, 301.6)
@@ -106,29 +119,12 @@ static func run(t) -> void:
 		var kind := {"bay": OrderKinds.BAY, "ward": OrderKinds.WARD, "waypoint": OrderKinds.WAYPOINT, "move": OrderKinds.MOTHERSHIP_MOVE}[tool] as String
 		expect(t, "the %s tool" % tool, kind, "point", pi, {"siege": 1} if tool == "waypoint" else {})
 		ov.disarm()
-	# The minion tools and the right click and the lane buttons.
-	var m := w.spawn_minion(team, "fighter", "mid", w.mothership(team).global_position + Vector2(300, 0))
-	ov.select_all()
-	var ids: Array = [m.uid]
-	ov.arm("fleet_move")
-	ov.apply_at(p)
-	expect(t, "the fleet move tool", OrderKinds.MINION_ORDER, "point", pi, {"type": "move"}, ids)
-	ov.disarm()
-	ov.arm("fleet_hold")
-	ov.apply_at(p)
-	expect(t, "the fleet hold tool", OrderKinds.MINION_ORDER, "point", pi, {"type": "hold"}, ids)
-	ov.disarm()
-	ts.facilities["fleet"] = true
-	ov.order_at(p)
-	expect(t, "the right click", OrderKinds.MINION_ORDER, "point", pi, {"type": "move"}, ids)
-	ov.order_lane("bot")
-	expect(t, "the lane button", OrderKinds.MINION_ORDER, "lane", "bot", {"type": "lane", "lane": "bot"}, ids)
-	ts.facilities.erase("fleet")
-	# A refusal that comes back at once shows its toast (the drone button with an empty treasury).
+	# A refusal that comes back at once shows its toast (the turret button with an empty
+	# treasury: a drone, a module and a research wait for ore instead of being refused).
 	b._set_tab("Build")
 	await tree.physics_frame
 	ts.treasury = 0.0
-	find_button(b, "Build a mining drone").pressed.emit()
+	(b._cards[turret_key] as Button).pressed.emit()
 	await tree.physics_frame
 	await tree.physics_frame
 	await shot(t, "board_refused_toast")

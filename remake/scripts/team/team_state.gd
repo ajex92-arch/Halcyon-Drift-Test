@@ -17,19 +17,22 @@ extends RefCounted
 ##   2. count down respawn strain (TeamStrain);
 ##   3. stop there if our mothership is destroyed. Otherwise add the
 ##      mothership's own income to the treasury
-##      (Rules.MOTHERSHIP_SKIM, 3 credits per second), move the facility
-##      and research queues on (TeamTech), and build mining drones
+##      (Rules.MOTHERSHIP_SKIM, 3 credits per second), run the build list
+##      (Production: it starts what can be paid and finishes ships), move the
+##      facility and research queues on (TeamTech), and build mining drones
 ##      (TeamDrones).
 ## The variables all live here, because many files read and write them
 ## directly (ts.treasury, ts.siege_lane, ts.turret_armor ...). The real
 ## work is done by "part" objects, one per job, that each keep a link back
 ## to this notebook:
-##   TeamTech     the tech tree: what may be queued, paying, progress, and
+##   TeamTech     the tech tree: what may be queued, progress, and
 ##                turning finished research into upgrades
 ##   TeamSiege    where our big ships gather and attack during a siege
 ##   TeamDefense  the "all pilots defend the mothership!" call
 ##   TeamStrain   respawn strain (too many respawns in a short time)
 ##   TeamDrones   the mining-drone build line and where drones died
+##   Production   the build list: ships, research, modules and drones, paid
+##                when they start (scripts/rts/production.gd)
 ## A function below that only calls a part says so ("the real code is
 ## ..."); it stays here so other files can keep calling it on TeamState.
 ##
@@ -81,13 +84,13 @@ var admiral_docked := true
 var facilities := {}
 ## Research we have finished: tech id -> true.
 var done := {}
-## Facilities queued to be built, in order: 2 at most, and only the first
-## one makes progress. Each entry is {"id", "left" (seconds still to go),
-## "total" (seconds it takes in all)}.
+## The facility being built, at most one (the module dock builds one at a time).
+## The ones waiting behind it are in the build list (`production`). Each entry
+## is {"id", "left" (seconds still to go), "total" (seconds it takes in all)}.
 var building: Array = []
-## Research queued, in order: 3 at most, and only the first one makes
-## progress (and only while we own the Research Module). Each entry looks
-## like the ones in `building`.
+## The research being done, at most one (and it makes progress only while we own
+## the Research Module). The ones waiting behind it are in the build list
+## (`production`). Each entry looks like the ones in `building`.
 var research: Array = []
 
 # --- upgrades from research (TeamTech.apply_effect adds to these) ---------------
@@ -219,8 +222,10 @@ var strain_t := 0.0
 
 # --- mining drones (the real code is in TeamDrones) -----------------------------
 
-## Mining drones paid for and waiting to be built, in order. Each entry is
-## the ore node id the drone should work, or "" to let it choose each trip.
+## The mining drone being built, at most one (the drone bay builds one at a
+## time): the ore node id it should work, or "" to let it choose each trip. The
+## ones waiting behind it are in the build list (`production`); drones_queued()
+## counts both.
 var drone_queue: Array[String] = []
 ## Seconds until the drone at the front of the queue is finished.
 var drone_t := 0.0
@@ -263,6 +268,9 @@ var strain: TeamStrain
 ## The mining-drone part (team_drones.gd): the build line and the memory of
 ## where drones died.
 var drone_line: TeamDrones
+## The build list (production.gd): ships, research, modules and drones wait here for
+## ore, pay when they start and build on their own lines.
+var production: Production
 
 
 ## Set up team `t` in world `w`. We start owning Tech.START_FACILITIES (the
@@ -281,6 +289,7 @@ func _init(t: int, w: World) -> void:
 	defense = TeamDefense.new(self)
 	strain = TeamStrain.new(self)
 	drone_line = TeamDrones.new(self)
+	production = Production.new(self)
 
 
 # --- money ----------------------------------------------------------------------
@@ -350,13 +359,13 @@ func tech_blocker(id: String) -> String:
 	return tech.tech_blocker(id)
 
 
-## Queue facility `id` and pay for it from the treasury. Returns "" or the
+## Queue facility `id` and put it in the build list. Returns "" or the
 ## reason it failed. The real code is TeamTech.queue_facility().
 func queue_facility(id: String) -> String:
 	return tech.queue_facility(id)
 
 
-## Queue research `id` and pay for it from the treasury. Returns "" or the
+## Queue research `id` and put it in the build list. Returns "" or the
 ## reason it failed. The real code is TeamTech.queue_research().
 func queue_research(id: String) -> String:
 	return tech.queue_research(id)
@@ -470,6 +479,10 @@ func tick(dt: float) -> void:
 	# Step 4: the mothership's own income, in credits per second (a tuned
 	# number: a feature module may change it, see Rules.tune).
 	earn(float(Rules.tune("mothership_skim", Rules.MOTHERSHIP_SKIM)) * dt)
+	# Step 4b: the build list (Production): finished items leave, ships being built
+	# count up and arrive, and items waiting for ore start if they can pay. It runs
+	# before the old queues so an item it starts moves on this very tick.
+	production.tick(dt)
 	# Step 5: move the facility and research queues on (TeamTech).
 	tech.tick(dt, ms)
 	# Step 6: build mining drones (TeamDrones).
@@ -497,3 +510,9 @@ func drone_danger(node_id: String, now: float, window: float = 150.0) -> int:
 ## TeamDrones.tick().
 func _drone_line(dt: float) -> void:
 	drone_line.tick(dt)
+
+
+## How many ordered mining drones are not yet built: the one being built in
+## drone_queue plus the ones waiting or on hold in the build list.
+func drones_queued() -> int:
+	return drone_queue.size() + production.idle_count(Production.DRONE)

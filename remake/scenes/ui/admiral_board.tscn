@@ -79,7 +79,7 @@ custom_minimum_size = Vector2(120, 30)
 layout_mode = 2
 focus_mode = 0
 mouse_filter = 0
-text = "Fleet"
+text = "Yard"
 
 [node name="Pilots" type="Button" parent="Col/Tabs"]
 custom_minimum_size = Vector2(120, 30)

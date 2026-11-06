@@ -19,15 +19,14 @@ extends RefCounted
 ##           (minion_cap), the Lance hunts lone big ships (lance_role), two
 ##           Bomber seats fly Fighters and pilot torpedoes hurt small craft
 ##           more (bomber_role:both), the AI admiral spends a big treasury
-##           on the Fleet Command Module and wards (admiral_sinks:fleet),
+##           on wards (admiral_sinks:fleet),
 ##           hyperspace launches to a repair bay spool for 4 s instead of 6
 ##           and the AI admiral builds the Hyperspace Module early (redeploy;
 ##           AI pilots can also jump to a turret, a human's hangar offers
 ##           repair bays only),
-##           every gear item has a Mk II upgrade (gear_mk2), and a team may
-##           have up to 60 bought minions alive (fleet_cap:60; 30 in the old
-##           rules). None of these changes a requirement: 60 is the Fleet
-##           Command limit that docs/DESIGN.md (C22) requires.
+##           and every gear item has a Mk II upgrade (gear_mk2). None of these
+##           changes a requirement. (The fleet limit is not a rule set any more:
+##           it is RtsHulls.CAP_IN_FORCE.)
 ##   none    the old standard rules: no pairs at all, so every variant is at
 ##           its default (Rules.VARIANT_DEFAULTS), the game as v0.1.0 played
 ##           it. For comparisons with older results.
@@ -46,8 +45,7 @@ extends RefCounted
 ## HOW IT WORKS: each preset is one --variant string (VARIANTS). Game builds
 ## a match's variants in this order: the defaults, then the pairs of the
 ## preset, then the pairs of --variant, so --variant can still change one key
-## of a preset (--preset=pick --variant=fleet_cap:30 is the pick with the old
-## limit). The preset comes from the launch option --preset=<name>; without
+## of a preset (--preset=pick --variant=gear_mk2:off is the pick without the Mk II gear). The preset comes from the launch option --preset=<name>; without
 ## it, STANDARD is played. A name that is not in VARIANTS makes FeatureRegistry
 ## refuse the match (exit code 3), so a typo never quietly plays another set of
 ## rules.
@@ -78,8 +76,8 @@ const ORDER := [OLD_RULES, "within", STANDARD]
 ## pairs, so it plays every variant at its default.
 const VARIANTS := {
 	"none": "",
-	"within": "minion_cap:on,lance_role:on,bomber_role:both,admiral_sinks:fleet,redeploy:on,gear_mk2:on,fleet_cap:60",
-	"pick": "minion_cap:on,lance_role:on,bomber_role:both,admiral_sinks:fleet,redeploy:on,gear_mk2:on,fleet_cap:60,node_persist:on,ms:nosmall",
+	"within": "minion_cap:on,lance_role:on,bomber_role:both,admiral_sinks:fleet,redeploy:on,gear_mk2:on",
+	"pick": "minion_cap:on,lance_role:on,bomber_role:both,admiral_sinks:fleet,redeploy:on,gear_mk2:on,node_persist:on,ms:nosmall",
 }
 
 ## Each preset's name in the notes (NoteWriter), where a match records which

@@ -1,7 +1,7 @@
 class_name Scoreboard
 extends PanelContainer
 ## WHAT THIS IS: the table of both teams' pilots: who they are, their ship,
-## K/D/A (kills / deaths / assists), minion last hits, derelicts cleared,
+## K/D/A (kills / deaths / assists), minion last hits, Scum bounties collected,
 ## credits earned and what they are doing now.
 ##
 ## HOW IT WORKS: the layout is the scene scenes/ui/scoreboard.tscn: a box
@@ -9,7 +9,7 @@ extends PanelContainer
 ## it, Col > HalcyonHead, Halcyon, CinderHead, Cinder. Each team has a
 ## heading line and a grid (a table)
 ## whose first row is the column titles (Pilot, Ship, K / D / A, Minions,
-## Derelicts, Earned, Status); each title's minimum width in the scene is
+## Bounties, Earned, Status); each title's minimum width in the scene is
 ## its column's width in pixels. The box is as tall as its table, unless
 ## `max_height` is smaller (a short window): then the table scrolls inside
 ## the box. Twice a second while it is on screen,
@@ -103,10 +103,11 @@ func _refresh() -> void:
 		var ts := world.teams[t]
 		var ms := world.mothership(t)
 		UiKit.set_text(_heads[t], "%s  ·  %d kills  ·  %d turrets destroyed  ·  mothership %d%%%s" % [Rules.TEAM_DISPLAY[t], ts.kills, ts.turrets_destroyed, int(ms.hull_frac() * 100.0), _feature_notes(t)])
-		# Step 2: this team's pilots, best score first.
+		# Step 2: this team's pilots, best score first. The crew of a bought
+		# ship is not a pilot and gets no line.
 		var rows: Array = []
 		for p: PilotProfile in world.profiles:
-			if p.team == t:
+			if p.team == t and not p.is_crew:
 				rows.append(p)
 		rows.sort_custom(func(a: PilotProfile, b: PilotProfile) -> bool: return a.kills * 3 + a.assists > b.kills * 3 + b.assists)
 		# Step 3: make the grid exactly the right size: the title row plus
@@ -156,7 +157,7 @@ func _fill_row(g: GridContainer, r: int, p: PilotProfile, t: int, vt: int) -> vo
 	var status := ""
 	match p.state:
 		"flying":
-			var visible_to_us := vt < 0 or t == vt or (p.ship != null and is_instance_valid(p.ship) and p.ship.visible_to(vt))
+			var visible_to_us := vt < 0 or FogOff.is_on() or t == vt or (p.ship != null and is_instance_valid(p.ship) and p.ship.visible_to(vt))
 			ship = String(Ships.HULLS[p.ship.hull_id]["label"]) if visible_to_us and p.ship != null and is_instance_valid(p.ship) else "?"
 			status = "Flying" if visible_to_us else "Unseen"
 		"docked":

@@ -66,6 +66,8 @@ func launch(p: PilotProfile, at_bay: RepairBay = null) -> Ship:
 	s.controller = PlayerController.new(world) if p.is_human else world.pilot_ai.get(p)
 	p.ship = s
 	p.state = "flying"
+	# The pilot's wingmen (if any) launch with them and take their places.
+	Squads.on_leader_launch(world, p, s)
 	# An admiral flying their own ship has left the admiral's chair.
 	if p.role == "admiral":
 		world.teams[p.team].admiral_docked = false
@@ -131,8 +133,13 @@ func swap_module_in_bay(p: PilotProfile, id: String) -> String:
 ## Dock flying ship `s` at its mothership if it is close enough. Returns
 ## true if it docked. A human gets a short message when they can't.
 ## `from_anywhere` (only the Recall feature passes true) skips the distance
-## test: the ship docks wherever it is.
+## test: the ship docks wherever it is. A bought ship (its profile is a crew)
+## never docks: a docked crew would vanish from the fleet and the cap. A pilot's
+## wingman is the exception (its crew has a wing seat number): it docks with its leader.
 func try_dock(s: Ship, from_anywhere: bool = false) -> bool:
+	# Step 0: a bought ship stays out.
+	if s.profile != null and s.profile.is_crew and s.profile.slot < Crew.WING_SLOT_FIRST:
+		return false
 	# The mothership must be working, and the ship within its dock radius
 	# of the hull.
 	var ms := world.mothership(s.team)

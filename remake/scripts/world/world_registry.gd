@@ -50,10 +50,10 @@ func attach(u: Unit) -> void:
 func index(u: Unit) -> void:
 	world.units.append(u)
 	world.by_uid[u.uid] = u
-	# Start hidden if the viewer can't see it. The visibility pass only
+	# Start hidden if the viewer can't see it (never with No fog on, FogOff). The visibility pass only
 	# reaches each team every 0.2 s, and a fresh enemy unit must not pop
 	# out of the fog in the meantime.
-	if world.viewer_team >= 0 and u.team != world.viewer_team and world.vision != null:
+	if world.viewer_team >= 0 and not FogOff.is_on() and u.team != world.viewer_team and world.vision != null:
 		if not world.vision.is_visible(world.viewer_team, u.global_position):
 			u.visible = false
 	# The list for its kind. (Motherships have none here: WorldSetup puts

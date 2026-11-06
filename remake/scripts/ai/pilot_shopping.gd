@@ -124,7 +124,7 @@ func shop() -> void:
 		g = next_gear()
 	# Step 6 (only with the gear_mk2 feature): once the gear list is bought,
 	# upgrade items to Mk II in list order while the reserve stays.
-	if g == "" and brain.world.features.has("gear_mk2"):
+	if g == "" and FeatureRegistry.active_for(brain.world, profile.team, "gear_mk2"):
 		GearMk2Feature.ai_upgrade(profile, reserve, GEAR_SMALL if profile.hull_id == "" or Ships.size_of(profile.hull_id) == Rules.SIZE_SMALL else GEAR_BIG)
 
 
@@ -209,7 +209,7 @@ func wants_shopping(ship: Ship) -> String:
 	var g := next_gear()
 	# With the gear_mk2 feature, an upgrade can be worth a trip home too
 	# (same rules as for new gear: a big bank, not far from home).
-	if g == "" and not far and world.features.has("gear_mk2"):
+	if g == "" and not far and FeatureRegistry.active_for(world, profile.team, "gear_mk2"):
 		return GearMk2Feature.ai_trip_reason(profile, ship, GEAR_SMALL if ship.is_small() else GEAR_BIG)
 	# Gear isn't worth a trip across the map (playtest: two frigates spent a
 	# whole siege flying home for gear, 25,000 away).

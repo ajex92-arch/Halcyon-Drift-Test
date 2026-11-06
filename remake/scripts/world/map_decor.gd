@@ -3,14 +3,16 @@ extends Node2D
 ## WHAT THIS IS: the background picture of the map, under everything else:
 ## a starfield, faint bands showing the lane corridors with dashed centre
 ## lines, the base clearings around the motherships, and big labels for
-## the lanes and the ore nodes. It is only decoration: it changes nothing
-## in the game.
+## the lanes and the ore nodes, and the heaps of scrap round the Scum dens (one
+## ScumDen node per camp). It is only decoration: it changes nothing in the game.
 ##
 ## HOW IT WORKS: setup() scatters the stars once (with its own random
 ## number maker, Mulberry seeded 99, so the sky is the same every match and
 ## no other random numbers are disturbed) and asks Godot to draw. Godot
 ## remembers the drawing, so _draw() runs again only when Godot is asked to
-## redraw this node. The labels are written in world units, so close up they
+## redraw this node. The stars are drawn through a CircleBatch (two drawing
+## commands for all 1,400 of them, not one command each), the same circles in the
+## same places. The labels are written in world units, so close up they
 ## would grow to hundreds of screen pixels; they are therefore never drawn
 ## taller than LABEL_MAX_PX on the screen. They are drawn on a child node of
 ## their own (_names), because drawing the stars, bands and lines again takes
@@ -86,6 +88,13 @@ func setup(w: World) -> void:
 	_names.draw.connect(_draw_names)
 	_names.queue_redraw()
 	queue_redraw()
+	# The Scum dens: scrap and warning beacons round every camp, one small node each (not with
+	# --no-jungle, which has no camps).
+	if not Game.opt("no-jungle", false):
+		for c: Dictionary in w.map.camps:
+			var den := ScumDen.new()
+			add_child(den)
+			den.setup(c["pos"], float(Jungle.CAMPS[c["type"]]["radius"]), str(c["id"]).hash())
 
 
 ## Every frame: work out how big the labels may be at the camera's zoom (the
@@ -115,8 +124,12 @@ func _draw() -> void:
 		return
 	# A faint dark wash over the map, then the stars.
 	draw_rect(Rect2(0, 0, MapLayout.W, MapLayout.H), Palette.with_alpha(Palette.INK, 0.25))
+	# The stars in one batch: a few drawing commands instead of one for every star.
+	var batch := CircleBatch.new()
+	var star_col := Palette.with_alpha(Palette.ICE, 0.25)
 	for s: Vector3 in stars:
-		draw_circle(Vector2(s.x, s.y), s.z * 6.0, Palette.with_alpha(Palette.ICE, 0.25))
+		batch.add(Vector2(s.x, s.y), s.z * 6.0, star_col)
+	batch.draw(self)
 	# The lane corridors (10% see-through colour) with dashed centre lines.
 	var lane_fill := Palette.with_alpha(Palette.LANE, 0.10)
 	var guide := Palette.with_alpha(Palette.LANE, 0.55)

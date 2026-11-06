@@ -240,12 +240,13 @@ func _steer_to(target: Vector2, dt: float, arrive: float) -> void:
 
 
 ## Remember every friendly pilot whose ship is within Rules.ESCORT_RANGE
-## (1,100 world units) of us: they share the escort bonus on delivery.
+## (1,100 world units) of us: they share the escort bonus on delivery. The
+## crew of a bought ship is not a pilot and takes no share.
 func _note_escorts() -> void:
 	for u: Unit in world.unit_hash.query(global_position, Rules.ESCORT_RANGE, _scratch):
 		if u is Ship and u.team == team and u.alive and u.global_position.distance_to(global_position) < Rules.ESCORT_RANGE:
 			var p: PilotProfile = (u as Ship).profile
-			if p != null:
+			if p != null and not p.is_crew:
 				escorts[p] = true
 
 

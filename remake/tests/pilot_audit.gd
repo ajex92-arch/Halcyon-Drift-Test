@@ -101,18 +101,27 @@ func _on_damage(target: Node, info: RefCounted, amount: float, hull_dmg: float) 
 	if t == null or di == null:
 		return
 	var src: Unit = di.source if (di.source != null and is_instance_valid(di.source)) else null
-	if src is Ship and (src as Ship).controller is PilotAI:
+	if _is_pilot_ship(src):
 		var tk := _kind_name(t)
 		_add("dmg_out_" + tk, amount)
 		_add("dmg_out_hull_" + tk, hull_dmg)
 		_add("dmgh_%s_%s" % [(src as Ship).hull_id, tk], amount)
-	if t is Ship and (t as Ship).controller is PilotAI:
+	if _is_pilot_ship(t):
 		_add("dmg_in", amount)
 		_add("dmg_in_hull", hull_dmg)
 		_add("dmg_in_from_" + _kind_name(src), amount)
 		# The same, counted per hull of the ship that was hit.
 		_add("dmgin_" + (t as Ship).hull_id, amount)
 		_add("dmgin_hull_" + (t as Ship).hull_id, hull_dmg)
+
+
+## Is `u` a ship flown by a pilot's brain? A bought ship's stand-in brain is a
+## PilotAI too, but its crew is not a pilot, so the audit leaves it out.
+func _is_pilot_ship(u: Node) -> bool:
+	var s := u as Ship
+	if s == null or not (s.controller is PilotAI):
+		return false
+	return s.profile == null or not s.profile.is_crew
 
 
 ## Add `n` to counter `key`.
@@ -135,7 +144,7 @@ func _physics_process(dt: float) -> void:
 	if world == null:
 		return
 	for s: Ship in world.ships:
-		if not s.alive or not (s.controller is PilotAI):
+		if not s.alive or not _is_pilot_ship(s):
 			continue
 		var rock := false
 		var ms_hit := false
@@ -185,9 +194,11 @@ func _physics_process(dt: float) -> void:
 func _sample() -> void:
 	var seen := {}
 	for p: PilotProfile in world.profiles:
+		if p.is_crew:
+			continue
 		_add("prof_" + p.state)
 	for s: Ship in world.ships:
-		if not s.alive or not (s.controller is PilotAI):
+		if not s.alive or not _is_pilot_ship(s):
 			continue
 		var b := s.controller as PilotAI
 		var key := b.profile.callsign
@@ -312,7 +323,7 @@ func _sample() -> void:
 ## last 8 s while more than 800 from its goal, and not fighting, is stuck.
 func _positions() -> void:
 	for s: Ship in world.ships:
-		if not s.alive or not (s.controller is PilotAI):
+		if not s.alive or not _is_pilot_ship(s):
 			continue
 		var b := s.controller as PilotAI
 		var h: Dictionary = _hist.get(b.profile.callsign, {"pos": [], "state": "", "target": 0, "stuck": false})
@@ -357,10 +368,10 @@ func _positions() -> void:
 func _on_killed(u: Node, info: RefCounted) -> void:
 	var di := info as DamageInfo
 	# Kills by AI pilots (any victim).
-	if di != null and di.source != null and is_instance_valid(di.source) and di.source is Ship and (di.source as Ship).controller is PilotAI:
+	if di != null and di.source != null and is_instance_valid(di.source) and _is_pilot_ship(di.source):
 		_add("kills_by_pilots_" + _kind_name(u as Unit))
 		_add("kills_by_hull_%s_%s" % [(di.source as Ship).hull_id, _kind_name(u as Unit)])
-	if not (u is Ship) or not ((u as Ship).controller is PilotAI):
+	if not _is_pilot_ship(u):
 		return
 	var s := u as Ship
 	var b := s.controller as PilotAI

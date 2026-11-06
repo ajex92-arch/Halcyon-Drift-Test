@@ -31,7 +31,8 @@ extends Node2D
 ## torpedo shot down. Units call explosion()
 ## when they die (Ship, Minion, Turret, Mothership, RepairBay, Derelict,
 ## MiningDrone). Ward, SnubFighter and RepairDrone make puffs, and
-## ShipAbilities makes pulses for specials (Scout Ping, Jam, ...).
+## ShipAbilities makes pulses for specials (Scout Ping, Jam, ...). RtsFx draws the
+## arrival pictures of bought ships on it.
 
 ## The most particles alive at once (900).
 const MAX_PARTICLES := 900
@@ -180,3 +181,5 @@ func _draw() -> void:
 		var k := 1.0 - float(pl[2]) / float(pl[3])
 		var c: Color = pl[4]
 		draw_arc(pl[0], float(pl[1]) * k, 0.0, TAU, 64, Palette.with_alpha(c, (1.0 - k) * 0.6), 2.0 * px, true)
+	# The arrival pictures of bought ships (the slide and the warp streak).
+	RtsFx.draw(self, world, px)

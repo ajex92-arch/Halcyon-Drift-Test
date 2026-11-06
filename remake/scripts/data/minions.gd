@@ -9,15 +9,12 @@ extends RefCounted
 ## minions make up the wave of each lane (the top and bottom lanes get a
 ## small wave, the middle lane a bigger one; wave_for() hands one out), and
 ## FIRST_WAVE and WAVE_INTERVAL say when the waves leave. Minions get a
-## little tougher as the match goes on (scaling()). Late in the match an
-## admiral who builds the Fleet Command Module stops the free waves and buys
-## minions instead (buy_cost, CONTROL_CAP).
+## little tougher as the match goes on (scaling()). The waves never stop and
+## nothing buys minions: buy_cost and CONTROL_CAP are left over from the old
+## Fleet Command Module and nothing reads them.
 ##
-## WHO USES IT: MinionDirector sends the waves and sells minions; Minion
-## reads its type's numbers; WorldSpawner applies scaling(); the AI admiral
-## (AdmiralFleetCommand), AdmiralCommand and the admiral board
-## (AdmiralBoardFleet) use the Fleet Command numbers; Economy pays the
-## bounty.
+## WHO USES IT: MinionDirector sends the waves; Minion reads its type's numbers;
+## WorldSpawner applies scaling(); Economy pays the bounty.
 
 ## The minion types: type id -> its facts. The ids "fighter", "bomber" and
 ## "corvette" are keys used all over the game and never change; the labels
@@ -30,11 +27,17 @@ extends RefCounted
 ##              without a hit it refills by a tenth of this number per
 ##              second
 ##   speed      top speed [world units per second]; on the lane the whole
-##              wave moves at FORMATION_SPEED instead, if that is slower
+##              wave moves at FORMATION_SPEED instead, if that is slower. It is
+##              the table speed: a minion flies at it times its pace (below)
 ##   accel      how fast it can change its velocity [world units per second, per
 ##              second]. A minion only uses ALONG_ACCEL_MUL of it to speed up or
 ##              slow down and SIDE_ACCEL_MUL of it to bend its path (see
-##              MinionFlight.steer)
+##              MinionFlight.steer). Also the table number, times the pace
+##   pace       (optional) the share of its speed and accel the type flies with.
+##              Without it a small craft (size 0) flies at Rules.SMALL_CRAFT_PACE
+##              and a bigger one at 1.0 (Rules.craft_pace()); with it, this
+##              number is used instead. The Light Bomber has 1.0 so it keeps up
+##              with its wave (see pace())
 ##   turn       how fast it swings its nose [radians per second]
 ##   radius     size, a circle [world units]
 ##   vision     how far it sees [world units]
@@ -45,14 +48,14 @@ extends RefCounted
 ##   aim_error  `aim_error` is the random aiming error (radians) that makes
 ##              them low skill. (Each aim lands up to this much x the
 ##              distance away from the target; bigger = worse aim.)
-##   buy_cost   price in Fleet Command mode [credits, from the treasury]
+##   buy_cost   the old Fleet Command price [credits]; nothing reads it now
 ## Hull, shield and damage are multiplied by scaling() (and by the team's
 ## Reinforced Waves research) when a minion is made.
 const TYPES := {
 	"fighter": {"label": "Snub-Fighter", "size": 0, "hull": 55.0, "shield": 30.0, "speed": 480.0, "accel": 500.0,
 		"turn": 2.4, "radius": 10.0, "vision": 1100.0, "aggro": 1000.0, "weapons": ["m_bolt"], "bounty": 14.0,
 		"aim_error": 0.035, "buy_cost": 35.0},
-	"bomber": {"label": "Light Bomber", "size": 0, "hull": 85.0, "shield": 30.0, "speed": 380.0, "accel": 320.0,
+	"bomber": {"label": "Light Bomber", "size": 0, "hull": 85.0, "shield": 30.0, "speed": 380.0, "accel": 320.0, "pace": 1.0,
 		"turn": 1.28, "radius": 15.0, "vision": 1100.0, "aggro": 1200.0, "weapons": ["m_torp"], "bounty": 18.0,
 		"aim_error": 0.02, "buy_cost": 50.0},
 	"corvette": {"label": "Patrol Leader", "size": 1, "hull": 480.0, "shield": 160.0, "speed": 340.0, "accel": 220.0,
@@ -97,9 +100,8 @@ const WAVE_INTERVAL := 35.0
 ## Hull and damage growth per 5 minutes of match time.
 ## (0.07 = +7% for every full 5 minutes; it also grows their shield.)
 const SCALING_PER_5MIN := 0.07
-## Fleet Command module: max alive and costs live in TYPES.buy_cost.
-## This is the most bought minions a team may have alive at once. Read it
-## through control_cap(), which lets the fleet_cap rule variant change it.
+## The old Fleet Command limit on bought minions. Nothing reads it now (the fleet limit
+## is RtsHulls.CAP_IN_FORCE); it stays so the fleet_cap rule variant still loads.
 const CONTROL_CAP := 30
 
 
@@ -111,12 +113,9 @@ static func wave_for(lane: String) -> Array:
 	return (WAVES.get(lane, OUTER_WAVE) as Array).duplicate()
 
 
-## The most bought minions a team may have alive at once in this match:
-## CONTROL_CAP (30), unless the fleet_cap variant tuned it (FleetCapFeature
-## sets the tuned number "fleet_cap"). It is one rule for the whole match,
-## so the AI admiral (AdmiralFleetCommand) and a human admiral (the board's
-## buy buttons) both end up at MinionDirector.buy(), which asks this, and
-## both teams share the same limit.
+## The old limit on bought minions: CONTROL_CAP (30), unless the fleet_cap variant
+## tuned it (FleetCapFeature sets the tuned number "fleet_cap"). Nothing asks
+## for it now; it stays so the variant loads.
 static func control_cap() -> int:
 	return int(Rules.tune("fleet_cap", CONTROL_CAP))
 
@@ -126,3 +125,14 @@ static func control_cap() -> int:
 ## example 1.14 at 10:00. WorldSpawner multiplies new minions by it.
 static func scaling(match_time: float) -> float:
 	return 1.0 + SCALING_PER_5MIN * floorf(match_time / 300.0)
+
+
+## The pace a minion of type `type_id` flies at: the share of its table speed
+## and accel it uses. The type's own "pace" field when it has one (the Light
+## Bomber: 1.0), else Rules.craft_pace() of its size class (0.8 for the
+## Snub-Fighter, 1.0 for the Patrol Leader). Minion.setup multiplies by it.
+static func pace(type_id: String) -> float:
+	var row: Dictionary = TYPES[type_id]
+	if row.has("pace"):
+		return float(row["pace"])
+	return Rules.craft_pace(int(row["size"]))

@@ -39,7 +39,8 @@ extends RefCounted
 ## A mining drone of `team` brought `amount` ore home (1 ore = 1 credit).
 ## Rules.ORE_TREASURY_SHARE (60%, tuned "ore_treasury_share") goes to the
 ## treasury. The other 40% is split evenly among the team's pilots who are
-## not dead (a human admiral has a pilot record too, so they get a share).
+## not dead (a human admiral has a pilot record too, so they get a share; the
+## crew of a bought ship is not a pilot and gets none).
 ## On top of that, pilots who escorted the drone (flew near it;
 ## `drone.escorts`) share an extra Rules.ESCORT_BONUS (20% of `amount`,
 ## tuned "escort_bonus"), raised by their bounty gear. `drone` may be null
@@ -53,7 +54,7 @@ static func deliver_ore(w: World, team: int, amount: float, drone: MiningDrone) 
 	# Step 2: the rest is shared by our living pilots.
 	var living: Array = []
 	for p: PilotProfile in w.profiles:
-		if p.team == team and p.state != "dead":
+		if p.team == team and p.state != "dead" and not p.is_crew:
 			living.append(p)
 	if not living.is_empty():
 		var share := amount * (1.0 - treasury_share) / float(living.size())
@@ -70,10 +71,13 @@ static func deliver_ore(w: World, team: int, amount: float, drone: MiningDrone) 
 ## Rules.PASSIVE_INCOME (1.5 credits per second, tuned "passive_income")
 ## plus their gear's "income" stat, for `dt` seconds. It goes into credits
 ## and earned (PilotProfile.earn_quietly()), without a message. The tuned
-## number is read once per call, not once per pilot.
+## number is read once per call, not once per pilot. The crew of a bought ship
+## earns nothing.
 static func passive_income(w: World, dt: float) -> void:
 	var base := float(Rules.tune("passive_income", Rules.PASSIVE_INCOME))
 	for p: PilotProfile in w.profiles:
+		if p.is_crew:
+			continue
 		var rate := base + p.gear_stats().g("income")
 		p.earn_quietly(rate * dt)
 
@@ -91,7 +95,8 @@ static func _bounty_mult(p: PilotProfile) -> float:
 ## damage / all that recent damage. Returns pilot profile -> share (a 0..1
 ## fraction), for every pilot attacker whose share is at least `min_frac`.
 ## Damage from attackers that aren't pilots (turrets, minions) counts in
-## the total, but nobody gets their share. A pilot who hit it with two
+## the total, but nobody gets their share (the crew of a bought ship is not a
+## pilot, so it counts like a turret here). A pilot who hit it with two
 ## different ships gets both shares added together (each must reach
 ## `min_frac` on its own).
 static func contributors(w: World, victim: Unit, window: float, min_frac: float) -> Dictionary:
@@ -108,7 +113,7 @@ static func contributors(w: World, victim: Unit, window: float, min_frac: float)
 	# Step 2: each recent pilot attacker's share, if it is big enough.
 	for uid in victim.damage_log:
 		var e: Array = victim.damage_log[uid]
-		if w.time - float(e[1]) > window or e[2] == null:
+		if w.time - float(e[1]) > window or e[2] == null or (e[2] as PilotProfile).is_crew:
 			continue
 		var frac := float(e[0]) / total
 		if frac >= min_frac:
@@ -122,11 +127,16 @@ static func contributors(w: World, victim: Unit, window: float, min_frac: float)
 ## made the last hit, or null if it wasn't a pilot). Each kind of thing
 ## pays differently (see the steps below; the names in quotes are the
 ## tuned numbers of Rules.TUNABLES). Kinds not listed (such as a
-## mothership) pay nothing here.
+## mothership) pay nothing here. A last hit by the crew of a bought ship counts
+## as no pilot's last hit (the same as a turret's or a minion's), so nobody is
+## paid for it.
 static func on_unit_killed(w: World, victim: Unit, info: DamageInfo) -> void:
 	var killer: PilotProfile = info.source_profile as PilotProfile
+	if killer != null and killer.is_crew:
+		killer = null
 	match victim.kind:
-		# A pilot's ship (human or AI): the big one, see _ship_killed().
+		# A pilot's ship (human or AI): the big one, see _ship_killed(). A bought
+		# ship (its profile is a crew) pays the small bounty of _crew_killed().
 		Unit.K_SHIP:
 			_ship_killed(w, victim as Ship, info, killer)
 		# A minion: an enemy pilot who made the last hit gets its bounty,
@@ -291,7 +301,13 @@ static func _minion_killed(w: World, m: Minion, killer: PilotProfile) -> void:
 ##   - The victim's death is counted, their streak ends, and insurance
 ##     pays back part of the ship's value (straight into credits): their
 ##     insurance gear's share plus "insurance_base" (normally 0).
+## A bought ship (its profile is a crew) is not a pilot: it takes the short way
+## of _crew_killed() and none of the above.
 static func _ship_killed(w: World, ship: Ship, info: DamageInfo, killer: PilotProfile) -> void:
+	# Step 0: a bought ship pays the small bounty and nothing else is counted.
+	if ship.profile != null and ship.profile.is_crew:
+		_crew_killed(w, ship, killer)
+		return
 	# Step 1: how much the kill is worth.
 	var victim: PilotProfile = ship.profile
 	var value := ship.bounty_value()
@@ -336,3 +352,31 @@ static func _ship_killed(w: World, ship: Ship, info: DamageInfo, killer: PilotPr
 		var insurance := victim.gear_stats().g("insurance") + float(Rules.tune("insurance_base", 0.0))
 		if insurance > 0.0:
 			victim.credits += value * insurance
+
+
+## A bought ship (`ship`, whose profile is a crew) was destroyed. It pays the
+## small bounty only: Rules.KILL_VALUE_SHARE (12%, "kill_value_share") of what
+## the ship was worth, with no Rules.KILL_BASE and no streak part. It is split
+## the way a minion's bounty is (_minion_killed): the enemy pilot who made the
+## last hit (`killer`) keeps all of it, or all but the helpers' pool
+## (Rules.MINION_ASSIST_SHARE) when other pilots of that team helped. A crew
+## ship finished off by a turret, a minion, a monster or another crew pays
+## nobody. No kill, assist, streak, ace, death or insurance is counted.
+static func _crew_killed(w: World, ship: Ship, killer: PilotProfile) -> void:
+	# Step 1: only an enemy pilot's last hit is paid.
+	if killer == null or killer.team == ship.team:
+		return
+	# Step 2: the pay, and the helpers' pool if there are helpers.
+	var pay := ship.bounty_value() * float(Rules.tune("kill_value_share", Rules.KILL_VALUE_SHARE))
+	var helpers := _helpers(w, ship, killer)
+	var pool := 0.0
+	if not helpers.is_empty():
+		pool = pay * clampf(float(Rules.tune("minion_assist_share", Rules.MINION_ASSIST_SHARE)), 0.0, 1.0)
+	# Step 3: the killer keeps the rest.
+	killer.earn((pay - pool) * _bounty_mult(killer), "kill")
+	# Step 4: the helpers share the pool by their share of the damage.
+	var total := 0.0
+	for p: PilotProfile in helpers:
+		total += float(helpers[p])
+	for p: PilotProfile in helpers:
+		p.earn(pool * float(helpers[p]) / maxf(0.001, total) * _bounty_mult(p), "assist")

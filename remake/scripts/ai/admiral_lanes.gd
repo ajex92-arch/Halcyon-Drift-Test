@@ -14,7 +14,7 @@ extends RefCounted
 ##
 ## WHO USES IT: AdmiralAI makes one (AdmiralAI.lanes) and hands it to its
 ## other parts, which call it: AdmiralWaypoint, AdmiralSiege,
-## AdmiralMothershipMover, AdmiralBuilder and AdmiralFleetCommand.
+## AdmiralMothershipMover, AdmiralBuilder and AdmiralProduction.
 
 ## The game world (we read its minions and ships).
 var world: World

@@ -69,7 +69,7 @@ signal site_state_changed(site_id: String, state: String, team: int, tick: int)
 ## change. Sent by PostSite.update(); tests and the HUD listen.
 signal post_state_changed(team: int, lane: String, state: String, tick: int)
 ## A minion (`m`, a Minion) has just launched from its mothership with a
-## minion wave (not one bought with Fleet Command). Sent by MinionDirector
+## minion wave. Sent by MinionDirector
 ## right after the minion is made and before it takes its first step; only
 ## feature modules listen (BreachFeature, BreachExtraFeature,
 ## LanespawnFeature). `wave_id` is the director's next_wave at that moment,

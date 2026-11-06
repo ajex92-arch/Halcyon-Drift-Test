@@ -157,6 +157,9 @@ static func refresh(b: AdmiralBoard) -> void:
 	if b._cards.has("drones"):
 		var dl: Label = b._cards["drones"]
 		dl.text = "%d / %d drones working  ·  %d being built  ·  %d lost  ·  %s ore delivered" % [b.world.mining_drone_count(b.team), int(Structures.MINING_DRONE["max"]), ts.drone_queue.size(), ts.drones_lost, Util.money(ts.ore_delivered)]
+		var waiting := ts.production.idle_count(Production.DRONE)
+		if waiting > 0:
+			dl.text += "  ·  %d waiting" % waiting
 	# Step 2: each node's line and turret buttons.
 	for key: String in b._cards:
 		if key.begins_with("node:"):

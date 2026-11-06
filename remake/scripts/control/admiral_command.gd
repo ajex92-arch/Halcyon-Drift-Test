@@ -3,13 +3,14 @@ extends RefCounted
 ## WHAT THIS IS: the rule book for every order an admiral can give. The
 ## admiral is the team member who doesn't fly: they spend the team's shared
 ## money (the "treasury") on mining drones, mothership facilities,
-## research, turrets, repair bays and wards, set the team waypoint, move the
-## mothership, and (with the Fleet Command Module) buy and order minions
-## (small computer-flown ships that push down the lanes).
+## research, turrets, repair bays and wards, set the team waypoint and move the
+## mothership. (Fleet ships are bought through the yard's own orders, see
+## ProductionOrders.)
 ##
 ## HOW IT WORKS: each order function first checks the rules (is it
 ## unlocked? is there room? can the team pay?). If the order is allowed, it
-## pays from the treasury and carries the order out. It returns "" when the
+## pays from the treasury and carries the order out (a drone, a module and a
+## research pay later, when the build list starts them). It returns "" when the
 ## order worked, or a short message for the player saying why not (for
 ## example "Not enough in the team treasury (120 short)"). Every order is one
 ## order record (Order): _order() gets it, either the queued record that the order
@@ -33,7 +34,7 @@ extends RefCounted
 ## DESIGN.md A11-A13 has the rules: drones, facilities, research, turrets at
 ## node slots, repair bays (they fly out and anchor), wards (only where the
 ## team can see), the waypoint, mothership moves (from 20:00, admiral
-## docked) and Fleet Command minion purchases and orders.
+## docked).
 
 ## The refusal for a mothership move into the jungle (also used by the order
 ## queue's check that runs before the order is queued).
@@ -115,22 +116,23 @@ func _order(team: int, kind: String, settings: Dictionary, target_kind: String =
 ## wait in the build queue. The price is not checked here.
 func drone_blocker(team: int) -> String:
 	var ts := world.teams[team]
-	# Rule 1: living drones plus queued ones must stay under the limit (14).
-	if world.mining_drone_count(team) + ts.drone_queue.size() >= int(Structures.MINING_DRONE["max"]):
+	# Rule 1: living drones plus queued ones (being built, waiting or on hold)
+	# must stay under the limit (14).
+	if world.mining_drone_count(team) + ts.drones_queued() >= int(Structures.MINING_DRONE["max"]):
 		return "Drone limit reached (%d)" % int(Structures.MINING_DRONE["max"])
-	# Rule 2: at most 6 drones waiting in the build queue.
-	if ts.drone_queue.size() >= 6:
-		return "Drone build queue is full (6 at a time)"
+	# Rule 2: at most 6 drones in the build queue.
+	if ts.drones_queued() >= RtsHulls.DEPTH_DRONES:
+		return "Drone build queue is full (%d at a time)" % RtsHulls.DEPTH_DRONES
 	return ""
 
 
 ## Order one more mining drone (a small robot ship that mines ore and brings
-## it home, which pays the team and its pilots). It joins the mothership's
-## build queue and appears when built (Structures.MINING_DRONE "build",
-## 6 s each, one at a time).
+## it home, which pays the team and its pilots). It joins the build list
+## (Production), which pays for it when it starts and builds it on the drone
+## bay (Structures.MINING_DRONE "build", 6 s each, one at a time).
 ## `node_id` is the resource node it should keep mining at, or "" to let
 ## the game pick a node each trip (World.best_node_for_drone). Costs 200
-## credits (Structures.MINING_DRONE "cost").
+## credits (Structures.MINING_DRONE "cost"), taken when the build starts.
 func build_drone(team: int, node_id: String = "") -> String:
 	var o := _order(team, OrderKinds.DRONE, {"node": node_id})
 	if o.is_empty():
@@ -140,21 +142,14 @@ func build_drone(team: int, node_id: String = "") -> String:
 	var blocked := drone_blocker(team)
 	if blocked != "":
 		return _done(o, blocked)
-	# Rule 3: pay for it.
-	var cost: float = float(Structures.MINING_DRONE["cost"])
-	if not ts.spend(cost):
-		return _done(o, "Not enough in the team treasury (%d short)" % int(ceil(cost - ts.treasury)))
-	# Queue it. If the queue was empty, start the build clock now, so this
-	# drone takes the full build time. (TeamState._drone_line builds them.)
-	if ts.drone_queue.is_empty():
-		ts.drone_t = float(Structures.MINING_DRONE["build"])
-	ts.drone_queue.append(node_id)
+	# Queue it in the build list. (TeamState._drone_line builds the one that starts.)
+	ts.production.add_drone(node_id)
 	return _done(o, "")
 
 
 ## Build facility `id` onto our mothership (a module from Tech.FACILITIES,
 ## such as the Research Module). TeamState.queue_facility() checks the
-## rules, pays and queues it.
+## rules and puts it in the build list, which pays when it starts.
 func build_facility(team: int, id: String) -> String:
 	var o := _order(team, OrderKinds.MODULE, {}, "id", id)
 	if o.is_empty():
@@ -163,7 +158,8 @@ func build_facility(team: int, id: String) -> String:
 
 
 ## Start researching tech `id` (an upgrade from Tech.TECHS).
-## TeamState.queue_research() checks the rules, pays and queues it.
+## TeamState.queue_research() checks the rules and puts it in the build list,
+## which pays when it starts.
 func research(team: int, id: String) -> String:
 	var o := _order(team, OrderKinds.RESEARCH, {}, "id", id)
 	if o.is_empty():
@@ -431,45 +427,4 @@ func move_mothership(team: int, point: Vector2) -> String:
 	if path.is_empty():
 		return _done(o, "The mothership can't find a way there through open space")
 	ms.order_move(point, path)
-	return _done(o, "")
-
-
-## Fleet Command: buy one minion of type `type_id` (a key of Minions.TYPES)
-## and send it down `lane`. MinionDirector.buy() checks the rules and pays.
-func buy_minion(team: int, type_id: String, lane: String) -> String:
-	var o := _order(team, OrderKinds.MINION_BUY, {"type": type_id, "lane": lane})
-	if o.is_empty():
-		return _early
-	return _done(o, world.minion_director.buy(team, type_id, lane))
-
-
-## Fleet Command: give an order to the minions with the ids in `uids` (a minion that
-## is gone is skipped). `order` is a dictionary such as {"type": "lane", "lane": "mid"}
-## or {"type": "move", "pos": a point} (see MinionDirector.set_order). Needs the Fleet
-## Command Module.
-func order_minions(team: int, uids: Array, order: Dictionary) -> String:
-	var settings := {"type": str(order.get("type", ""))}
-	var target_kind := "none"
-	var target = null
-	if order.has("pos"):
-		target_kind = "point"
-		target = order["pos"]
-	elif order.has("lane"):
-		settings["lane"] = str(order["lane"])
-		target_kind = "lane"
-		target = str(order["lane"])
-	var o := _order(team, OrderKinds.MINION_ORDER, settings, target_kind, target, uids)
-	if o.is_empty():
-		return _early
-	if not world.minion_director.controlled(team):
-		return _done(o, "Needs the Fleet Command Module")
-	# Look each id up; the gone ones are skipped.
-	var minions: Array = []
-	for uid in uids:
-		var u: Unit = null
-		if world.orders != null:
-			u = world.orders.unit_by_uid(int(uid))
-		if u != null:
-			minions.append(u)
-	world.minion_director.set_order(team, minions, order)
 	return _done(o, "")

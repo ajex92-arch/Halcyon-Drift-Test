@@ -87,11 +87,15 @@ func update(ship: Ship, _dt: float) -> void:
 	# Step 5: aim at the mouse. With Ctrl held, the hull keeps facing the way
 	# it points now (a spot 600 units straight ahead); otherwise it turns to
 	# face the mouse too.
-	c.aim_point = world.mouse_world()
-	if Input.is_physical_key_pressed(KEY_CTRL):
-		c.face_point = ship.global_position + Vector2.from_angle(ship.rotation) * 600.0
-	else:
-		c.face_point = c.aim_point
+	# While the order wheel is open, or the pointer is on a HUD button and not firing (world.ui_hold), the aim and
+	# the face point stay where they were. (ui_hold is set by the HUD each frame, after the tick, so the hold starts
+	# one tick after the pointer enters a control and ends within one tick of it leaving.)
+	if not world.wheel_hold and not world.ui_hold:
+		c.aim_point = world.mouse_world()
+		if Input.is_physical_key_pressed(KEY_CTRL):
+			c.face_point = ship.global_position + Vector2.from_angle(ship.rotation) * 600.0
+		else:
+			c.face_point = c.aim_point
 	# Step 6: shield focus (arrow keys). Pressing the side already focused
 	# asks for balanced shields instead.
 	var focus_keys := [["shield_front", Rules.FOCUS_FRONT], ["shield_rear", Rules.FOCUS_REAR],

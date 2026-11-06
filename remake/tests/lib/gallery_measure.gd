@@ -13,15 +13,16 @@ extends RefCounted
 ## and how long Godot's "process" step takes (Performance.TIME_PROCESS, which
 ## includes every _process and _draw call of the ships and units; Godot only
 ## refreshes it once a second, with the slowest frame of that second, so it is
-## a rough hint and not an average). The parts bench also splits each frame at the
-## start of its drawing (the RenderingServer's frame_pre_draw signal) into the
-## game's own work (script ms) and Godot's drawing (render ms). The looks
-## are interleaved, so a slow patch of the computer hits all of them alike.
+## a rough hint and not an average). bench() and the parts bench also split each
+## frame at the start of its drawing (the RenderingServer's frame_pre_draw
+## signal) into the game's own work (script ms) and Godot's drawing (render ms).
+## The looks are interleaved, so a slow patch of the computer hits all of them alike.
 ##   - bench(): spreads 70 ships and 70 minions per team over a play-zoom view,
 ##     freezes nothing but moves nothing (the gallery stopped the match), and
 ##     measures three looks: only the Aurelian half drawn, both teams drawn
 ##     with Cinder alien, both teams with Cinder plain. What differs between
-##     the looks is the cost of drawing.
+##     the looks is the cost of drawing. It prints the frame mean, the 95th
+##     percentile, the median, the draw calls and the script and render split.
 ##   - bench_parts() (the draw-cost table): the same crowd and
 ##     looks, but each look is measured once per SWITCH SET of DrawParts: all
 ##     parts on, each part off alone, all parts off. What differs between the
@@ -83,6 +84,9 @@ var frames := BENCH_FRAMES
 var _firing: Array = []
 ## Which way the gun-kick bench's cooldowns went on the last frame.
 var _flip := false
+## The frame times (ms, sorted) of the latest _measure(), so bench() can take the
+## median over all its rounds.
+var last_times: Array = []
 
 
 ## Remember the gallery that made us, and read --bench-frames.
@@ -120,7 +124,9 @@ func _make_crowd(size: Vector2, z: float) -> Array:
 
 ## Run the bench at a view `view` world units wide (or --bench-view=N) and
 ## print, for each look, the average and the 95th percentile of the frame time,
-## the average process time, and the draw calls of the last frame.
+## the average process time, and the draw calls of the last frame, then the
+## median of all the frames of all the rounds and the average script and render
+## split (see _measure(); both are 0 in a headless run, which has no renderer).
 func bench(view: float) -> void:
 	view = float(Game.opt("bench-view", view))
 	var size := gallery.get_viewport().get_visible_rect().size
@@ -129,25 +135,31 @@ func bench(view: float) -> void:
 	# Step 1: the crowd.
 	var crowd := _make_crowd(size, z)
 	await gallery.wait_frames(30)
-	# Step 2: go round the looks several times; keep every measurement.
+	# Step 2: go round the looks several times; keep every measurement and every frame time.
 	var results := {}
+	var pooled := {}
 	for look: String in LOOKS:
 		results[look] = []
+		pooled[look] = []
 	for _r in int(Game.opt("bench-rounds", BENCH_ROUNDS)):
 		for look: String in LOOKS:
 			for u: Unit in crowd:
 				u.visible = look != "aurelian only" or u.team == 0
 			CinderPaint.set_alien(look != "cinder plain")
 			results[look].append(await _measure())
+			pooled[look].append_array(last_times)
 	CinderPaint.set_alien(true)
-	# Step 3: print the average over the rounds.
+	# Step 3: print the average over the rounds, and the median of all the frames.
 	for look: String in LOOKS:
-		var sums := [0.0, 0.0, 0.0, 0.0]
+		var sums := [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
 		for r: Array in results[look]:
-			for i in 4:
+			for i in 6:
 				sums[i] += float(r[i])
 		var n := float(results[look].size())
-		print("bench %-14s: frame mean %.2f ms, p95 %.2f ms, game work (process) %.2f ms, draw calls %d" % [look, sums[0] / n, sums[1] / n, sums[2] / n, int(sums[3] / n)])
+		var all_times: Array = pooled[look]
+		all_times.sort()
+		var median := float(all_times[int(all_times.size() * 0.5)]) if not all_times.is_empty() else 0.0
+		print("bench %-14s: frame mean %.2f ms, p95 %.2f ms, game work (process) %.2f ms, draw calls %d, median %.2f ms, script %.2f ms, render %.2f ms" % [look, sums[0] / n, sums[1] / n, sums[2] / n, int(sums[3] / n), median, sums[4] / n, sums[5] / n])
 
 
 ## The steel bench (--bench-look=steel): the same crowd as bench(), measured for
@@ -360,6 +372,7 @@ func _measure(redraw_off := false) -> Array:
 	RenderingServer.frame_pre_draw.disconnect(_on_pre_draw)
 	RenderingServer.frame_post_draw.disconnect(_on_post_draw)
 	times.sort()
+	last_times = times
 	var total := 0.0
 	for ms: float in times:
 		total += ms

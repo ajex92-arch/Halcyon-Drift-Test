@@ -40,8 +40,8 @@ extends Unit
 ##     attack it. With the damage modifiers removed, a minion's hit does its
 ##     raw damage to every target, scaled only by its own strength
 ##     (Minion.stat_scale: match-time growth and Reinforced Waves research).
-##   - Fleet Command: with that module the admiral can give minions an
-##     `order` instead of the lane walk (see `order` below).
+##   - A minion may carry an `order` instead of the lane walk (see `order`
+##     below); nothing gives one now, so every minion walks its lane.
 ##   - Saving work: there are many minions, so the costly parts are spread
 ##     out. The game moves forward in small steps called ticks (60 per
 ##     second). Choosing a target and checking for rocks happen 4 times a
@@ -101,12 +101,12 @@ var aggro := 1000.0
 var aim_error := 0.03
 ## +1 or -1: which way it circles a target (a coin toss at birth).
 var orbit := 1.0
-## Fleet Command orders from the admiral. One of:
+## What the minion is told to do. One of:
 ##   {"type": "lane"} (the default) or {"type": "lane", "lane": id}:
 ##     walk the lane;
 ##   {"type": "move", "pos": Vector2} or {"type": "hold", "pos": Vector2}:
 ##     go to that spot and fight around it (both work the same way here).
-## MinionDirector.set_order() gives each minion its own copy.
+## Nothing sets a minion's order now, so it stays the lane walk.
 var order := {"type": "lane"}
 ## Strength multiplier on its hull, shield and gun damage (1.0 = normal).
 ## It grows with match time (+7% per full 5 minutes) and with the team's
@@ -163,8 +163,12 @@ func setup(w: World, t: int, type_id: String, lane_id: String, at: Vector2, matc
 	# shield per second after 4 s without a hit.
 	shields = ShieldZones.new()
 	shields.setup(float(mdef["shield"]) * stat_scale, float(mdef["shield"]) * 0.1, 4.0, true)
-	speed = float(mdef["speed"])
-	accel = float(mdef["accel"])
+	# The type's pace (Minions.pace()): the Snub-Fighter flies at
+	# Rules.SMALL_CRAFT_PACE of its row's top speed and accel; the Light Bomber
+	# (its row says 1.0) and the Patrol Leader (size class 1) at 1.0.
+	var pace := Minions.pace(type_id)
+	speed = float(mdef["speed"]) * pace
+	accel = float(mdef["accel"]) * pace
 	turn = float(mdef["turn"])
 	aggro = float(mdef["aggro"])
 	aim_error = float(mdef["aim_error"])
@@ -205,8 +209,7 @@ func setup(w: World, t: int, type_id: String, lane_id: String, at: Vector2, matc
 
 
 ## Switch to lane `lane_id` and get that lane's path from where we are now.
-## setup() calls it, and so does MinionDirector.set_order() for a "lane"
-## order.
+## setup() calls it.
 func set_lane(lane_id: String) -> void:
 	lane = lane_id
 	path = world.lane_path_from(lane_id, team, position)

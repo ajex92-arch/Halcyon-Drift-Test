@@ -22,7 +22,7 @@ extends Node
 ## With the option --ai-rebuild the computer admiral is left on (run without
 ## --no-admiral-ai) and the test does not order the rebuild itself: the record must
 ## say "building" within 20 s of the timer running out (the computer admiral's rule,
-## AdmiralBuilder.rebuild_posts), unless its team owns Fleet Command or cannot pay.
+## AdmiralBuilder.rebuild_posts), unless its team cannot pay.
 ##
 ## HOW TO RUN IT ("godot" is the Godot console program, started from the folder
 ## that holds remake/):
@@ -196,7 +196,7 @@ func _physics_process(_dt: float) -> void:
 					_check("the computer admiral rebuilt the post within 20 s of the timer", site.state_tick - site.ready_tick <= 1200, "(%d ticks after)" % (site.state_tick - site.ready_tick))
 					step = 4
 				elif world.tick_count > site.ready_tick + 1200:
-					_check("the computer admiral rebuilt the post within 20 s of the timer", false, "(state %s, Fleet Command: %s, treasury %d)" % [site.state, world.minion_director.controlled(Rules.HALCYON), int(world.teams[Rules.HALCYON].treasury)])
+					_check("the computer admiral rebuilt the post within 20 s of the timer", false, "(state %s, treasury %d)" % [site.state, int(world.teams[Rules.HALCYON].treasury)])
 					step = 6
 					_finish()
 			elif blocker != null:

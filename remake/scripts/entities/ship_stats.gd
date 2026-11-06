@@ -14,7 +14,9 @@ extends RefCounted
 ##   1. the pilot's gear and the fitted modules, added up in a StatBlock
 ##      (percent bonuses are fractions: 0.10 means +10%);
 ##   2. the team's tech upgrades for this size of ship (drive: +8% top speed
-##      and +6% engine push per level; armour: +15% hull per level);
+##      and +6% engine push per level; armour: +15% hull per level), and for
+##      a small craft its pace (Rules.SMALL_CRAFT_PACE, 0.8: top speed and the
+##      main, reverse and side pushes 20% lower);
 ##   3. the energy routing setting (EnergyPool.m());
 ##   4. buffs: ace (Rules.ACE_SPEED, Rules.ACE_DAMAGE), standing in the
 ##      team's waypoint (Rules.WAYPOINT_*), a friendly Support ship's aura
@@ -55,8 +57,12 @@ static func recompute(ship: Ship, full_heal: bool) -> void:
 	var drive := t.drive_level(tier) if t != null else 0
 	var armor := t.armor_level(tier) if t != null else 0
 	var thrust := energy.m("thrust")
-	var speed_mul := stats.mul("speed_pct") * (1.0 + 0.08 * drive) * thrust
-	var accel_mul := stats.mul("accel_pct") * (1.0 + 0.06 * drive) * thrust
+	# The small craft fly at Rules.SMALL_CRAFT_PACE of their table top speed and
+	# pushes (1.0 for every bigger ship). It sits inside both multipliers, so gear,
+	# Fighter Drive and the buffs below still multiply on top of it.
+	var pace := Rules.craft_pace(ship.size_class)
+	var speed_mul := stats.mul("speed_pct") * (1.0 + 0.08 * drive) * thrust * pace
+	var accel_mul := stats.mul("accel_pct") * (1.0 + 0.06 * drive) * thrust * pace
 	var turn_mul := stats.mul("turn_pct") * energy.m("turn")
 	var in_wp := t != null and t.in_waypoint(ship.global_position)
 	if ship.ace_t > 0.0:

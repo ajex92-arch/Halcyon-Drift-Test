@@ -8,8 +8,9 @@ extends Node
 ## HOW IT WORKS: this test node is the same in every run, so the runs have the same
 ## nodes. setup() adds the det_hash test as its child (it prints the hash lines the runs are
 ## compared by). With --script it also acts as the human Admiral: at fixed ticks it submits
-## a list of orders (drones, a Research Module and a research, a turret, a repair bay, wards,
-## a waypoint; in a --late match a mothership move and a siege waypoint) as seat 5 with
+## a list of orders (drones, a Research Module and a research, ships bought, held, moved and
+## cancelled, a turret, a repair bay, wards, a waypoint; in a --late match a mothership move, a
+## Destroyer bought, held and cancelled, and a siege waypoint) as seat 5 with
 ## `human` true, so they are marked "h" in the log and can be replayed. When the run ends it
 ## prints "order_replay: N failures": with --script it checks that every order that was
 ## accepted is in the log and that the log has its header, fingerprint lines and end line;
@@ -64,6 +65,12 @@ func _normal_list() -> Array:
 		[120, OrderKinds.DRONE, "none", 0, {"node": ""}],
 		[600, OrderKinds.MODULE, "id", "research", {}],
 		[900, OrderKinds.DRONE, "none", 0, {"node": ""}],
+		[2400, OrderKinds.PRODUCE, "none", 0, {"hull": "fighter", "count": 3, "rally": "mothership"}],
+		[3000, OrderKinds.HOLD_ITEM, "item", "@ship", {"hold": 1}],
+		[3300, OrderKinds.HOLD_ITEM, "item", "@ship", {"hold": 0}],
+		[3600, OrderKinds.PRODUCE, "none", 0, {"hull": "fighter", "count": 2, "rally": "lane", "repeat": 1}],
+		[4200, OrderKinds.MOVE_ITEM, "item", "@ship", {"dir": 1}],
+		[4800, OrderKinds.CANCEL, "item", "@ship", {}],
 		[9000, OrderKinds.RESEARCH, "id", "repairBays", {}],
 		[12000, OrderKinds.TURRET, "node", node_id, {"ttype": "pd"}],
 		[15000, OrderKinds.BAY, "point", sp, {}],
@@ -80,8 +87,13 @@ func _late_list() -> Array:
 	var enemy := world.mothership(Rules.enemy_of(world.human_team)).global_position
 	return [
 		[60, OrderKinds.MOTHERSHIP_MOVE, "point", Order.point(Vector2(MapLayout.CX, MapLayout.CY - 1400.0)), {}],
+		[300, OrderKinds.PRODUCE, "none", 0, {"hull": "destroyer", "count": 1, "rally": "mothership"}],
 		[600, OrderKinds.WARD, "point", Order.point(spot), {}],
 		[900, OrderKinds.BAY, "point", Order.point(spot) + Vector2i(60, 60), {}],
+		[1200, OrderKinds.HOLD_ITEM, "item", "@ship", {"hold": 1}],
+		[1500, OrderKinds.HOLD_ITEM, "item", "@ship", {"hold": 0}],
+		[2100, OrderKinds.PRODUCE, "none", 0, {"hull": "fighter", "count": 3, "rally": "lane"}],
+		[2700, OrderKinds.CANCEL, "item", "@ship", {}],
 		[3000, OrderKinds.WAYPOINT, "point", Order.point(enemy + Vector2(-2500.0, 0.0)), {"siege": 1}],
 		[9000, OrderKinds.DRONE, "none", 0, {"node": ""}],
 		[12000, OrderKinds.MOTHERSHIP_MOVE, "point", Order.point(world.map.mothership_pos[world.human_team]), {}],
@@ -95,9 +107,21 @@ func _physics_process(_dt: float) -> void:
 	while _given < _list.size() and world.tick_count >= int((_list[_given] as Array)[0]):
 		var row: Array = _list[_given]
 		_given += 1
-		var o := Order.make(str(row[1]), world.human_team, Rules.ADMIRAL_SEAT, true, row[4], [], str(row[2]), row[3])
+		var target = row[3]
+		if str(target) == "@ship":
+			target = _first_ship_item()
+		var o := Order.make(str(row[1]), world.human_team, Rules.ADMIRAL_SEAT, true, row[4], [], str(row[2]), target)
 		if world.orders.submit(o) == "":
 			_accepted += 1
+
+
+## The id of the first ship item in the human team's build list ("@ship" in the lists above stands for
+## it, for the orders that name an item), or "" when the list has none.
+func _first_ship_item() -> String:
+	for it: Dictionary in world.teams[world.human_team].production.items:
+		if it["kind"] == Production.SHIP:
+			return str(it["id"])
+	return ""
 
 
 ## The match is over (the hash test quit): print the verdict.

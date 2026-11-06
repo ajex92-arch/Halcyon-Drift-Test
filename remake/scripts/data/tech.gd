@@ -12,7 +12,7 @@ extends RefCounted
 ##   TECHS       research items (one researches at a time, 3 may be
 ##               queued). Each needs the Research Module plus the facility
 ##               of its column.
-## Both are paid in full from the team treasury when they are queued, and
+## Both are paid in full from the team treasury when the build list starts them, and
 ## the queues themselves are run by TeamTech (team_tech.gd). The research
 ## board shows TECHS in columns (COLUMNS), and the helper functions at the
 ## bottom answer "may we queue this?" and "may our pilots buy this hull?".
@@ -24,8 +24,7 @@ extends RefCounted
 ##   req_fac   facilities that must be built first (a list of ids)
 ##   req_tech  research that must be finished first (a list of ids)
 ##   blurb     what it does, in words for players; read it through
-##             facility_blurb(), which fills in "{fleet_cap}" (the Fleet
-##             Command limit of this match) and "{spool}" (the seconds a
+##             facility_blurb(), which fills in "{spool}" (the seconds a
 ##             hyperspace launch spools up in this match)
 ## A research item's fields:
 ##   label, cost [credits], time [seconds] and blurb, as above
@@ -111,7 +110,7 @@ const FACILITIES := {
 	"hyperspace": {"label": "Hyperspace Module", "cost": 1200.0, "time": 40.0, "req_fac": ["research", "corvette"], "req_tech": [],
 		"blurb": "Pilots can launch straight to any friendly repair bay ({spool}s spool-up)."},
 	"fleet": {"label": "Fleet Command Module", "cost": 2000.0, "time": 60.0, "req_fac": ["capital"], "req_tech": [],
-		"blurb": "Direct minion control. Free minion waves stop; buy up to {fleet_cap} minions and order them."},
+		"blurb": "Not used yet. The free minion waves keep coming and this module buys nothing; a later stage gives it a job."},
 }
 
 ## Research columns, in board order. "research" = General, "flagship" =
@@ -232,16 +231,13 @@ static func blurb(id: String) -> String:
 
 
 ## The description of mothership module (facility) `id` for players: its
-## "blurb", with "{fleet_cap}" replaced by the most bought minions a team may
-## have alive in this match (Minions.control_cap(): 30 in the old rules, 60 in
-## the standard rules through the fleet_cap variant) and "{spool}" by the seconds a
-## hyperspace launch spools up (World.HYPERSPACE_SPOOL, 6, unless the redeploy
-## variant tuned "hyperspace_spool" to 4), so the Fleet Command and Hyperspace
-## Module cards never show a stale number. The admiral board's module cards
-## show it.
+## "blurb", with "{spool}" replaced by the seconds a hyperspace launch spools up
+## (World.HYPERSPACE_SPOOL, 6, unless the redeploy variant tuned "hyperspace_spool"
+## to 4), so the Hyperspace Module's card never shows a stale number. The admiral
+## board's module cards show it.
 static func facility_blurb(id: String) -> String:
 	var spool := int(Rules.tune("hyperspace_spool", World.HYPERSPACE_SPOOL))
-	return String(FACILITIES[id]["blurb"]).format({"fleet_cap": Minions.control_cap(), "spool": spool})
+	return String(FACILITIES[id]["blurb"]).format({"spool": spool})
 
 
 ## Why a research item can't be queued, or "" if it can. `planned` = done +

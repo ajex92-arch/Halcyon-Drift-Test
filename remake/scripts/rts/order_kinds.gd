@@ -20,9 +20,8 @@ extends RefCounted
 ##
 ## WHO USES IT: Order (the record), OrderQueue and OrderChecks (the tiers), AdmiralCommand
 ## (the words), RtsEvents and AlertList (the codes), the screens (to build records),
-## and tests/order_check.gd, which walks every table. The squad and production
-## kinds are only named here; their handlers come with their own stages and are
-## registered in OrderQueue.handlers.
+## and tests/order_check.gd, which walks every table. The squad kinds are
+## only named here; the production kinds are registered by ProductionOrders.
 
 # --- the kinds -----------------------------------------------------------------
 ## The Admiral's orders of today's game.
@@ -35,8 +34,6 @@ const BAY := "BAY"  # send out a repair bay
 const WARD := "WARD"  # place a ward
 const WAYPOINT := "WAYPOINT"  # set the rally waypoint (may declare a siege)
 const MOTHERSHIP_MOVE := "MOTHERSHIP_MOVE"  # move the mothership
-const MINION_BUY := "MINION_BUY"  # buy a minion (Fleet Command)
-const MINION_ORDER := "MINION_ORDER"  # give minions an order (Fleet Command)
 ## The computer Admiral's siege call (a human declares a siege with a waypoint).
 const SIEGE := "SIEGE"  # the computer Admiral's siege state
 ## Game speed (applied at once, never queued) and the reserved pause.
@@ -74,7 +71,7 @@ const SET_POSTURE := "SET_POSTURE"  # later: reserved
 
 ## Every kind there is.
 const ALL := [
-	DRONE, MODULE, RESEARCH, TURRET, POST, BAY, WARD, WAYPOINT, MOTHERSHIP_MOVE, MINION_BUY, MINION_ORDER,
+	DRONE, MODULE, RESEARCH, TURRET, POST, BAY, WARD, WAYPOINT, MOTHERSHIP_MOVE,
 	SIEGE, GAME_SPEED, PAUSE,
 	ESCORT, ATTACK, HOLD, MOVE, GUARD, SET_FORMATION, SET_STANCE,
 	PRODUCE, CANCEL, MOVE_ITEM, HOLD_ITEM, SET_REPEAT, SET_RALLY,
@@ -85,7 +82,7 @@ const SQUADRON_KINDS := [ESCORT, ATTACK, HOLD, MOVE, GUARD, SET_FORMATION, SET_S
 ## The ship yard's orders.
 const PRODUCTION_KINDS := [PRODUCE, CANCEL, MOVE_ITEM, HOLD_ITEM, SET_REPEAT, SET_RALLY]
 ## The kinds that AdmiralCommand carries out (the queue calls its functions).
-const BUILT_IN := [DRONE, MODULE, RESEARCH, TURRET, POST, BAY, WARD, WAYPOINT, MOTHERSHIP_MOVE, MINION_BUY, MINION_ORDER, SIEGE]
+const BUILT_IN := [DRONE, MODULE, RESEARCH, TURRET, POST, BAY, WARD, WAYPOINT, MOTHERSHIP_MOVE, SIEGE]
 ## Kinds that take effect the moment they are submitted, never queued.
 const AT_ONCE := [GAME_SPEED]
 ## The game speeds an order may name, in whole hundredths of normal.
@@ -104,7 +101,6 @@ const TEST_SEAT := -2
 const TARGETS := {
 	DRONE: ["none"], MODULE: ["id"], RESEARCH: ["id"], TURRET: ["node"], POST: ["lane"],
 	BAY: ["point"], WARD: ["point"], WAYPOINT: ["point"], MOTHERSHIP_MOVE: ["point"],
-	MINION_BUY: ["none"], MINION_ORDER: ["point", "lane"],
 	SIEGE: ["lane", "none"], GAME_SPEED: ["none"], PAUSE: ["none"],
 	ESCORT: ["unit"], ATTACK: ["unit"], HOLD: ["point"], MOVE: ["point", "unit"], GUARD: ["unit"],
 	SET_FORMATION: ["none"], SET_STANCE: ["none"],
@@ -125,8 +121,6 @@ const SETTINGS := {
 	POST: {}, BAY: {}, WARD: {},
 	WAYPOINT: {"siege": ["enum", [0, 1], true]},
 	MOTHERSHIP_MOVE: {},
-	MINION_BUY: {"type": ["str", [], true], "lane": ["str", [], true]},
-	MINION_ORDER: {"type": ["enum", ["move", "hold", "lane"], true], "lane": ["str", [], false]},
 	SIEGE: {"phase": ["enum", ["gather", "assault", ""], true]},
 	GAME_SPEED: {"hundredths": ["enum", [50, 75, 100, 150, 200], true]},
 	PAUSE: {},
@@ -155,7 +149,7 @@ const SETTINGS := {
 ## the computer's, in its think; "later" = reserved, no handler yet.
 const APPLIES := {
 	DRONE: "next", MODULE: "next", RESEARCH: "next", TURRET: "next", POST: "next", BAY: "next", WARD: "next",
-	WAYPOINT: "next", MOTHERSHIP_MOVE: "next", MINION_BUY: "next", MINION_ORDER: "next",
+	WAYPOINT: "next", MOTHERSHIP_MOVE: "next",
 	SIEGE: "same", GAME_SPEED: "once", PAUSE: "later",
 	ESCORT: "next", ATTACK: "next", HOLD: "next", MOVE: "next", GUARD: "next", SET_FORMATION: "next", SET_STANCE: "next",
 	PRODUCE: "next", CANCEL: "next", MOVE_ITEM: "next", HOLD_ITEM: "next", SET_REPEAT: "next", SET_RALLY: "next",
@@ -163,11 +157,11 @@ const APPLIES := {
 	MERGE: "later", PING: "later", REQUEST: "later", ANSWER: "later", DEPUTY: "later", SET_POSTURE: "later",
 }
 ## The word Events.admiral_result carries for each kind ("none": no toast). The
-## first eleven are the words the HUD, the fun probe and the audits already read.
+## first nine are the words the HUD, the fun probe and the audits already read.
 ## A pilot's squad order sends no toast word (see action_word).
 const ACTION := {
 	DRONE: "drone", MODULE: "facility", RESEARCH: "research", TURRET: "turret", POST: "post", BAY: "bay",
-	WARD: "ward", WAYPOINT: "waypoint", MOTHERSHIP_MOVE: "move", MINION_BUY: "minion", MINION_ORDER: "order",
+	WARD: "ward", WAYPOINT: "waypoint", MOTHERSHIP_MOVE: "move",
 	SIEGE: "none", GAME_SPEED: "none", PAUSE: "none",
 	ESCORT: "squad_escort", ATTACK: "squad_attack", HOLD: "squad_hold", MOVE: "squad_move", GUARD: "squad_guard",
 	SET_FORMATION: "squad_formation", SET_STANCE: "squad_stance",
@@ -195,7 +189,7 @@ const TEXT_DUPLICATE := "Same order again"  # refusal text
 const REASONS := [
 	["Not enough in the team treasury", "money"],
 	["Drone limit reached", "room"], ["Drone build queue is full", "room"], ["Build queue is full", "room"],
-	["Research queue is full", "room"], ["You already have", "room"], ["Minion cap reached", "room"],
+	["Research queue is full", "room"], ["You already have", "room"],
 	["Every turret slot here is taken", "room"],
 	["Needs ", "unlock"], ["Already built or being built", "unlock"], ["Already researched or queued", "unlock"],
 	["That spot is inside an asteroid", "place"], ["The bay can't reach that spot", "place"],
@@ -208,7 +202,6 @@ const REASONS := [
 	["The mothership can't move right now", "time"], ["The post stands", "time"],
 	["The post is being rebuilt", "time"], ["The post was destroyed", "time"],
 	["Enemy ships are too close", "time"], ["A turret was just destroyed here", "time"],
-	["The mothership can't launch minions", "time"],
 	[TEXT_GONE_UNIT, "gone"], [TEXT_GONE_SQUAD, "gone"], ["You have no wingmen", "gone"], ["Target not in sight", "gone"],
 	[TEXT_SPEED, "value"], [TEXT_VALUE, "value"], [TEXT_NO_ITEM, "value"],
 	["No target under the reticle", "value"], ["No big ship under the reticle", "value"],
@@ -256,7 +249,7 @@ static func may_send(kind: String, seat: int, squad = null) -> bool:
 			return int(_squad_field(squad, "owner_seat", -99)) == seat
 		return admiral or deputy
 	match kind:
-		SIEGE, WAYPOINT, MOTHERSHIP_MOVE, MINION_BUY, MINION_ORDER, DEPUTY:
+		SIEGE, WAYPOINT, MOTHERSHIP_MOVE, DEPUTY:
 			return admiral
 		PING, REQUEST, ANSWER:
 			return seat >= 0 and seat <= Rules.ADMIRAL_SEAT

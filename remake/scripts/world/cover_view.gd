@@ -12,7 +12,8 @@ extends Node2D
 ## patch is denser than its rim and the edge follows the cells softly. The
 ## shapes are fixed (no random numbers, no particles) and the picture is made
 ## once: Godot remembers the drawing. It is drawn above the ships (z_index 3)
-## and under the shots and the fog.
+## and under the shots and the fog. The discs go through a CircleBatch, so the
+## hundreds of them take a few drawing commands, not one each.
 ##
 ## WHO USES IT: WorldSetup makes it and calls setup() (World child "CoverView").
 ## It reads World.vision.cover (the cells, ids and kinds).
@@ -50,6 +51,9 @@ func _draw() -> void:
 	var cover := world.vision.cover
 	var vision := world.vision
 	var cell := vision.cell
+	# All the discs in one batch (a few drawing commands, not one for every disc), in the
+	# order they are made, so they blend the way they did one by one.
+	var batch := CircleBatch.new()
 	for id in range(1, cover.cells.size()):
 		var col := Palette.POCKET if str(cover.kinds[id]) == "pocket" else Palette.GAS
 		var layers: Array = [
@@ -60,4 +64,5 @@ func _draw() -> void:
 		for c in cover.cells[id] as PackedInt32Array:
 			var at := Vector2((float(c % vision.cols) + 0.5) * cell, (float(c / vision.cols) + 0.5) * cell)
 			for layer: Array in layers:
-				draw_circle(at, float(layer[0]), layer[1] as Color)
+				batch.add(at, float(layer[0]), layer[1] as Color)
+	batch.draw(self)

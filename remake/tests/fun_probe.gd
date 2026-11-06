@@ -323,6 +323,7 @@ func _results(mship: MsPart, cap: float) -> Dictionary:
 		"start_min": snappedf(start_t / 60.0, 0.01),
 		"secs_cap": int(cap),
 		"variants": Game.variants,
+		"team_variants": Game.team_variants,
 		"skill_jitter": Game.opt("skill-jitter") != null,
 		"damage_hook": hook,
 		"ended": ended,

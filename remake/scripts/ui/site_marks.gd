@@ -24,7 +24,8 @@ extends RefCounted
 ## site's HELD, BUILDING and LOCKED are public (the map already shows who holds
 ## it, and the admiral board reads the true holder); CONTESTED and CLEAR show
 ## only to a team that has a pilot ship or minion inside the circle or sees its
-## centre (knows()), else the site reads OPEN. Nothing is drawn with a flash.
+## centre (knows()), else the site reads OPEN (with No fog on, FogOff, every site is known).
+## Nothing is drawn with a flash.
 ##
 ## WHO USES IT: ResourceNode draws its ring with it, the minimap draws the
 ## nodes' rings with it and the news feed (HudFeed) asks knows(). The state
@@ -70,7 +71,7 @@ static func view(w: World, n: ResourceNode, vt: int) -> Dictionary:
 ## May team `vt` see who stands in site `n`'s build circle? Yes with a pilot
 ## ship or minion of its own inside, or with sight of the site's centre.
 static func knows(w: World, n: ResourceNode, vt: int) -> bool:
-	if vt < 0:
+	if vt < 0 or FogOff.is_on():
 		return true
 	var s := n.site
 	if int(s.pilots[vt]) + int(s.minions[vt]) > 0:

@@ -61,8 +61,14 @@ func refresh() -> void:
 	# Paused, or an Admiral map tool waiting for a click on the map.
 	if get_tree().paused:
 		title = "Paused"
-		# While the note box is open P types a letter, so no resume hint.
-		sub = "" if hud._note_is_open() else "Press P to resume."
+		# While the note box is open P types a letter, so no hint about it. While the pause menu's
+		# Look around has hidden the card, the line names the two keys that go on from here.
+		if hud._note_is_open():
+			sub = ""
+		elif hud.pause_menu != null and hud.pause_menu.looking:
+			sub = "%s or the Menu button: menu   %s: resume" % [KeyMapText.key_of("cancel"), KeyMapText.key_of("pause")]
+		else:
+			sub = "Press P for the pause menu."
 	elif hud.overlay.tool != "":
 		title = hud.overlay.hint()
 		# Amber is this banner's tone for a notice; red stays for danger.

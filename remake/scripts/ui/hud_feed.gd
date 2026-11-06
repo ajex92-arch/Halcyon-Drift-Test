@@ -152,17 +152,20 @@ func on_unit_killed(u: Node, info: RefCounted) -> void:
 			add_line("%s %s defense post destroyed" % [Rules.TEAM_DISPLAY[unit.team], str(MapLayout.LANES[(unit as DefensePost).lane]["label"]).to_lower()], _good_bad(1 - unit.team))
 		Unit.K_MONSTER:
 			if killer != null and (_vt() < 0 or killer.team == _vt()):
-				add_line("%s cleared a derelict %s" % [killer.callsign, (unit as Derelict).ctype], Palette.VEIL)
+				add_line("%s collected the bounty on a %s" % [killer.callsign, unit.display_name], Palette.SCUM_BOLT)
 
 
 ## The sentence for ship `s` being destroyed by the blow `d` (fired by
 ## pilot `killer`, or null when no pilot did it): shot down by a pilot,
 ## crashed into an asteroid, destroyed by something else (a turret, a
-## minion, a mothership, a derelict...), or just "destroyed".
+## minion, a mothership, a Scum ship...), or just "destroyed".
 func _ship_cause(s: Ship, d: DamageInfo, killer: PilotProfile) -> String:
 	var victim := s.profile
 	var hull := String(Ships.HULLS[s.hull_id]["label"])
 	var vname := victim.callsign if victim != null else "A pilot"
+	# A bought ship's crew has no name worth showing: the line names its team.
+	if victim != null and victim.is_crew:
+		vname = Rules.TEAM_DISPLAY[s.team]
 	var cause := ""
 	if killer != null:
 		cause = "%s shot down %s's %s" % [killer.callsign, vname, hull]
@@ -170,12 +173,12 @@ func _ship_cause(s: Ship, d: DamageInfo, killer: PilotProfile) -> String:
 		cause = "%s's %s crashed into an asteroid" % [vname, hull]
 	elif d.source != null and is_instance_valid(d.source):
 		# Name the thing that fired, with its team: "a Vhorr turret", "an Aurelian minion",
-		# "the Aurelian mothership" or "a derelict gunship".
+		# "the Aurelian mothership" or "a Scum Raider".
 		var what: String = Unit.KIND_NAMES[d.source.kind]
 		if d.source.kind == Unit.K_MOTHERSHIP:
 			what = "the %s mothership" % Rules.TEAM_DISPLAY[d.source.team]
 		elif d.source.team == Rules.NEUTRAL:
-			what = "a derelict " + what
+			what = "a " + String(d.source.display_name)
 		else:
 			var tn: String = Rules.TEAM_DISPLAY[d.source.team]
 			what = "%s %s %s" % ["an" if "AEIOU".contains(tn.left(1)) else "a", tn, what]

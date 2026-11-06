@@ -37,8 +37,12 @@ extends Node
 ##   - each computer admiral takes the field and stays out (AdmiralField.
 ##     force_reason): with the 5 pilots in space that makes 6 ships a side,
 ##     and the admiral launches again at once if it is shot down;
-##   - STAGE 4 HOOK (_fill_wings): every pilot will own the most wingmen it
-##     may have. Nothing happens there yet; stage 4 puts the code in.
+##   - THE WING HOOK (_fill_wings): with --wingmen on, every pilot keeps the
+##     full wing: a wingman that was lost is replaced once a second.
+##   - THE FLEET (_fill_fleet): both teams keep a full fleet of bought ships
+##     (FleetFill: 18 a team, a mix of squadrons, corvettes, frigates and
+##     Destroyers), so the run measures the fleet at the limit. Ships lost in a
+##     fight are bought again at once, once a second.
 ## Both settings are made here, in the test, so the game's own code is not
 ## touched. Without --perf-worst the probe only measures and nothing about
 ## the match changes.
@@ -108,7 +112,7 @@ var _usec := 0
 ## The three slowest ticks after the first 2 minutes of the run, slowest
 ## first (microseconds).
 var _slow: Array = []
-## Seconds until the stage 4 hook runs next (it runs once a second).
+## Seconds until the wing hook (_fill_wings) and the fleet fill (_fill_fleet) run next (once a second).
 var _wings_t := 0.0
 ## True once PERF_JSON has been printed (it is printed only once).
 var _done := false
@@ -149,7 +153,7 @@ func setup(w: World) -> void:
 	Events.match_over.connect(_on_match_over)
 	print("perf_probe: late=%s perf_worst=%s profiling=%s secs=%d start_t=%d" % [late, worst_case, world.profiling, int(secs - _t0), int(_t0)])
 	if worst_case:
-		print("perf_probe: worst-case load on: respawn waits 0 s, no AI shopping trips home, admirals kept in the field, wingman hook (stage 4) idle")
+		print("perf_probe: worst-case load on: respawn waits 0 s, no AI shopping trips home, admirals kept in the field, fleets kept full, wing hook %s" % ("on (--wingmen)" if Game.opt("wingmen") != null else "idle"))
 
 
 ## Godot calls this every tick. Count the tick, keep the worst case going,
@@ -194,8 +198,8 @@ func _apply_worst_case() -> void:
 
 ## Every tick of a --perf-worst run: keep every AI pilot "just launched", so
 ## that PilotShopping.wants_shopping() never sends it home to shop (it says
-## "no" in the first 150 s after a launch), and run the stage 4 hook once a
-## second.
+## "no" in the first 150 s after a launch), and run the wing hook and the fleet
+## fill once a second.
 func _keep_worst_case(dt: float) -> void:
 	for p: PilotProfile in world.pilot_ai:
 		(world.pilot_ai[p] as PilotAI).launched_at = world.time
@@ -203,16 +207,32 @@ func _keep_worst_case(dt: float) -> void:
 	if _wings_t <= 0.0:
 		_wings_t = 1.0
 		_fill_wings()
+		_fill_fleet()
 
 
-## STAGE 4 HOOK. Stage 4 (wingmen) fills this in: every pilot in space that
-## has a free wingman slot buys the most wingmen it may have (up to 3 with
-## the full Wing Command research), so the performance runs measure the
-## heaviest load. It is called once a second while --perf-worst is on, so
-## wingmen lost in a fight are bought again. Today the game has no wingmen,
-## so there is nothing to do.
+## The wing hook: while the launch option --wingmen is set, every wing whose leader is in space gets
+## a new wingman in each place that lost one (Squads.replace_wingman), so the performance runs
+## measure the heaviest load: every pilot with the full wing. It is called once a second while
+## --perf-worst is on, so wingmen lost in a fight come back. Without --wingmen nothing happens.
 func _fill_wings() -> void:
-	pass
+	if Game.opt("wingmen") == null:
+		return
+	for rec: Squad in world.squads.values():
+		if rec.kind != "wing" or rec.id != rec.wing_id:
+			continue
+		var leader := Squads.leader_ship(world, rec)
+		if leader == null:
+			continue
+		for sib: Squad in Squads.wing_records(world, rec.wing_id):
+			if Squads.crew_of(world, sib) == null:
+				Squads.replace_wingman(world, sib, leader)
+
+
+## Keep both teams' fleets of bought ships at the fleet limit (FleetFill does it through the
+## yard's own build list, skipping only the waiting and the paying). Called once a second while
+## --perf-worst is on.
+func _fill_fleet() -> void:
+	FleetFill.apply(world)
 
 
 # --- measuring ---------------------------------------------------------------------------------

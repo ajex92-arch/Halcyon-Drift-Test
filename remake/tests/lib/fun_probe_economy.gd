@@ -21,8 +21,9 @@ extends RefCounted
 ##     two teams (treasury_float_late averages these).
 ##   - on_admiral_result() (every Events.admiral_result): from 30:00 on, a
 ##     successful admiral order counts as a decision if it is not a drone,
-##     a waypoint or a minion order (so: facilities, research, turrets, bays,
-##     wards, minion purchases, mothership moves, and any new order a fork
+##     a waypoint or a yard order other than a buy (so: facilities, research,
+##     turrets, bays, wards, fleet ship purchases, mothership moves, and any
+##     new order a fork
 ##     adds), at most one per order type per team in each 30-s block.
 ##   - sample_minute() (v1): the pilots' unspent credits and both
 ##     treasuries at 30:00.

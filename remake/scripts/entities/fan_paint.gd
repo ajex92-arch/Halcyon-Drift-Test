@@ -94,7 +94,7 @@ static func enemy_in_fan(ship: Ship) -> bool:
 	if w.big_count > 0:
 		near.append_array(w.big_hash.query(centre, reach * 0.5 + Projectiles.HASH_PAD + Projectiles.BIG_PAD, []))
 	for u: Unit in near:
-		if not u.alive or u.team == ship.team or not w.vision.is_visible(ship.team, u.global_position):
+		if not u.alive or u.team == ship.team or not (FogOff.is_on() or w.vision.is_visible(ship.team, u.global_position)):
 			continue
 		if _cone_touches(from, heading, half, reach, u.global_position, u.hit_radius()):
 			return true
@@ -105,7 +105,7 @@ static func enemy_in_fan(ship: Ship) -> bool:
 			continue
 		var spine := Vector2.from_angle(ms.rotation) * ms.half_len
 		var nearest := Util.closest_on_segment(from, ms.position + spine, ms.position - spine)
-		if w.vision.is_visible(ship.team, nearest) and _cone_touches(from, heading, half, reach, nearest, ms.beam * 0.5):
+		if (FogOff.is_on() or w.vision.is_visible(ship.team, nearest)) and _cone_touches(from, heading, half, reach, nearest, ms.beam * 0.5):
 			return true
 	return false
 

@@ -97,13 +97,13 @@ func _queue_checks() -> void:
 	ts.treasury = 20000.0
 	# (a) An order submitted at tick n is carried out at tick n+1, and not before.
 	var n0 := world.tick_count
-	var drones0 := ts.drone_queue.size()
+	var drones0 := ts.drones_queued()
 	var o := Refusals.rec(OrderKinds.DRONE, 5, true, {"node": ""})
 	check("(a) the order is accepted", q.submit(o) == "")
 	check("(a) it is stamped tick n and carried out at tick n+1", int(o["tick"]) == n0 and int(o["apply_tick"]) == n0 + 1 and int(o["id"]) > 0)
-	check("(a) it is not carried out before the tick", ts.drone_queue.size() == drones0 and q.queue.size() == 1)
+	check("(a) it is not carried out before the tick", ts.drones_queued() == drones0 and q.queue.size() == 1)
 	await _tick()
-	check("(a) it is carried out by the next tick", ts.drone_queue.size() == drones0 + 1 and q.queue.is_empty() and world.tick_count == n0 + 1)
+	check("(a) it is carried out by the next tick", ts.drones_queued() == drones0 + 1 and q.queue.is_empty() and world.tick_count == n0 + 1)
 	# (b) Two orders in one tick go in (seat, id) order.
 	q.handlers[OrderKinds.PING] = func(r: Dictionary) -> String:
 		_seen.append(int(r["id"]))
@@ -122,16 +122,16 @@ func _queue_checks() -> void:
 	await _tick()
 	await _tick()
 	var paused_tick := world.tick_count
-	var before := ts.drone_queue.size()
+	var before := ts.drones_queued()
 	var held := Refusals.rec(OrderKinds.DRONE, 5, true, {"node": ""})
 	check("(c) an order is accepted while paused", q.submit(held) == "")
 	check("(c) a refusal comes back at once while paused", q.submit(Refusals.rec(OrderKinds.BAY, 5, true, {}, [], "point", Vector2i(5, 5))) != "")
 	await _tick()
 	await _tick()
-	check("(c) nothing is carried out while paused", ts.drone_queue.size() == before and world.tick_count == paused_tick and q.queue.size() == 1)
+	check("(c) nothing is carried out while paused", ts.drones_queued() == before and world.tick_count == paused_tick and q.queue.size() == 1)
 	get_tree().paused = false
 	await _tick()
-	check("(c) it is carried out on the first tick after the resume", ts.drone_queue.size() == before + 1 and int(held["apply_tick"]) == paused_tick + 1 and world.tick_count == paused_tick + 1)
+	check("(c) it is carried out on the first tick after the resume", ts.drones_queued() == before + 1 and int(held["apply_tick"]) == paused_tick + 1 and world.tick_count == paused_tick + 1)
 	# (e) A refusal at submit is not logged; one at apply is, with its code.
 	q.flush()
 	var logged_before := (OrderLog.read(_log_path)["orders"] as Array).size()
@@ -144,7 +144,14 @@ func _queue_checks() -> void:
 			at_submit = str((e["data"] as Dictionary)["at"])
 	check("(e) a refusal at submit is not logged and its event says submit", refused != "" and at_submit == "submit" and (OrderLog.read(_log_path)["orders"] as Array).size() == logged_before, at_submit)
 	ts.treasury = 20000.0
-	var doomed := Refusals.rec(OrderKinds.DRONE, 5, true, {"node": ""})
+	# A turret pays when it is ordered (a drone, a module and a research pay when their
+	# build starts), so it is the order whose money runs out between submit and apply.
+	var site: ResourceNode = null
+	for n in world.nodes:
+		if site == null and n.free_slot() >= 0 and n.build_blocker(0, "pd") == "":
+			site = n
+	check("(e) the test found a turret site", site != null)
+	var doomed := Refusals.rec(OrderKinds.TURRET, 5, true, {"ttype": "pd"}, [], "node", site.node_id)
 	check("(e) an order that passes the first checks is accepted", q.submit(doomed) == "")
 	ts.treasury = 0.0
 	cursor = world.events_rts.next_index(0)
@@ -176,6 +183,7 @@ func _queue_checks() -> void:
 	check("(h) DRONE counters: 3 submitted, 2 carried out, 1 refused: room", c1[0] - c0[0] == 3 and c1[1] - c0[1] == 2 and c1[2] - c0[2] == 1, "%s -> %s" % [str(c0), str(c1)])
 	# (l) The computer's direct orders are in the log with marker a and the tick of the call.
 	ts.drone_queue.clear()
+	ts.production.items.clear()
 	var think_tick := world.tick_count
 	check("(l) a direct call works at once", world.command.build_drone(0) == "")
 	q.flush()
@@ -210,24 +218,25 @@ func _queue_checks() -> void:
 	check("(m) each siege call is one log line", siege_lines == 4, str(siege_lines))
 	# (u) The switch that queues the computer's orders: on, a direct call waits for the next tick.
 	ts.drone_queue.clear()
-	var d0 := ts.drone_queue.size()
+	ts.production.items.clear()
+	var d0 := ts.drones_queued()
 	OrderQueue.AI_THROUGH_QUEUE = true
 	var queued := world.command.build_drone(0)
 	OrderQueue.AI_THROUGH_QUEUE = false
-	check("(u) with the switch on a direct call is queued, not carried out", queued == "" and q.queue.size() == 1 and ts.drone_queue.size() == d0)
+	check("(u) with the switch on a direct call is queued, not carried out", queued == "" and q.queue.size() == 1 and ts.drones_queued() == d0)
 	await _tick()
-	check("(u) it is carried out on the next tick with the same result", q.queue.is_empty() and ts.drone_queue.size() == d0 + 1)
-	var d1 := ts.drone_queue.size()
+	check("(u) it is carried out on the next tick with the same result", q.queue.is_empty() and ts.drones_queued() == d0 + 1)
+	var d1 := ts.drones_queued()
 	world.command.build_drone(0)
-	check("(u) with the switch off a direct call is carried out at once", ts.drone_queue.size() == d1 + 1 and q.queue.is_empty())
+	check("(u) with the switch off a direct call is carried out at once", ts.drones_queued() == d1 + 1 and q.queue.is_empty())
 	# (x) During a replay of the computer's orders a direct call is refused and changes nothing.
 	var counts_before := q.counters()
-	var d2 := ts.drone_queue.size()
+	var d2 := ts.drones_queued()
 	var money := ts.treasury
 	q.replaying_ai = true
 	var direct := world.command.build_drone(0)
 	q.replaying_ai = false
-	check("(x) a direct call during a replay of the computer's orders changes nothing", direct == "" and ts.drone_queue.size() == d2 and ts.treasury == money and q.counters() == counts_before)
+	check("(x) a direct call during a replay of the computer's orders changes nothing", direct == "" and ts.drones_queued() == d2 and ts.treasury == money and q.counters() == counts_before)
 
 
 ## The counters of kind `kind` for team 0 as [submitted, ok, refused (all codes)].

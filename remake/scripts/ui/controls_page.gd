@@ -7,7 +7,8 @@ extends PanelContainer
 ## HOW IT WORKS: the layout is the scene scenes/ui/controls_page.tscn: a title row with a tab
 ## for each mode (Home, Flying, Flying with the board open) and Close; a bar with "Reset this
 ## mode" and "Reset all" (each asks once, in the bar); the key set pickers of the tab (the home
-## layout); the clash warning; and a scrolling list of rows made by ControlsRows. A row shows
+## layout on the Home tab, the wing commands on the Flying tab); the clash warning; and a
+## scrolling list of rows made by ControlsRows. A row shows
 ## the action's name, two key buttons and a short note. A click on a key button waits for a key
 ## or mouse button 3 to 5 (ControlsCapture; Esc cancels). A key that another action in the same
 ## mode (or every mode) already uses is not taken: the page shows a warning in the danger colour

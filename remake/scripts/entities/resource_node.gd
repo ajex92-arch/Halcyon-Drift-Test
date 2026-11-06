@@ -25,7 +25,10 @@ extends Node2D
 ##     and "not within 60 s of a turret dying here".
 ##   - Owner: the team with a live turret here holds the node
 ##     (owner_team()). The node draws a ring in that team's colour, or
-##     neutral grey when nobody holds it.
+##     neutral grey when nobody holds it. The picture is drawn again only when something it
+##     shows has changed (_look_key(): the holder, the site's state, each rock's ore, the
+##     turrets standing, the zoom) and only while the node is near the camera's view
+##     (ViewCull), not on every tick.
 ## It is not a Unit: it extends Node2D (a plain 2D thing in the scene), so
 ## it can't be shot and has no sim_update(); World calls tick() instead.
 ## Distances are in world units (1 world unit is about one pixel at normal
@@ -80,6 +83,8 @@ var rebuild_lock_until := 0.0
 ## The site's record: its id, name, kind, build circle, clear window and state
 ## (see TurretSite). Made by setup().
 var site: TurretSite = null
+## What the picture last drawn showed (see _look_key()); empty before the first drawing.
+var _look := PackedInt32Array()
 
 
 ## Fill the node in from the map's description `info` (id, name, kind,
@@ -215,17 +220,45 @@ func take_ore(i: int, amount: float) -> float:
 
 
 ## One tick of `dt` seconds: every rock grows back a little (never above
-## its maximum), the site's record notes a change of state, and the node
-## redraws (not with --sim-only, Game.sim_only: then nothing is drawn). World
-## calls this every tick.
+## its maximum) and the site's record notes a change of state. World calls this
+## every tick. (The picture is asked for in _process(), not here: a frame can hold
+## several ticks.)
 func tick(dt: float) -> void:
 	var regen := MapLayout.ORE_REGEN * value * dt
 	for i in ore.size():
 		ore[i] = minf(ore_max[i], ore[i] + regen)
 	site.update(self, world.tick_count)
-	if not Game.sim_only:
+
+
+## Every frame: ask for a new picture only when what the picture shows has changed (see
+## _look_key()), and only while the node is near the camera's view (a node far from it is
+## brought up to date on the first frame it comes near). A frame can hold several ticks of
+## the match, and the picture used to be asked for on every one of them.
+func _process(_dt: float) -> void:
+	if world == null or Game.sim_only or not is_visible_in_tree():
+		return
+	if not ViewCull.near(get_viewport(), global_position, MapLayout.NODE_RADIUS + 900.0):
+		return
+	var key := _look_key()
+	if key != _look:
+		_look = key
 		queue_redraw()
 
+
+## What _draw() shows, as a list of whole numbers that changes when the picture must: who
+## holds the node and who is looking, the site's state (its build or lock progress in 64ths),
+## each rock's ore in 128ths (and whether it is dry), whether each slot has a live turret, and
+## the camera zoom in steps of 2%.
+func _look_key() -> PackedInt32Array:
+	var v := SiteMarks.view(world, self, world.viewer_team)
+	var z := _px()
+	var key := PackedInt32Array([owner_team(), world.viewer_team, String(v["state"]).hash(), int(v["team"]), int(v["left"]), int(float(v["progress"]) * 64.0), int(v["p0"]) * 16 + int(v["p1"]), int(floor(log(z) / 0.0198))])
+	for i in ore.size():
+		var left := ore[i] / ore_max[i] if ore_max[i] > 0.0 else 0.0
+		key.append(int(left * 128.0) + (1024 if left > 0.05 else 0))
+	for t in slots:
+		key.append(1 if (t != null and is_instance_valid(t) and t.alive) else 0)
+	return key
 
 ## World units per screen pixel at the current camera zoom (zoom limited to at
 ## least 0.02), so lines and words keep their size on screen.

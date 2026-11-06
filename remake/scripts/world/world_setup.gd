@@ -90,13 +90,13 @@ static func build(w: World, role: String) -> void:
 	# Rocks block sight, so Vision must hear when one is shot apart.
 	w.asteroids.rock_destroyed.connect(func(_i: int) -> void: w.vision.on_rock_destroyed())
 	# Projectiles and effects are child nodes; they also need to know
-	# whose fog the screen shows.
+	# whose fog the screen shows (none while the No fog option is on: FogOff).
 	w.projectiles = w.get_node("Projectiles")
 	w.projectiles.setup(w)
-	w.projectiles.viewer_team = w.viewer_team
+	w.projectiles.viewer_team = -1 if FogOff.is_on() else w.viewer_team
 	w.effects = w.get_node("Effects")
 	w.effects.setup(w)
-	w.effects.viewer_team = w.viewer_team
+	w.effects.viewer_team = -1 if FogOff.is_on() else w.viewer_team
 	w.combat = Combat.new(w)
 	w.rules = MatchRules.new(w)
 	w.command = AdmiralCommand.new(w)
@@ -105,6 +105,12 @@ static func build(w: World, role: String) -> void:
 	# log's header waits for the first tick.
 	w.orders.configure()
 	w.events_rts = RtsEvents.new(w)
+	# The yard: its six orders (buy ships, cancel, move, hold, repeat, rally) and the
+	# think hook that keeps a bought ship's brain from retreating.
+	ProductionOrders.install(w)
+	Standin.install(w)
+	# The squad orders (a pilot's wing) get their checker and handler.
+	Squads.register(w)
 	w.alerts = [AlertList.new(0), AlertList.new(1)]
 	w.units_root = w.get_node("Units")
 	w.camera = w.get_node("CameraRig")
@@ -182,6 +188,9 @@ static func build(w: World, role: String) -> void:
 		for p: PilotProfile in w.pilot_ai.keys():
 			w.profiles.erase(p)
 		w.pilot_ai.clear()
+	# The test wings (--wingmen, the start screen's two switches): after the switch above, so a pilot it
+	# removed gets none. Nothing happens when no wing is asked for.
+	Squads.make_test_wings(w)
 	# A computer admiral for each team whose seat is "ai" (unless the
 	# "no-admiral-ai" switch is on). It gets the admiral's seat too: a profile
 	# (callsign from Roster, role "admiral") and a pilot brain, so it can take

@@ -64,11 +64,11 @@ const K_TURRET := 5
 const K_BAY := 6
 ## Kind number: a mothership (Mothership), each team's huge home ship.
 const K_MOTHERSHIP := 7
-## Kind number: a derelict camp (Derelict), a neutral "jungle monster" ship.
+## Kind number: a derelict camp (Derelict), a neutral Scum den ship (a Scum Raider or Carrier).
 ## KIND_NAMES calls it "derelict".
 const K_MONSTER := 8
-## Kind number: a snub fighter (SnubFighter), a small neutral fighter that a
-## Derelict Carrier launches.
+## Kind number: a snub fighter (SnubFighter), the small neutral Scum Fighter that a
+## Scum Carrier launches.
 const K_SNUB := 9
 ## Kind number: a pilot's personal ore extractor (PilotExtractor; only with
 ## the pilot_mining:extractor feature). It is in World.units but in no
@@ -291,7 +291,7 @@ func take_hit(info: DamageInfo, amount: float) -> float:
 	# always faced right), pick the shield zone on that side, and let it
 	# soak the hit. `raw` becomes what got past the shield. A weapon with
 	# "pierce" sends that share of the hit past the shields to the hull; with
-	# a full pierce (the torpedoes) the shields are not touched at all (they do
+	# a full pierce (the pilots' torpedo) the shields are not touched at all (they do
 	# not even restart their refill wait).
 	if shields != null and shields.max_total > 0.0:
 		var through := amount * info.pierce

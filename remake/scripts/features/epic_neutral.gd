@@ -214,7 +214,7 @@ func tick(dt: float) -> void:
 	if live() == null and world.time >= next_spawn:
 		dread = world.spawn_derelict("epic", "dreadnought", spot)
 		TfjKit.apply_test_hull(dread as Derelict)
-		TfjKit.news("A Derelict Dreadnought has appeared at the middle of the map!")
+		TfjKit.news("A Scum Dreadnought has appeared at the middle of the map!")
 	# Step 2: the Elder Core running out.
 	if elder_team >= 0 and world.time >= elder_until:
 		_end_elder()

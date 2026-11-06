@@ -20,7 +20,7 @@ extends RefCounted
 ## describe() reads the match and returns plain data: the real date
 ## and time, how far the match had got and at what world speed (slow motion),
 ## the seed, the rules played (the preset's name, "pick" for the standard
-## rules, and a label for it), difficulty and test options (Unlock everything),
+## rules, and a label for it), difficulty and test options (Unlock everything and No fog),
 ## what the human plays (seat, ship, place, credits) and the typed text. A text
 ## that starts with an item ID ("T-7: the
 ## top lane falls too fast") also gets an "item" entry, so the notes can be
@@ -169,7 +169,7 @@ static func describe(world: World, text: String, paused_before: bool, picture_na
 			"rule_set": str(CouncilPresets.LABELS.get(Game.preset, "unknown (--preset was not understood)")),
 			"variants_changed": _changed_variants(), "difficulty": Game.difficulty,
 			"damage_modifiers_removed": Rules.damage_modifiers_removed(),
-			"unlock_everything": Game.unlock_everything},
+			"unlock_everything": Game.unlock_everything, "fog_off": Game.fog_off},
 		"human": human,
 		"screen": {"window": [window_size.x, window_size.y], "camera": [int(round(cam.x)), int(round(cam.y))]},
 		"screenshot": picture_name,

@@ -30,7 +30,7 @@ const EARN_LIFE := 5.0
 ## ("minion" -> "last hit"). A reason not listed is shown as it is.
 const EARN_REASON := {"minion": "last hit", "kill": "kill", "assist": "assist", "ore": "ore share", "escort": "drone escort",
 	"turret": "turret destroyed", "repair bay": "repair bay destroyed", "drone": "mining drone destroyed", "ward": "ward destroyed",
-	"repair drone": "repair drone destroyed", "derelict": "derelict", "stipend": "stipend"}
+	"repair drone": "repair drone destroyed", "derelict": "Scum bounty", "stipend": "stipend"}
 
 ## The game world (Hud.setup() sets it).
 var world: World

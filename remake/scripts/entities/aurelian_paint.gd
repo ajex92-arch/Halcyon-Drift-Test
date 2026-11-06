@@ -577,6 +577,8 @@ static func draw_shape(ci: CanvasItem, rec: Dictionary, u: float, rot: float, px
 	# Step 3: the whole hull in one command (already cut into triangles). A hull whose nose
 	# guns are kicking back is still one command: the same triangles, with the points of
 	# the guns put in another place (kicked_points()).
+	# Smooth (antialiased) lines cost three drawing commands each; far out they are drawn plain.
+	var smooth := DrawCache.is_close_px(px)
 	var kicking := kick > 0.0 and alpha >= 1.0 and not (rec["kick"] as Dictionary).is_empty()
 	var guns_at := xf.translated_local(Vector2(-kick, 0.0))
 	if kicking:
@@ -594,10 +596,10 @@ static func draw_shape(ci: CanvasItem, rec: Dictionary, u: float, rot: float, px
 	# outline is the hull without its guns, and the guns' own outlines slid back with them.
 	if DrawParts.outline:
 		if kicking:
-			ci.draw_polyline(xf * (rec["kick"]["line"] as PackedVector2Array), line_col, line_w * px, true)
+			ci.draw_polyline(xf * (rec["kick"]["line"] as PackedVector2Array), line_col, line_w * px, smooth)
 			ci.draw_multiline(guns_at * (rec["kick"]["gun_segs"] as PackedVector2Array), line_col, line_w * px * 0.7)
 		else:
-			ci.draw_polyline(xf * (rec["line"] as PackedVector2Array), line_col, line_w * px, true)	# Step 5: the engine nozzles' light, all in one command, brighter when the engines burn harder.
+			ci.draw_polyline(xf * (rec["line"] as PackedVector2Array), line_col, line_w * px, smooth)	# Step 5: the engine nozzles' light, all in one command, brighter when the engines burn harder.
 	var glow_idx: PackedInt32Array = rec["glow_idx"]
 	if not glow_idx.is_empty():
 		var glow_pts: PackedVector2Array = rec["glow_pts"]

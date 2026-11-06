@@ -10,9 +10,10 @@ extends Node
 ## be equal, in order (the HUD's key line reads the first key), with exactly the differences the
 ## list brings on purpose (_new_actions and the extra F12 on "help"). The test reads no
 ## settings file: it runs on the standard keys. The rules of the key check then run once for every
-## combination of the key presets (every layout of every group together, so 3 now): in each mode (the
-## shared keys included) no key does two things on the same page; the flying rows are today's keys plus
-## the team wheel; Z is unbound in the flying modes (and at home under layout B) until the Vent row binds
+## combination of the key presets (every layout of every group together, so 6 now (three
+## home layouts x two wing command presets)): in each mode (the
+## shared keys included) no key does two things on the same page; the flying rows are today's keys, the team wheel
+## and the eight wing rows; Z is unbound in the flying modes (and at home under layout B) until the Vent row binds
 ## it, and Shift+Z, the key the Vent row takes in layout C, is free in the flying modes; no default
 ## uses Alt with an F-key, Alt+Tab or Alt+F4, only full screen uses Alt+Enter, and Esc is cancel only; the keys other
 ## items own (F9, P, the backquote, Ctrl+F12) are where their owners read them and used by nobody else; a
@@ -49,12 +50,14 @@ static func _oracle() -> Dictionary:
 		(o["toggle_fullscreen"] as Array).push_front(_k(KEY_F11))
 	return o
 
-## The actions the key list adds on purpose, with their events: pause, the faster speed, the debug launch
-## and the order wheel.
+## The actions the key list adds on purpose, with their events: pause, the faster speed, the debug launch,
+## the order wheel, and the wing's eight order actions, which have no key under the standard wing preset (A).
 static func _new_actions() -> Dictionary:
 	return {
 		"pause": [_k(KEY_P)], "fast_motion": [_k(KEY_QUOTELEFT, "s")], "debug_launch": [_k(KEY_F12, "c")],
 		"wheel": [_k(KEY_X), _m(MOUSE_BUTTON_XBUTTON2)],
+		"wing_follow": [], "wing_cover": [], "wing_attack": [], "wing_guard": [], "wing_hold": [], "wing_regroup": [],
+		"wing_formation": [], "wing_fire": [],
 	}
 
 ## How many checks failed.
@@ -199,8 +202,8 @@ func _presets_sane() -> void:
 						_check("presets: %s/%s key '%s' of %s reads" % [gid, pid, k, a], KeyCodes.canonical(String(k)) != "")
 
 
-## Every combination of the key presets: one preset of every group, as {group id: preset id}. Three today
-## (the home layouts); a second group of presets multiplies the number.
+## Every combination of the key presets: one preset of every group, as {group id: preset id}. Six today
+## (three home layouts x two wing command presets); a further group of presets multiplies the number.
 func _combos() -> Array:
 	var out := [{}]
 	for g: Dictionary in KeyMapData.PRESETS:
@@ -215,13 +218,18 @@ func _combos() -> Array:
 
 
 ## The pilot's keys as the game had them (and the team wheel): action -> key texts. The flying rows must be exactly these
-## (the Vent row, when it is added, is allowed on top).
+## (the Vent row, when it is added, is allowed on top; the eight wing rows are in WING_KEYS_B).
 const FLYING_KEYS := {
 	"thrust_forward": ["W"], "thrust_back": ["S"], "strafe_left": ["A", "Q"], "strafe_right": ["D", "E"], "boost": ["Shift"],
 	"fire": ["Mouse1"], "special": ["G", "Mouse2"], "face_lock": ["Ctrl"], "shield_front": ["Up"], "shield_rear": ["Down"],
 	"shield_left": ["Left"], "shield_right": ["Right"], "energy_weapons": ["1"], "energy_shields": ["2"], "energy_thrusters": ["3"],
 	"energy_balanced": ["4"], "use_kit": ["R"], "assist_toggle": ["V"], "hangar": ["B"], "dock": ["F"], "help": ["H", "F12"],
 	"center_camera": ["C"], "team_wheel": ["T", "Mouse4"],
+}
+## The keys of the wing's eight order actions under preset B of the wing_commands group (under preset A they have none).
+const WING_KEYS_B := {
+	"wing_follow": "Y", "wing_cover": "U", "wing_attack": "I", "wing_guard": "O", "wing_hold": "K", "wing_regroup": "L",
+	"wing_formation": "N", "wing_fire": "Shift+N",
 }
 ## The keys other parts of the game own, by action: they must be where their owners read them and nobody else uses them.
 const OWNED := {"note": "F9", "pause": "P", "slow_motion": "QuoteLeft", "fast_motion": "Shift+QuoteLeft", "debug_launch": "Ctrl+F12"}
@@ -243,12 +251,16 @@ func _rules(combo: Dictionary) -> void:
 		for c: Dictionary in found:
 			words.append("%s with %s" % [c["label"], ", ".join(PackedStringArray((c["others"] as Array).map(func(o: Dictionary) -> String: return String(o["label"]))))])
 		_check("no key does two things in %s%s" % [m, tag], found.is_empty(), "; ".join(PackedStringArray(words)))
-	# Rule 2: the flying rows are today's keys plus the team wheel (and the Vent row once it exists).
+	# Rule 2: the flying rows are today's keys plus the team wheel (the eight wing rows, under the wing_commands preset, and the Vent row once it exists).
 	var seen := {}
 	for r: Dictionary in KeyMap.rows("flying"):
 		var id := String(r["id"])
 		seen[id] = true
 		if id == "vent":
+			continue
+		if WING_KEYS_B.has(id):
+			var want_wing := String(WING_KEYS_B[id]) if String(combo.get("wing_commands", "A")) == "B" else ""
+			_check("flying/%s has the key '%s'%s" % [id, want_wing, tag], KeyMap.first_key("flying", id) == want_wing, KeyMap.first_key("flying", id))
 			continue
 		_check("flying/%s is a key of today's pilot%s" % [id, tag], FLYING_KEYS.has(id))
 		if FLYING_KEYS.has(id):
@@ -366,7 +378,7 @@ func _file_round_trip() -> void:
 		KeyMap.reset_to_defaults()
 		for g: String in combo:
 			KeyMap.set_preset(g, combo[g])
-		KeyMap.set_slot("flying", "use_kit", 0, "K")
+		KeyMap.set_slot("flying", "use_kit", 0, "5")
 		KeyMap.set_slot("home", "idle_next", 1, "Mouse3")
 		var want := KeyMapText.help_text()
 		_check("round trip: the file is written", KeyMap.save(tmp) == OK)

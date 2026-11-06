@@ -127,8 +127,11 @@ const PIERCE_SLUG_MEDIUM := 20
 ## Destroyer's and Battlecruiser's heavy cannons, the mothership's cannons): a
 ## third skips.
 const PIERCE_SLUG_HEAVY := 35
-## Torpedoes: all of it skips the shield.
+## The pilots' torpedo (the Bomber's): all of it skips the shield.
 const PIERCE_TORPEDO := 100
+## The Light Bomber minion's torpedo and the torpedo turret's: the shield takes
+## all of it.
+const PIERCE_TORPEDO_SOAKED := 0
 
 ## Every weapon: weapon id -> its facts (the fields are explained above).
 const WEAPONS := {
@@ -156,7 +159,7 @@ const WEAPONS := {
 	# m_bolt: the Snub-Fighter's gun. m_torp: the Light Bomber's torpedo.
 	# m_cannon and m_pd: the Patrol Leader's guns.
 	"m_bolt": {"label": "Snub-Fighter gun", "kind": "bolt", "rate": 1.75, "dmg": 12.0, "pierce": PIERCE_SLUG_LIGHT, "speed": 1050.0, "life": 0.6, "spread": 0.1, "radius": 2.6, "pellets": 1, "energy": 0.0},
-	"m_torp": {"label": "Light Bomber torpedo", "kind": "torp", "rate": 0.4, "dmg": 28.0, "pierce": PIERCE_TORPEDO, "blast_size": 50, "blast_speed": 300, "blast_curve": 0, "speed": 480.0, "life": 2.2, "spread": 0.02, "radius": 6.0, "pellets": 1, "energy": 0.0, "torp_hp": 12.0},
+	"m_torp": {"label": "Light Bomber torpedo", "kind": "torp", "rate": 0.4, "dmg": 28.0, "pierce": PIERCE_TORPEDO_SOAKED, "blast_size": 50, "blast_speed": 300, "blast_curve": 0, "speed": 480.0, "life": 2.2, "spread": 0.02, "radius": 6.0, "pellets": 1, "energy": 0.0, "torp_hp": 12.0},
 	"m_cannon": {"label": "Patrol cannon", "kind": "bolt", "rate": 1.0, "dmg": 18.0, "pierce": PIERCE_SLUG_MEDIUM, "speed": 1000.0, "life": 1.25, "spread": 0.03, "radius": 4.0, "pellets": 1, "energy": 0.0, "turn": 1.5},
 	"m_pd": {"label": "Patrol PD", "kind": "pd", "rate": 5.0, "dmg": 3.0, "pierce": PIERCE_BURST, "speed": 1600.0, "life": 0.3, "spread": 0.06, "radius": 2.5, "pellets": 1, "energy": 0.0, "turn": 5.0, "prefer": "torp_small"},
 
@@ -165,7 +168,7 @@ const WEAPONS := {
 	# home in at 0.6 rad/s). bay_pd: a repair bay with Bay Defenses.
 	# monster_gun: the derelict monsters. snub_gun: snub fighters.
 	"turret_pd_gun": {"label": "PD turret", "kind": "pd", "rate": 6.0, "dmg": 9.0, "pierce": PIERCE_BURST, "speed": 1700.0, "life": 0.9, "spread": 0.03, "radius": 3.0, "pellets": 1, "energy": 0.0, "turn": 3.0, "prefer": "torp_small"},
-	"turret_torp": {"label": "Torpedo turret", "kind": "torp", "rate": 0.45, "dmg": 110.0, "pierce": PIERCE_TORPEDO, "blast_size": 65, "blast_speed": 350, "blast_curve": 0, "speed": 560.0, "life": 4.2, "spread": 0.0, "radius": 8.0, "pellets": 1, "energy": 0.0, "torp_hp": 40.0, "homing": 0.6, "turn": 2.0},
+	"turret_torp": {"label": "Torpedo turret", "kind": "torp", "rate": 0.45, "dmg": 110.0, "pierce": PIERCE_TORPEDO_SOAKED, "blast_size": 65, "blast_speed": 350, "blast_curve": 0, "speed": 560.0, "life": 4.2, "spread": 0.0, "radius": 8.0, "pellets": 1, "energy": 0.0, "torp_hp": 40.0, "homing": 0.6, "turn": 2.0},
 	"bay_pd": {"label": "Bay PD", "kind": "pd", "rate": 6.0, "dmg": 4.0, "pierce": PIERCE_BURST, "speed": 1600.0, "life": 0.44, "spread": 0.05, "radius": 2.5, "pellets": 1, "energy": 0.0, "turn": 5.0, "prefer": "torp_small"},
 	"monster_gun": {"label": "Derelict gun", "kind": "bolt", "rate": 1.2, "dmg": 6.0, "pierce": PIERCE_SLUG_LIGHT, "speed": 1000.0, "life": 0.9, "spread": 0.05, "radius": 3.5, "pellets": 1, "energy": 0.0, "turn": 2.0},
 	"snub_gun": {"label": "Snub gun", "kind": "bolt", "rate": 2.5, "dmg": 4.0, "pierce": PIERCE_SLUG_LIGHT, "speed": 1050.0, "life": 0.6, "spread": 0.08, "radius": 2.6, "pellets": 1, "energy": 0.0},
