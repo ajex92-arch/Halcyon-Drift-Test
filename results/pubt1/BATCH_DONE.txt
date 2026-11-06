@@ -1,0 +1,12 @@
+batch: pubt1
+run: 42254329020
+finished: 2026-11-06T16:43:05Z
+runs: 2
+jobs: 2
+expected: 6
+present: 6
+missing: 0
+failed_jobs: 0
+filled_by_collect: 0
+matches_nonzero_exit: 0
+run_jobs_result: success
