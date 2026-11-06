@@ -1,0 +1,121 @@
+Godot Engine v4.7.2.stable.official.ed1daf0bf - https://godotengine.org
+preset: pick = minion_cap:on,lance_role:on,bomber_role:both,admiral_sinks:fleet,redeploy:on,gear_mk2:on,node_persist:on,ms:nosmall
+difficulty: none (no human seat), both teams earn x1.00
+features: ms, minion_cap, lance_role, bomber_role, redeploy, gear_mk2, node_persist, admiral_sinks
+match: role=spectator variants={ "retreat": "systems_failure", "escort_wing": "extra", "siege_fix": "off", "breach": "off", "ms_cap": "off", "attrition": "off", "surrender": "off", "breach_extra": "off", "ms_soft": "off", "waves_late": "off", "lanespawn": "off", "eff": "off", "ms": "nosmall", "minion_cap": "on", "escort_pd": "off", "lance_role": "on", "routing_payoff": "off", "jungle_big": "off", "zoom_max": "off", "bomber_role": "both", "slipstream": "off", "redeploy": "on", "recall": "off", "respawn": "off", "respawn_site": "off", "bay_shop": "off", "respawn_curve": "off", "bayA": "off", "econ": "off", "bounties": "off", "gear_mk2": "on", "buyback": "off", "doctrine": "off", "catchup": "off", "pilot_mining": "off", "ms_spend_weak": "off", "morale": "off", "group_late": "off", "salvage_core": "off", "jungle_scale": "off", "node_persist": "on", "epic": "off", "beacons": "off", "camp4": "off", "feats": "off", "assets": "off", "orders": "off", "fortify": "off", "admiral_smart": "off", "ms_move": "off", "home_vision": "off", "mutiny": "off", "admiral_sinks": "fleet", "fleet_cap": "30", "ai_calib": "off" } rocks=3749 nodes=26 camps=14 route_nodes=611
+YARD t=1500 team=0 saves for a Destroyer (2200): the treasury 5551
+YARD t=1500 team=0 buys a Destroyer (2200): the treasury 5551 and the income 0 a second pay it within 20 seconds
+YARD t=1500 team=0 buys Fighter x3 (450): the fleet is 1 of 17 wanted by 25:00, the treasury 5551, 5801 to spare, the income 0 a second
+YARD t=1500 team=1 saves for a Destroyer (2200): the treasury 4203
+YARD t=1500 team=1 buys a Destroyer (2200): the treasury 4203 and the income 0 a second pay it within 20 seconds
+YARD t=1500 team=1 buys Fighter x3 (450): the fleet is 1 of 17 wanted by 25:00, the treasury 4203, 4453 to spare, the income 0 a second
+YARD t=1501 team=0 buys Fighter x3 (450): the fleet is 4 of 17 wanted by 25:01, the treasury 2704, 2504 to spare, the income 0 a second
+hash t=1505 60 units, 5440cc76
+hash t=1510 110 units, 3f3be5bc
+hash t=1515 112 units, c1ee58cc
+hash t=1520 114 units, 727654b9
+YARD t=1521 team=0 repeats Fighter x3 (450): Fighter squadrons are on repeat while the fleet is below its target
+YARD t=1521 team=1 repeats Fighter x3 (450): Fighter squadrons are on repeat while the fleet is below its target
+YARD t=1522 team=0 repeats Fighter x3 (450): Fighter squadrons are on repeat while the fleet is below its target
+hash t=1525 124 units, 12a6a463
+hash t=1530 122 units, 86ea4fce
+hash t=1535 121 units, 0f8a4364
+YARD t=1539 team=1 holds Mining drone (200): the treasury 19 and the income 2 a second do not pay it within 20 seconds, so the next item may start
+hash t=1540 115 units, 559f6c3c
+YARD t=1540 team=1 holds Mining drone (200): the treasury 22 and the income 2 a second do not pay it within 20 seconds, so the next item may start
+YARD t=1541 team=0 repeats Fighter x3 (450): Fighter squadrons are on repeat while the fleet is below its target
+YARD t=1541 team=0 holds Fighter x3 (450): the treasury 199 and the income 2 a second do not pay it within 20 seconds, so the next item may start
+YARD t=1541 team=1 repeats Fighter x3 (450): Fighter squadrons are on repeat while the fleet is below its target
+YARD t=1541 team=1 holds Mining drone (200): the treasury 25 and the income 2 a second do not pay it within 20 seconds, so the next item may start
+YARD t=1542 team=0 repeats Fighter x3 (450): Fighter squadrons are on repeat while the fleet is below its target
+YARD t=1542 team=0 holds Fighter x3 (450): the treasury 202 and the income 2 a second do not pay it within 20 seconds, so the next item may start
+hash t=1545 155 units, 060cda04
+YARD t=1549 team=0 holds Mining drone (200): the treasury 23 and the income 2 a second do not pay it within 20 seconds, so the next item may start
+hash t=1550 157 units, 7178d07a
+hash t=1555 155 units, 97eda1e0
+hash t=1560 153 units, 58a70ae9
+YARD t=1561 team=1 saves for a Destroyer (2200): the treasury 85
+hash t=1565 150 units, 8d6a698e
+YARD t=1567 team=0 goes on with Fighter x3 (450): the treasury 237 pays it now or nothing else waits
+YARD t=1567 team=0 goes on with Fighter x3 (450): the treasury 237 pays it now or nothing else waits
+YARD t=1567 team=0 goes on with Mining drone (200): the treasury 237 pays it now or nothing else waits
+YARD t=1567 team=1 goes on with Mining drone (200): the treasury 283 pays it now or nothing else waits
+YARD t=1567 team=1 goes on with Mining drone (200): the treasury 283 pays it now or nothing else waits
+YARD t=1567 team=1 goes on with Mining drone (200): the treasury 283 pays it now or nothing else waits
+YARD t=1567 team=1 holds Fighter x3 (450): the treasury 283 and the income 6 a second do not pay it within 20 seconds, so the next item may start
+YARD t=1568 team=0 holds Fighter x3 (450): the treasury 240 and the income 9 a second do not pay it within 20 seconds, so the next item may start
+YARD t=1569 team=0 holds Fighter x3 (450): the treasury 243 and the income 9 a second do not pay it within 20 seconds, so the next item may start
+hash t=1570 145 units, 3cb14a08
+YARD t=1573 team=0 goes on with Fighter x3 (450): the treasury 235 pays it now or nothing else waits
+YARD t=1573 team=0 goes on with Fighter x3 (450): the treasury 235 pays it now or nothing else waits
+hash t=1575 146 units, 43465302
+hash t=1580 182 units, a37fdf28
+hash t=1585 178 units, 5e3f5dc9
+YARD t=1589 team=1 goes on with Fighter x3 (450): the treasury 596 pays it now or nothing else waits
+hash t=1590 170 units, 1062c5cf
+YARD t=1590 team=0 saves for a Destroyer (2200): the treasury 373
+hash t=1595 164 units, c606d727
+hash t=1600 158 units, 7544ca09
+hash t=1605 150 units, c6cd81f3
+hash t=1610 147 units, 7abfac44
+YARD t=1610 team=1 repeats Fighter x3 (450): Fighter squadrons are on repeat while the fleet is below its target
+hash t=1615 184 units, a54e9c83
+hash t=1620 182 units, 1915c29f
+hash t=1625 176 units, ba4ca6ef
+hash t=1630 175 units, 6d63cef9
+YARD t=1633 team=1 repeats Fighter x3 (450): Fighter squadrons are on repeat while the fleet is below its target
+hash t=1635 169 units, 3228e62e
+hash t=1640 159 units, 5085ace8
+hash t=1645 159 units, d7b16afa
+YARD t=1645 team=0 buys a Destroyer (2200): the treasury 1505 and the income 35 a second pay it within 20 seconds
+hash t=1650 185 units, 7e448647
+hash t=1655 174 units, bf222ec1
+YARD t=1657 team=1 repeats Fighter x3 (450): Fighter squadrons are on repeat while the fleet is below its target
+YARD t=1658 team=0 buys Ion Frigate x1 (1250): the fleet is 8 of 17 wanted by 27:38, the treasury 536, 536 to spare, the income 52 a second
+hash t=1660 174 units, 37642e82
+hash t=1665 171 units, 66cda0d1
+YARD t=1669 team=0 buys Lance Fighter x3 (900): the fleet is 9 of 17 wanted by 27:49, the treasury 97, 97 to spare, the income 69 a second
+hash t=1670 166 units, 6859678c
+hash t=1675 157 units, 716d8aab
+YARD t=1675 team=0 buys Logistics Corvette x1 (500): the fleet is 12 of 17 wanted by 27:55, the treasury 472, 472 to spare, the income 76 a second
+YARD t=1676 team=1 buys a Destroyer (2200): the treasury 1335 and the income 55 a second pay it within 20 seconds
+YARD t=1677 team=1 repeats Fighter x3 (450): Fighter squadrons are on repeat while the fleet is below its target
+hash t=1680 162 units, a00d77a4
+YARD t=1680 team=0 buys Fighter x3 (450): the fleet is 13 of 17 wanted by 28:00, the treasury 703, 703 to spare, the income 76 a second
+hash t=1685 192 units, 23e1eb39
+hash t=1690 184 units, adc2cfe5
+FIELD_TRIP t=1650.0 team=1 reason=defend dur=42.0 result=docked hull=battlecruiser resupplies=0
+hash t=1695 182 units, 043ebf8c
+YARD t=1698 team=1 buys Fighter x3 (450): the fleet is 15 of 17 wanted by 28:18, the treasury 209, 209 to spare, the income 55 a second
+hash t=1700 178 units, c67f9dcb
+hash t=1705 175 units, 0e06c6b2
+hash t=1710 166 units, 902e1bdb
+YARD t=1712 team=0 buys Flak Frigate x1 (1100): the fleet is 16 of 17 wanted by 28:32, the treasury 137, 137 to spare, the income 67 a second
+YARD t=1713 team=0 saves for a Destroyer (2200): the treasury 140
+hash t=1715 164 units, 8c7a836e
+hash t=1720 203 units, 2cc703e3
+hash t=1725 206 units, d451ac55
+hash t=1730 198 units, 0356d0fd
+hash t=1735 199 units, cb152c48
+hash t=1740 192 units, aaceca3c
+t=29:00  sim 242.2 ms/sim-s  worst tick 10.6 ms  units=191 ships=41 minions=53 drones=28 projectiles=90 fps=180
+  Halcyon tr=251 ore=13260 fac=8 tech=53 turrets=8 killed_turrets=2 K/D=1/7 avg_cr=1179 ms=100% sh=100% flying={ "lance": 4, "fighter": 9, "destroyer": 2, "battlecruiser": 1, "flak": 2, "ion": 1, "logistics": 1 }
+  Cinder tr=1558 ore=12480 fac=8 tech=53 turrets=7 killed_turrets=2 K/D=0/4 avg_cr=1727 ms=100% sh=100% flying={ "battlecruiser": 1, "ion": 1, "destroyer": 1, "fighter": 16, "lance": 1, "flak": 1 }
+hash t=1745 182 units, 219f6c75
+hash t=1750 178 units, ad2d6c96
+hash t=1755 211 units, ef7f9d1c
+YARD t=1755 team=0 buys a Destroyer (2200): the treasury 1305 and the income 64 a second pay it within 20 seconds
+hash t=1760 208 units, 1bea7fa8
+hash t=1765 213 units, c3b7fb55
+hash t=1770 209 units, fff2cfa4
+hash t=1775 206 units, f981b0fe
+YARD t=1776 team=1 saves for a Destroyer (2200): the treasury 3247
+YARD t=1776 team=1 buys a Destroyer (2200): the treasury 3247 and the income 48 a second pay it within 20 seconds
+hash t=1780 192 units, ca95595a
+hash t=1785 185 units, 6c107b26
+hash t=1790 223 units, dc49c628
+YARD t=1792 team=0 buys Fighter x3 (450): the fleet is 15 of 17 wanted by 29:52, the treasury 617, 617 to spare, the income 55 a second
+hash t=1795 213 units, ddc7b0e4
+FIELD_TRIP t=1663.5 team=0 reason=pilots_down dur=136.0 result=docked hull=battlecruiser resupplies=0
+hash t=1800 209 units, aad225d9
+DET_HASH END t=1800 209 units, aad225d9
