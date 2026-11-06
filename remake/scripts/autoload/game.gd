@@ -5,7 +5,7 @@ extends Node
 ## that feature modules changed for this match, and the feature usage counts.
 ## It keeps the settings that are remembered between runs (the last
 ## difficulty pick, the team the human plays for and the test option "Unlock
-## everything", and the player's own key changes; all in a small settings file in the
+## everything", the two wing switches, and the player's own key changes; all in a small settings file in the
 ## user's data folder), sets up the
 ## keyboard and mouse controls and
 ## listens for the fullscreen key (F11 or Alt+Enter, see WindowMode).
@@ -22,7 +22,9 @@ extends Node
 ##   3. defines the controls ("input actions") through GameInputMap;
 ##   4. sets the window's smallest size, 1280 x 720 (WindowMode).
 ## The start screen may choose the difficulty (choose_difficulty()), the team
-## (choose_team()) and the test option "Unlock everything" (choose_unlock())
+## (choose_team()), the test option "Unlock everything" (choose_unlock()) and the two
+## wing switches (choose_test_wing(), choose_cpu_wings()) and the test option "No fog"
+## (choose_fog_off())
 ## later, before the match is built. The rules are not chosen on a screen.
 ## Other files then ask Game.opt("name") or Game.variant("name").
 ## Two lists belong to the feature modules (scripts/features/, see
@@ -39,13 +41,20 @@ extends Node
 ## count_usage(); Rules.tune() reads tunables; the fun probe prints usage;
 ## PilotAI and SkillJitter read --skill-jitter and --seed; tests read
 ## their own options (such as --secs); the end screen clears Game.world
-## before a new match. The start screen calls use_remembered_difficulty() and
+## before a new match, and the pause menu's Restart and Quit to start go
+## through restart_match() and quit_to_start() (they load the main scene again;
+## main.gd then starts the match in restart_role at once, or shows the start
+## screen when it is empty). The start screen calls use_remembered_difficulty() and
 ## choose_difficulty() (its difficulty buttons), use_remembered_team() and
 ## choose_team() (its team buttons) and use_remembered_unlock() and
-## choose_unlock() (its Unlock everything toggle), use_remembered_keys() (the player's own
+## choose_unlock() (its Unlock everything toggle), use_remembered_fog_off() and
+## choose_fog_off() (its No fog toggle), use_remembered_wings(),
+## choose_test_wing() and choose_cpu_wings() (its two wing switches),
+## use_remembered_keys() (the player's own
 ## keys, put on the controls) and reads preset_error;
 ## WorldSetup reads `difficulty` and `human_team` when it builds a match; UnlockAll
-## is the one place that reads `unlock_everything`; and FeatureRegistry reads
+## is the one place that reads `unlock_everything`, FogOff the one that reads `fog_off`;
+## and FeatureRegistry reads
 ## preset_error, difficulty_error and team_error; NoteWriter reads `preset`.
 ##
 ## The options (who reads them in brackets):
@@ -71,6 +80,19 @@ extends Node
 ##                                    Rules.VARIANT_DEFAULTS). A variant
 ##                                    that has a feature module switches
 ##                                    it on (FeatureRegistry).
+##   --variant-team0=<pairs>, --variant-team1=<pairs>
+##                                    the same name:value pairs as --variant,
+##                                    but each holds for ONE team's AI only
+##                                    (team 0 = Aurelian, the amber team on the
+##                                    left; team 1 = Vhorr, the red team). For
+##                                    tests of an AI change: "the new AI against
+##                                    today's AI". A name that is not in
+##                                    Rules.VARIANT_DEFAULTS, or a pair that is
+##                                    not name:value, stops the match at its
+##                                    start (FeatureRegistry, exit code 3).
+##                                    Without them every match plays as always.
+##                                    Read into Game.team_variants.
+##                                    (FeatureRegistry.is_on_for())
 ##   --preset=none|within|pick        the rules, for tests and research: a
 ##                                    named --variant string
 ##                                    (CouncilPresets). The preset is
@@ -116,6 +138,31 @@ extends Node
 ##                                    Computer pilots, the other team and the
 ##                                    computer Admirals play normally. Read into
 ##                                    Game.unlock_everything. (UnlockAll)
+##   --fog-off                        test option: the human's screen shows everything
+##                                    (no fog of war, every enemy ship and building,
+##                                    shots, explosions and sounds). Only the screen
+##                                    changes: the match, the AI and the Admiral's
+##                                    placing rules are as they are. A bare switch;
+##                                    "=0" or "=false" turns it off even if the start
+##                                    screen remembered it on. Read into Game.fog_off.
+##                                    (FogOff)
+##   --wingmen=<hull,hull,hull>       test option: every pilot seat of both teams
+##                                    gets a wing of these hulls (up to three, any
+##                                    hull id; "off" or empty = none; an unknown
+##                                    id is ignored with a printed warning). It
+##                                    wins over the two switches below for every
+##                                    seat. (Game.wing_hulls_for, Squads)
+##   --test-wing                      test option: the human pilot's seat gets a
+##                                    Scout, a Fighter and a Bomber as wingmen. A
+##                                    bare switch; "=0" or "=false" turns it off
+##                                    even if the start screen remembered it on.
+##                                    Read into Game.test_wing. (Squads)
+##   --cpu-wings                      test option: every computer pilot seat gets
+##                                    the same three wingmen. A bare switch; "=0"
+##                                    or "=false" turns it off. Read into
+##                                    Game.cpu_wings. A run with no start screen
+##                                    and none of these options has no wings.
+##                                    (Squads)
 ##   --slow=<0.05 to 1>               test option: the match starts with its
 ##                                    world slowed to this speed (0.75 and 0.5
 ##                                    are the two the backquote key steps to;
@@ -267,6 +314,11 @@ extends Node
 ## The running match (a World), or null between matches. WorldSetup sets
 ## it when a match is built; the end screen clears it before a new match.
 var world: Node = null
+## The seat the next match starts in at once, without the start screen: "pilot",
+## "admiral" or "spectator". Empty (the usual state) means "show the start
+## screen". restart_match() sets it just before the main scene loads again;
+## main.gd reads it there and empties it.
+var restart_role := ""
 ## The command-line options: name (without the "--") -> value. "--seed=7"
 ## gives "seed" -> "7" (always text); a bare "--auto" gives "auto" -> true.
 var options := {}
@@ -274,6 +326,22 @@ var options := {}
 ## Starts as a copy of Rules.VARIANT_DEFAULTS; the preset (--preset, or
 ## CouncilPresets.STANDARD) and then --variant change entries.
 var variants := {}
+## The per-team rule variants (--variant-team0 and --variant-team1): two
+## Dictionaries, index 0 for team 0's AI and index 1 for team 1's AI, each
+## variant name -> value (text) for the names that team's AI holds on its own.
+## Both are empty (the default) when no per-team option is given, and then
+## every match plays as always. Set by _parse_options(); read through
+## variant_for().
+var team_variants: Array = [{}, {}]
+## True when at least one per-team pair was given (--variant-team0 or
+## --variant-team1). False (the default) = every read of a switch is the same
+## for both teams, which the AI's reads use as their cheap fast path.
+var team_variants_given := false
+## Why a per-team option could not be used: "" when it could, else a line
+## naming the unknown name (or the pair that is not name:value) and the option.
+## FeatureRegistry.install() then refuses the match (exit code 3), so a typo
+## never plays a night of matches without the switch.
+var team_variant_error := ""
 ## The preset (rule set) of this match: one of CouncilPresets.ORDER. "pick"
 ## (the standard rules) when --preset is not given, "none" for the old
 ## standard rules. "" only when --preset named something unknown (see
@@ -336,7 +404,7 @@ var human_team := Rules.HALCYON
 ## then refuses the match (exit code 3), so a typo never plays Aurelian by mistake.
 var team_error := ""
 ## The file the game keeps its few remembered settings in (the last difficulty
-## pick, the team, the Unlock everything toggle and, in its [keys] section, the
+## pick, the team, the Unlock everything toggle, the No fog toggle, the two wing switches and, in its [keys] section, the
 ## player's own key changes: KeyMapStore), in the user's data folder (the browser
 ## version keeps it in the browser's storage).
 const SETTINGS_FILE := "user://halcyon_settings.cfg"
@@ -360,6 +428,29 @@ var unlock_everything := false
 ## the start screen reading the remembered choice, or by a toggle. Only the start
 ## screen reads the settings file for it, like the difficulty.
 var _unlock_open := true
+## True when the test option "No fog" is on for this run: the human's screen then shows everything (FogOff is the one
+## place that asks). Only the screen changes: what each team can see, the computer pilots and the Admiral's placing rules are
+## exactly as before. It is off until --fog-off turns it on, or the start screen shows the remembered choice or the player
+## toggles it (choose_fog_off()). A match with it off is exactly the normal game.
+var fog_off := false
+## True until the No fog option has been settled: by --fog-off, by the start screen reading the remembered choice, or by a
+## toggle. Only the start screen reads the settings file for it, like Unlock everything.
+var _fog_off_open := true
+## True when the human pilot's seat gets the test wing (a Scout, a Fighter and a Bomber). Off until
+## --test-wing turns it on or the start screen shows the remembered choice or the player toggles it
+## (choose_test_wing()). Off, a match has no wing for the human.
+var test_wing := false
+## True when every computer pilot's seat gets the same test wing. Off until --cpu-wings turns it on or
+## the start screen shows the remembered choice (on the first time) or the player toggles it
+## (choose_cpu_wings()). A run with no start screen and no option has it off.
+var cpu_wings := false
+## True until the test wing switch has been settled (by --test-wing, by the start screen reading
+## the remembered choice, or by a toggle).
+var _test_wing_open := true
+## True until the computer pilots' wings switch has been settled (same ways).
+var _cpu_wings_open := true
+## The wing the two switches give: a Scout, a Fighter and a Bomber.
+const TEST_WING := ["scout", "fighter", "bomber"]
 ## True until the player's own key changes have been read from the settings file. Only
 ## the start screen reads them (use_remembered_keys()), so a test or a run without a
 ## start screen always has the standard keys, whatever this computer remembers.
@@ -430,6 +521,22 @@ func _parse_options() -> void:
 		_unlock_open = false
 		var ua: String = str(options["unlock-all"])
 		unlock_everything = ua != "false" and ua != "0"
+	# Step 1e2: --fog-off (a bare switch; "=0" or "=false" turns it off) settles the test option "No fog" for this run, like
+	# --unlock-all. It only changes what the human's screen draws: nothing in the match reads it.
+	if options.has("fog-off"):
+		_fog_off_open = false
+		var fo: String = str(options["fog-off"])
+		fog_off = fo != "false" and fo != "0"
+	# Step 1f: --test-wing and --cpu-wings (bare switches; "=0" or "=false" turns them off)
+	# settle the two wing switches for this run, like --unlock-all.
+	if options.has("test-wing"):
+		_test_wing_open = false
+		var tw: String = str(options["test-wing"])
+		test_wing = tw != "false" and tw != "0"
+	if options.has("cpu-wings"):
+		_cpu_wings_open = false
+		var cw: String = str(options["cpu-wings"])
+		cpu_wings = cw != "false" and cw != "0"
 	# Step 2: the variants: start from the defaults, then the preset named by
 	# --preset (the standard rules when none is named), then each "name:value"
 	# pair of --variant (see _build_variants()). The preset is named in the log.
@@ -437,6 +544,10 @@ func _parse_options() -> void:
 	if preset != "":
 		var pairs := CouncilPresets.variant_string(preset)
 		print("preset: %s = %s" % [preset, pairs if pairs != "" else "(every variant at its default)"])
+	# Step 3: the per-team pairs (--variant-team0 and --variant-team1), kept apart
+	# in `team_variants`. An unknown name sets team_variant_error, which
+	# FeatureRegistry turns into a refusal.
+	_read_team_variants()
 
 
 ## Build `variants`: start from Rules.VARIANT_DEFAULTS, then apply the pairs
@@ -464,6 +575,29 @@ func _apply_pairs(text: String) -> void:
 		var kv := pair.split(":")
 		if kv.size() == 2:
 			variants[kv[0]] = kv[1]
+
+
+## Read --variant-team0 and --variant-team1 into `team_variants` (see there):
+## each is split into name:value pairs like --variant (see _apply_pairs()), but
+## the pairs of a team go to that team's Dictionary only, and `variants` is not
+## touched. Sets `team_variants_given` when any pair exists. A name that is not
+## in Rules.VARIANT_DEFAULTS, or a pair that is not exactly name:value, sets
+## `team_variant_error` (one line naming it and the option; the first one found
+## stays), so the match is refused, and the pair is not kept.
+func _read_team_variants() -> void:
+	team_variants = [{}, {}]
+	team_variants_given = false
+	team_variant_error = ""
+	for team: int in range(2):
+		var opt_name := "variant-team%d" % team
+		for pair in str(options.get(opt_name, "")).split(",", false):
+			var kv := pair.split(":")
+			if kv.size() != 2 or not Rules.VARIANT_DEFAULTS.has(kv[0]):
+				if team_variant_error == "":
+					team_variant_error = "--%s: \"%s\" is not a name:value pair with a name from Rules.VARIANT_DEFAULTS" % [opt_name, pair]
+				continue
+			team_variants[team][kv[0]] = kv[1]
+			team_variants_given = true
 
 
 ## Put the difficulty last picked on this computer into `difficulty`, unless the
@@ -552,6 +686,90 @@ func use_remembered_unlock() -> void:
 	unlock_everything = typeof(saved) == TYPE_BOOL and saved
 
 
+## Put the No fog choice last made on this computer into `fog_off`, unless the option is already settled (--fog-off was given,
+## or this ran before). The start screen calls it when it is built, so only a game with a start screen reads the settings file
+## for it. A missing or unreadable file, or an entry that is not a real yes, leaves it off.
+func use_remembered_fog_off() -> void:
+	if not _fog_off_open:
+		return
+	_fog_off_open = false
+	var cfg := ConfigFile.new()
+	if cfg.load(SETTINGS_FILE) != OK:
+		return
+	var saved: Variant = cfg.get_value("game", "fog_off", false)
+	fog_off = typeof(saved) == TYPE_BOOL and saved
+
+
+## Put the two wing switches last made on this computer into `test_wing` and `cpu_wings`, unless a
+## switch is already settled (its option was given, or this ran before). The start screen calls it
+## when it is built, so only a game with a start screen reads the settings file for them. A
+## missing file or entry means: the human's test wing off, the computer pilots' wings on.
+func use_remembered_wings() -> void:
+	var cfg := ConfigFile.new()
+	var have := cfg.load(SETTINGS_FILE) == OK
+	if _test_wing_open:
+		_test_wing_open = false
+		# Only a real yes counts: a damaged entry leaves it off.
+		var saved: Variant = cfg.get_value("game", "test_wing", false) if have else false
+		test_wing = typeof(saved) == TYPE_BOOL and saved
+	if _cpu_wings_open:
+		_cpu_wings_open = false
+		# The computer pilots' wings are on the first time; only a real no turns them off.
+		var saved: Variant = cfg.get_value("game", "cpu_wings", true) if have else true
+		cpu_wings = not (typeof(saved) == TYPE_BOOL and not saved)
+
+
+## The player switched the human's test wing on or off (`on`) on the start screen: use it for the
+## coming match and remember it for the next run (a file that cannot be written only costs the memory).
+func choose_test_wing(on: bool) -> void:
+	test_wing = on
+	_test_wing_open = false
+	_remember("test_wing", on, "The test wing")
+
+
+## The player switched the computer pilots' wings on or off (`on`) on the start screen: use it for the
+## coming match and remember it.
+func choose_cpu_wings(on: bool) -> void:
+	cpu_wings = on
+	_cpu_wings_open = false
+	_remember("cpu_wings", on, "The computer pilots' wings")
+
+
+## Write `key` = `value` in the settings file's [game] section, keeping everything else; `what` names
+## the setting in the warning when the file cannot be written.
+func _remember(key: String, value: bool, what: String) -> void:
+	var cfg := ConfigFile.new()
+	cfg.load(SETTINGS_FILE)
+	cfg.set_value("game", key, value)
+	var err := cfg.save(SETTINGS_FILE)
+	if err != OK:
+		push_warning("settings: cannot write %s (error %d); %s will not be remembered" % [SETTINGS_FILE, err, what])
+
+
+## The hulls of the wing a pilot seat gets: --wingmen first (for every seat), else the test wing for
+## the human's seat when its switch is on, or for a computer pilot's seat when that switch is on.
+## Up to three hull ids, in slot order; empty = no wing.
+func wing_hulls_for(is_human_seat: bool) -> PackedStringArray:
+	var out := PackedStringArray()
+	var spec: Variant = options.get("wingmen")
+	if spec != null:
+		var text := str(spec).strip_edges().to_lower()
+		if text == "" or text == "off" or text == "true" or text == "0" or text == "false":
+			return out
+		for part: String in text.split(",", false):
+			var id := part.strip_edges()
+			if not Ships.HULLS.has(id):
+				push_warning("--wingmen: unknown hull \"%s\" ignored" % id)
+				print("--wingmen: unknown hull \"%s\" ignored" % id)
+				continue
+			if out.size() < 3:
+				out.append(id)
+		return out
+	if (test_wing if is_human_seat else cpu_wings):
+		out.append_array(PackedStringArray(TEST_WING))
+	return out
+
+
 ## Put the player's own key changes and picked key presets from the settings file on the
 ## controls (KeyMapStore.load_from(), then KeyMap.apply_to_input_map()), unless that was
 ## already done. The start screen calls it when it is built, so only a game with a start
@@ -580,6 +798,39 @@ func choose_unlock(on: bool) -> void:
 		push_warning("settings: cannot write %s (error %d); Unlock everything will not be remembered" % [SETTINGS_FILE, err])
 
 
+## The player switched No fog on or off (`on`) on the start screen: use it for the coming match and remember it in the settings
+## file for the next run. A file that cannot be written only costs the memory (a warning).
+func choose_fog_off(on: bool) -> void:
+	fog_off = on
+	_fog_off_open = false
+	_remember("fog_off", on, "No fog")
+
+
+## Start the match again in seat `role` (the pause menu's Restart): the same
+## seat, the same team, difficulty and rules (Game keeps all of those), with
+## no start screen in between. The main scene is loaded again, so the new match
+## is built from nothing; the pause is lifted first, or the new match would
+## start paused.
+func restart_match(role: String) -> void:
+	restart_role = role
+	_load_main_scene_again()
+
+
+## Go back to the start screen (the pause menu's Quit to start): the main scene
+## is loaded again, with no seat chosen.
+func quit_to_start() -> void:
+	restart_role = ""
+	_load_main_scene_again()
+
+
+## Forget the running match, lift the pause and load the main scene again (what
+## the end screen's New match does too).
+func _load_main_scene_again() -> void:
+	world = null
+	get_tree().paused = false
+	get_tree().reload_current_scene()
+
+
 ## The value of option `key` (the name without "--"), or `default_value`
 ## when it was not given. Values are text (or true for a bare option), so
 ## callers turn them into numbers with int() or float().
@@ -591,6 +842,23 @@ func opt(key: String, default_value = null):
 ## there is no such variant.
 func variant(key: String) -> String:
 	return str(variants.get(key, ""))
+
+
+## The value of rule variant `key` as team `team`'s AI sees it: the team's own
+## value when --variant-team0 / --variant-team1 gave one for it, else the
+## match-wide variant(key). A team outside 0-1 gets variant(key).
+func variant_for(team: int, key: String) -> String:
+	if team >= 0 and team < 2:
+		var own: Dictionary = team_variants[team]
+		if own.has(key):
+			return str(own[key])
+	return variant(key)
+
+
+## Was any per-team variant given (--variant-team0 or --variant-team1)? False
+## in every normal match. FeatureRegistry.active_for() uses it as its fast path.
+func has_team_variants() -> bool:
+	return team_variants_given
 
 
 ## Count `n` more uses (1 unless told otherwise) of feature mechanic `key`

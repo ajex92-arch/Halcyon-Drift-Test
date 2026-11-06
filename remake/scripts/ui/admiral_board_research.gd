@@ -23,7 +23,7 @@ extends RefCounted
 ## WHO USES IT: AdmiralBoard._set_tab() calls build() and
 ## AdmiralBoard._refresh() calls refresh() for the Research tab.
 ## AdmiralBoardMothership also uses tech_card() and refresh() for its
-## Flagship cards, and AdmiralBoardFleet uses progress_text().
+## Flagship cards.
 
 
 ## Build the Research tab's cards on board `b` (see HOW IT WORKS).
@@ -49,7 +49,7 @@ static func build(b: AdmiralBoard) -> void:
 				b.world.orders.submit(Order.make(OrderKinds.MODULE, b.team, Rules.ADMIRAL_SEAT, true, {}, [], "id", fid))
 				b._refresh())
 		# The details line comes through Tech.facility_blurb(), which fills
-		# in this match's Fleet Command limit and hyperspace spool-up.
+		# in this match's hyperspace spool-up.
 		b._hover(c, "%s: %s" % [d["label"], Tech.facility_blurb(id)])
 		g.add_child(c)
 		b._cards["fac:" + id] = c
@@ -134,6 +134,8 @@ static func _refresh_facility(ts: TeamState, id: String, c: CardButton) -> void:
 		sel = true
 	elif ts.is_building(id):
 		foot = progress_text(ts.building, id)
+		if foot == "":
+			foot = _list_text(ts, Production.MODULE, id)
 	else:
 		# Step 2: a "blocker" is the reason it can't be built yet ("" = none).
 		var b := ts.facility_blocker(id)
@@ -168,6 +170,8 @@ static func _refresh_tech(ts: TeamState, id: String, c: CardButton) -> void:
 		sel = true
 	elif ts.is_researching(id):
 		foot = progress_text(ts.research, id)
+		if foot == "":
+			foot = _list_text(ts, Production.RESEARCH, id)
 	else:
 		var b := ts.tech_blocker(id)
 		foot = "%d · %ds" % [int(d["cost"]), int(d["time"])]
@@ -203,11 +207,23 @@ static func _refresh_column_need(ts: TeamState, col: String, l: Label) -> void:
 	l.visible = l.text != ""
 
 
+## The footer for a module or a research that waits or is on hold in the team's build
+## list (`kind` is Production.MODULE or Production.RESEARCH): its state, such as
+## "Waiting: ore (needs 120)" or "On hold". "" if it is not in the list.
+static func _list_text(ts: TeamState, kind: String, id: String) -> String:
+	for it: Dictionary in ts.production.items:
+		if it["kind"] == kind and it["what"] == id:
+			var text := ts.production.state_text(it)
+			return text.substr(0, 1).to_upper() + text.substr(1)
+	return ""
+
+
 ## The footer for something in a queue. `queue` is TeamState.building or
 ## TeamState.research: a list of {id, left, total} entries (seconds left
-## and seconds in all), the one being worked on first. The first entry
-## gets "In progress 45% (12s)"; the ones behind it get "Queued #2",
-## "Queued #3", ... Returns "" if `id` isn't in the queue.
+## and seconds in all), one entry: the item being worked on. The entry
+## gets "In progress 45% (12s)". Waiting items show their state from
+## _list_text, so the "Queued #n" branch below is dead. Returns "" if `id`
+## isn't in the queue.
 static func progress_text(queue: Array, id: String) -> String:
 	for i in queue.size():
 		var e: Dictionary = queue[i]

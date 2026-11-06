@@ -6,7 +6,7 @@ extends RefCounted
 ##
 ## HOW IT WORKS: static functions. call_built_in() takes an order record and calls the
 ## AdmiralCommand function for its kind with the record's fields (a point turned back into a
-## Vector2, a minion order turned back into the dictionary MinionDirector wants). The function
+## Vector2). The function
 ## logs the order itself, because AdmiralCommand has set `pending` to the record. file_event()
 ## puts "order_done" or "order_refused" into the event stream, with the sender's seat, the first
 ## subject's id, the place (for a point target) and the unit (for a unit target).
@@ -40,15 +40,6 @@ static func call_built_in(w: World, o: Dictionary) -> String:
 			return cmd.set_waypoint(team, Vector2(target), int(s["siege"]) == 1, bool(o["human"]))
 		OrderKinds.MOTHERSHIP_MOVE:
 			return cmd.move_mothership(team, Vector2(target))
-		OrderKinds.MINION_BUY:
-			return cmd.buy_minion(team, str(s["type"]), str(s["lane"]))
-		OrderKinds.MINION_ORDER:
-			var order := {"type": str(s["type"])}
-			if str(o["target_kind"]) == "point":
-				order["pos"] = Vector2(target)
-			else:
-				order["lane"] = str(target)
-			return cmd.order_minions(team, o["subjects"], order)
 		OrderKinds.SIEGE:
 			return cmd.set_siege(team, str(target) if str(o["target_kind"]) == "lane" else "", str(s["phase"]))
 	return OrderKinds.TEXT_UNBUILT

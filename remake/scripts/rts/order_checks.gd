@@ -66,17 +66,10 @@ static func recheck(w: World, q: OrderQueue, o: Dictionary) -> String:
 	return _checker(q, o)
 
 
-## Do the units and squadrons the order names still exist? A minion order needs at
-## least one of its minions alive; every other kind needs each squadron it names (its
-## subjects) in World.squads, and a target unit or squadron to be there.
+## Do the units and squadrons the order names still exist? Each squadron an order names
+## (its subjects) must be in World.squads, and a target unit or squadron must be there.
 static func gone(w: World, q: OrderQueue, o: Dictionary) -> String:
-	var kind := str(o["kind"])
 	var subjects: Array = o["subjects"]
-	if kind == OrderKinds.MINION_ORDER:
-		for uid in subjects:
-			if q.unit_by_uid(int(uid)) != null:
-				return ""
-		return OrderKinds.TEXT_GONE_UNIT
 	for sid in subjects:
 		if not w.squads.has(int(sid)):
 			return OrderKinds.TEXT_GONE_SQUAD
@@ -91,8 +84,9 @@ static func gone(w: World, q: OrderQueue, o: Dictionary) -> String:
 
 
 ## The Admiral's own rules for the order, read from the same *_blocker functions the
-## map tools use, plus the price. Returns "" or the same text AdmiralCommand would
-## give. The point is the order's own (already rounded for a human).
+## map tools use, plus the price (not for a drone, a module or a research, which wait in
+## the build list and pay when they start). Returns "" or the same text AdmiralCommand
+## would give. The point is the order's own (already rounded for a human).
 static func blocker(w: World, o: Dictionary) -> String:
 	var kind := str(o["kind"])
 	var team := int(o["team"])
@@ -102,21 +96,20 @@ static func blocker(w: World, o: Dictionary) -> String:
 	var target = o["target"]
 	var b := ""
 	match kind:
+		# A drone, a module or a research waits in the build list and pays when it
+		# starts, so no price is asked when it is ordered.
 		OrderKinds.DRONE:
-			b = cmd.drone_blocker(team)
-			return b if b != "" else price(ts, float(Structures.MINING_DRONE["cost"]))
+			return cmd.drone_blocker(team)
 		OrderKinds.MODULE:
 			var fid := str(target)
 			if not Tech.FACILITIES.has(fid):
 				return OrderKinds.TEXT_NO_ITEM
-			b = ts.facility_blocker(fid)
-			return b if b != "" else price(ts, float(Tech.FACILITIES[fid]["cost"]))
+			return ts.facility_blocker(fid)
 		OrderKinds.RESEARCH:
 			var tid := str(target)
 			if not Tech.TECHS.has(tid):
 				return OrderKinds.TEXT_NO_ITEM
-			b = ts.tech_blocker(tid)
-			return b if b != "" else price(ts, float(Tech.TECHS[tid]["cost"]))
+			return ts.tech_blocker(tid)
 		OrderKinds.TURRET:
 			b = cmd.turret_blocker(team, str(target), str(s["ttype"]))
 			return b if b != "" else price(ts, float(TurretData.TURRETS[str(s["ttype"])]["cost"]))
@@ -134,16 +127,6 @@ static func blocker(w: World, o: Dictionary) -> String:
 			if b == "" and not w.map.in_open_lane(Vector2(target)):
 				b = AdmiralCommand.JUNGLE_TEXT
 			return b
-		OrderKinds.MINION_BUY:
-			if not w.minion_director.controlled(team):
-				return "Needs the Fleet Command Module"
-			if not Minions.TYPES.has(str(s["type"])):
-				return OrderKinds.TEXT_NO_ITEM
-			if not ts.can_afford(float(Minions.TYPES[str(s["type"])]["buy_cost"])):
-				return "Not enough in the team treasury"
-		OrderKinds.MINION_ORDER:
-			if not w.minion_director.controlled(team):
-				return "Needs the Fleet Command Module"
 	return ""
 
 

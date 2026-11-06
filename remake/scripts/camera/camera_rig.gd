@@ -13,7 +13,9 @@ extends Camera2D
 ##     camera (look_at_point()). The Space key centers the camera on your
 ##     ship (with no ship, docked or dead, on the human's own mothership), and
 ##     holding it keeps the camera centered on the ship as it moves; let go
-##     and the camera is free again from where it is. A pilot's camera also
+##     and the camera is free again from where it is. The HUD's Centre button
+##     "latches" Space for the mouse (centre_latched): one click holds it, the
+##     next lets go (a minimap click or a middle-button drag lets go too). A pilot's camera also
 ##     jumps to the ship whenever it launches, so a new ship is never off
 ##     screen. How far you may zoom out depends on the seat: admirals and
 ##     spectators see the whole map; a pilot sees only a piece of it
@@ -80,6 +82,10 @@ var target_zoom := 0.25
 ## The edge peek: how far (world units) the view is pushed toward the
 ## screen edge the mouse is at. Only used in follow mode.
 var peek := Vector2.ZERO
+## True while the Centre button has "latched" the Space key down: the free camera then stays on the ship (or
+## the mothership) as if Space were held, until the button is clicked again, a minimap click jumps the camera
+## or a middle-button drag starts (the HUD's Centre button sets it; HudInput.click()).
+var centre_latched := false
 ## True while the middle mouse button is dragging the free camera.
 var _drag := false
 ## Where the mouse was (screen pixels) at the last drag step.
@@ -168,6 +174,7 @@ func zoom_limits() -> Vector2:
 ## board, tests). It slides there over the next frames. Does nothing in
 ## follow mode (an Admiral who pressed C): that camera is on their ship.
 func look_at_point(p: Vector2) -> void:
+	centre_latched = false
 	if free:
 		_free_pos = p
 
@@ -196,6 +203,8 @@ func _unhandled_input(event: InputEvent) -> void:
 		elif mb.pressed and mb.button_index == MOUSE_BUTTON_WHEEL_DOWN:
 			target_zoom /= 1.12
 		elif mb.button_index == MOUSE_BUTTON_MIDDLE:
+			if mb.pressed:
+				centre_latched = false
 			_drag = mb.pressed and free
 			_drag_last = mb.position
 	elif event is InputEventMouseMotion and _drag:
@@ -318,12 +327,13 @@ func _home_spot() -> Vector2:
 	return ms.global_position + Vector2.from_angle(ms.rotation) * 900.0
 
 
-## Is the Space key ("center_on_ship") down, or was it pressed this frame?
+## Is the Space key ("center_on_ship") down, or was it pressed this frame, or
+## has the Centre button latched it (centre_latched)?
 ## A spectator has no ship to center on, so for them it is never.
 func _centering() -> bool:
 	if world.human == null:
 		return false
-	return Input.is_action_pressed("center_on_ship") or Input.is_action_just_pressed("center_on_ship")
+	return centre_latched or Input.is_action_pressed("center_on_ship") or Input.is_action_just_pressed("center_on_ship")
 
 
 ## Where the free camera's goal goes while Space is down: on ship `s`, a

@@ -322,7 +322,7 @@ func travel(ship: Ship, to: Vector2, arrive: float) -> void:
 	# Step 10: the siege_fix:full feature holds a siege ship back that runs far
 	# ahead of its fleet, so the slow capital ships arrive together
 	# (SiegeFixFeature.throttle). Nothing happens unless that feature is on.
-	if world.features.has("siege_fix"):
+	if FeatureRegistry.active_for(world, ship.team, "siege_fix"):
 		(world.features["siege_fix"] as SiegeFixFeature).throttle(ship)
 
 

@@ -239,11 +239,11 @@ func _check_admiral(on: bool) -> void:
 	for purse: float in [Rules.START_TREASURY, 1.0]:
 		for t: Array in tries:
 			ts.treasury = purse
-			ts.building.clear()
-			ts.research.clear()
-			ts.drone_queue.clear()
+			_empty_lists(ts)
 			var units_before := world.units.duplicate()
 			var err: String = (t[1] as Callable).call()
+			# An order puts its item in the build list; the item pays when it starts, on the list's next tick.
+			ts.production.tick(0.0)
 			# Take away what the order made (a turret, a bay, a ward), so the next
 			# attempt finds the node's slots and the bay limit as they were.
 			for u: Unit in world.units.duplicate():
@@ -254,28 +254,34 @@ func _check_admiral(on: bool) -> void:
 			if on:
 				_check(what, err == "" and absf(paid) <= TOLERANCE, "'%s', paid %.1f" % [err, paid])
 			elif purse == 1.0:
-				# Off with an empty purse: refused for the lock, or for the money.
-				_check(what, err != "" and absf(paid) <= TOLERANCE, "'%s'" % err)
+				# Off with an empty purse: refused for the lock, or for the money. A drone, module or research order is not refused for money: it joins the build list and waits for the ore, and nothing is paid.
+				var waits := err == "" and ts.production.items.size() > 0
+				_check(what, (err != "" or waits) and absf(paid) <= TOLERANCE, "'%s'" % err)
 			elif str(t[2]) == "":
 				_check(what, err == "" and paid > 0.0, "'%s', paid %.1f" % [err, paid])
 			else:
 				_check(what, err.contains(str(t[2])) and absf(paid) <= TOLERANCE, "'%s'" % err)
 	ts.treasury = Rules.START_TREASURY
-	ts.building.clear()
-	ts.research.clear()
-	ts.drone_queue.clear()
+	_empty_lists(ts)
 	# On: a queued research runs without the Research Module and helps the team.
 	if on:
 		cmd.research(team, "lanceBeams")
+		ts.production.tick(0.0)
 		ts.tech.tick(1000.0, world.mothership(team))
 		_check("%s a research runs without the Research Module and the team gets it" % tag, ts.done.has("lanceBeams") and not ts.facilities.has("research"), "done %s" % str(ts.done.keys()))
 	# Put the team back as it was.
 	ts.done.assign(done0)
 	ts.facilities.assign(fac0)
 	ts.treasury = Rules.START_TREASURY
+	_empty_lists(ts)
+
+
+## Empty the team's build list and the three old queues behind it (what an earlier try in this check left).
+func _empty_lists(ts: TeamState) -> void:
 	ts.building.clear()
 	ts.research.clear()
 	ts.drone_queue.clear()
+	ts.production.items.clear()
 
 
 ## A spot near the Admiral's mothership where a repair bay may go (with the option

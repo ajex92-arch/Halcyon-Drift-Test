@@ -5,7 +5,7 @@ extends Node
 ## pictures of them: one close-up per unit type, and "play zoom" and "far"
 ## pictures that line all the types up at the sizes you really see in a
 ## match. It is for judging the Cinder alien look. It also checks the Cinder
-## shape tables and the Aurelian minion outlines (see GalleryChecks.run()). Run with --bench instead and it measures
+## shape tables and the Aurelian minion outlines and marks (see GalleryChecks.run()). Run with --bench instead and it measures
 ## what the drawing costs per frame; with --live it does that in a real match
 ## (see GalleryMeasure); with --check it only does the shape checks (that works without
 ## a window, like the other pass/fail tests); with --fights it plays a real
@@ -31,7 +31,8 @@ extends Node
 ## --bench: instead of pictures, 70 ships and 70 minions per team are spread
 ## over a play-zoom view and the frame time is printed for the three ways of
 ## drawing them: Aurelian only, Cinder alien, Cinder plain (the old
-## outlines), with the game's own frame work and the number of draw calls.
+## outlines), with the game's own frame work and the number of draw calls, then
+## the median frame time and the script and render split of the frame.
 ## --bench --bench-parts (the draw-cost table): the same crowd and looks,
 ## measured once per parts switch set of DrawParts: every part drawn, each part
 ## (flames, arcs, arrow, bars, name, outline, redraw) left out alone, the six
@@ -47,6 +48,17 @@ extends Node
 ## --bench-off=<parts> (read once by DrawParts, listed in scripts/autoload/game.gd):
 ## for example --bench --bench-off=arcs draws the three looks without the shield
 ## arcs (not with redraw: the looks would keep the previous look's picture).
+## --close-zoom=Z: every picture is drawn the close way (smooth lines, all arc segments, all flame dots)
+## from camera zoom Z on (0.0001 = everywhere), so the pictures compare pixel by pixel with the old ones.
+## --live --live-look=scan: what each part of a real match's frame costs (the rock fields, the fog, the shots, the screens,
+## each kind of unit): see GalleryLiveScan; give --late --secs=1620.
+## --bench-types: the draw calls of each kind of unit of the bench's crowd, one kind at a time,
+## per unit (see GallerySceneCost.by_type(); --bench-view=N for another view).
+## --hold-pulse: the glowing veins of the Cinder hulls keep one pulse (not the clock's), so the
+## pictures of two runs can be compared pixel by pixel; --bench-off=flames leaves the random flame
+## dots out of them too.
+## --bench-scene: lists what the rest of the scene draws, with no crowd: the draw calls
+## each child of the world and each kind of unit adds to a frame (see GallerySceneCost).
 ## --fights: instead of the frozen units, the real match runs (everything on,
 ## the screens too) and whenever both teams are in a big fight the camera goes
 ## there and saves a wide and a near picture of it, so the look can be judged
@@ -72,8 +84,9 @@ extends Node
 ## data folder).
 ##
 ## HOW TO READ THE OUTPUT: first the checks ("cinder polygons: N checked, 0
-## cannot be filled", "cinder sizes: N shapes checked, 0 outside 10% ..." and
-## "minion looks: N outlines checked, 0 not plain"),
+## cannot be filled", "cinder sizes: N shapes checked, 0 outside 10% ...",
+## "minion looks: N outlines checked, 0 not plain" and "minion marks: N marks
+## checked, 0 outside the plate"),
 ## then one "shot <path>" line per picture and "hull_gallery: done N pictures"
 ## (with --bench, three "bench ..." lines instead; with --bench --bench-parts, one
 ## "DRAWCOST ..." line per measurement and a "bench-parts ..." summary per look and
@@ -109,6 +122,10 @@ extends Node
 ## (GalleryMeasure.live_kick()); its worst case (every gun of a big crowd kicking all the
 ## time) by --bench --bench-look=kick (GalleryMeasure.bench_kick(); --bench-view=2200 for a
 ## closer view where more turrets are drawn).
+## The Scum (the jungle's pirate ships) are shown by --scum (their close-ups, the play zoom next
+## to a pilot ship of each team, the Raider turned eight ways and one den; see GalleryScum), by
+## --scum-fight (a real match until a den ship is hurt in a fight with a pilot ship; two pictures
+## of that instant) and measured by --bench --bench-look=scum (a crowd of Scum ships in one view).
 
 ## The unit types, in picture order: [file name, unit key, title]. A key is
 ## "ship:<hull id>", "minion:<type>", "mining_drone", "repair_drone", "ward",
@@ -184,7 +201,7 @@ func setup(w: World) -> void:
 	DirAccess.make_dir_recursive_absolute(dir)
 	process_mode = Node.PROCESS_MODE_ALWAYS
 	# --live, --fights and --scene use a real match: leave everything running.
-	if Game.opt("live", false) or Game.opt("fights", false) or Game.opt("scene", false):
+	if Game.opt("live", false) or Game.opt("fights", false) or Game.opt("scene", false) or Game.opt("scum-fight", false):
 		_run.call_deferred()
 		return
 	# Nothing moves, shoots or is rebuilt: the match clock is stopped.
@@ -215,6 +232,8 @@ func _run() -> void:
 			await GalleryMeasure.new(self).live_streams(PLAY_VIEW)
 		elif str(Game.opt("live-look", "")) == "kick":
 			await GalleryMeasure.new(self).live_kick(PLAY_VIEW)
+		elif str(Game.opt("live-look", "")) == "scan":
+			await GalleryLiveScan.new(self).scan(PLAY_VIEW)
 		else:
 			await GalleryMeasure.new(self).live(PLAY_VIEW)
 		get_tree().quit()
@@ -225,6 +244,20 @@ func _run() -> void:
 		return
 	if Game.opt("scene", false):
 		await GalleryScene.new(self).scene()
+		get_tree().quit()
+		return
+	# --hold-pulse: the veins of the Cinder hulls keep one pulse, so two runs' pictures
+	# can be compared pixel by pixel.
+	if Game.opt("hold-pulse", false):
+		CinderPaint.hold_pulse(0)
+	if Game.opt("close-zoom") != null:
+		DrawCache.set_close_zoom(float(Game.opt("close-zoom", 0.5)))
+	if Game.opt("bench-scene", false):
+		await GallerySceneCost.scan(self)
+		get_tree().quit()
+		return
+	if Game.opt("scum-fight", false):
+		await GalleryScum.new(self).fight()
 		get_tree().quit()
 		return
 	var failures := GalleryChecks.run()
@@ -245,8 +278,14 @@ func _run() -> void:
 		await GalleryKick.new(self).strip()
 		get_tree().quit()
 		return
+	if Game.opt("scum", false):
+		await GalleryScum.new(self).pictures()
+		get_tree().quit()
+		return
 	if Game.opt("bench", false):
-		if Game.opt("bench-parts", false):
+		if Game.opt("bench-types", false):
+			await GallerySceneCost.by_type(self, PLAY_VIEW)
+		elif Game.opt("bench-parts", false):
 			await GalleryMeasure.new(self).bench_parts(PLAY_VIEW)
 		elif str(Game.opt("bench-look", "")) == "steel":
 			await GalleryMeasure.new(self).bench_steel(PLAY_VIEW)
@@ -254,6 +293,8 @@ func _run() -> void:
 			await GalleryMeasure.new(self).bench_kick(PLAY_VIEW)
 		elif str(Game.opt("bench-look", "")) == "streams":
 			await GalleryMeasure.new(self).bench_streams(PLAY_VIEW)
+		elif str(Game.opt("bench-look", "")) == "scum":
+			await GalleryScum.new(self).bench(PLAY_VIEW)
 		else:
 			await GalleryMeasure.new(self).bench(PLAY_VIEW)
 	else:
@@ -432,7 +473,7 @@ func _extent(key: String) -> Vector2:
 		return box * float(Ships.HULLS[hid]["length"]) / 36.0
 	if key.begins_with("minion:"):
 		var mt := key.substr(7)
-		return GalleryChecks.box(MinionShapes.AURELIAN[mt]) * float(Minions.TYPES[mt]["radius"]) * 1.3
+		return GalleryChecks.box(MinionShapes.footprint(mt)) * float(Minions.TYPES[mt]["radius"]) * 1.3
 	match key:
 		"mining_drone":
 			return GalleryChecks.box(UnitVisual.DRONE) * float(Structures.MINING_DRONE["radius"]) * 1.2

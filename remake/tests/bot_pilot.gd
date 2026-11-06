@@ -117,12 +117,13 @@ func _physics_process(dt: float) -> void:
 			ship.velocity = Vector2.ZERO
 			Input.action_press("thrust_forward")
 			_next()
-		# After 1 s of W, the speed along our nose must be over 250.
+		# After 1 s of W, the speed along our nose must be over 200 (the small
+		# craft fly at Rules.SMALL_CRAFT_PACE of their table push, so 0.8 x 250).
 		1:
 			Input.action_press("thrust_forward")
 			if step_t > 1.0:
 				var fwd := ship.velocity.dot(Vector2.from_angle(ship.rotation))
-				_check("W thrusts forward", fwd > 250.0, "forward speed %.0f" % fwd)
+				_check("W thrusts forward", fwd > 200.0, "forward speed %.0f" % fwd)
 				_next()
 		# A: stop on the first frame, then hold "strafe left" for 0.6 s;
 		# the speed toward our left side (port) must be over 100.

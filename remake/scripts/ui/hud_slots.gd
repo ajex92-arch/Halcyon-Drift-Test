@@ -8,7 +8,8 @@ extends VBoxContainer
 ## 8 pixels from the bottom-left corner, growing upward, holding Keys (the
 ## grey key reminder, 11 px; it wraps to the width of the gear slots) and
 ## Gear (a grid for the slot boxes, 4 pixels apart: one row of 6, or two rows
-## of 3 in a narrow window, see set_compact()). The mouse passes through it.
+## of 3 in a narrow window, see set_compact()). The mouse passes through it,
+## except over a slot that holds a repair kit: a click there uses a kit.
 ## How many slots there are is game
 ## data (Items.SLOTS = 6), so _ready() adds the boxes to Gear: one per slot,
 ## each made from scenes/ui/hud_gear_slot.tscn (a dark 62 x 40 pixel box,
@@ -32,18 +33,30 @@ const SLOT_SCENE := preload("res://scenes/ui/hud_gear_slot.tscn")
 @onready var _keys: Label = $Keys
 ## One label per gear slot, in slot order.
 var _slot_labels: Array[Label] = []
+## One box per gear slot, in slot order.
+var _boxes: Array[PanelContainer] = []
+## Does each slot hold a repair kit now (refresh_slots() keeps it)? Only such a box takes the mouse.
+var _is_kit: Array[bool] = []
+## The slot a left press started on, or -1: the release acts only on the same slot.
+var _press_slot := -1
 ## True while the gear slots are in two rows of 3 (set_compact).
 var _compact := false
+## The HUD (set by Hud.setup()): a click on a kit slot goes to its router (HudInput.click("use_kit")).
+var hud: Hud = null
 
 
 ## Godot calls this when the corner joins the HUD: add one box per gear
 ## slot to the Gear grid, and remember each box's label. The key reminder is
-## made as wide as the gear row, so it wraps there.
+## made as wide as the gear row, so it wraps there. Each box also listens to
+## its own clicks (a box takes the mouse only while its slot holds a kit).
 func _ready() -> void:
 	for i in Items.SLOTS:
 		var box: PanelContainer = SLOT_SCENE.instantiate()
 		slots_box.add_child(box)
 		_slot_labels.append(box.get_node("Item") as Label)
+		_boxes.append(box)
+		_is_kit.append(false)
+		box.gui_input.connect(_on_box_input.bind(i))
 	_keys.custom_minimum_size.x = _row_width(Items.SLOTS)
 
 
@@ -77,13 +90,37 @@ func refresh_slots(h: PilotProfile) -> void:
 	for i in Items.SLOTS:
 		var s: Dictionary = h.inventory[i]
 		var txt := ""
+		var kit := false
 		if s.is_empty():
 			txt = "—"
 		elif s["id"] == Items.KIT["id"]:
 			txt = "Kit x%d\n(R)" % int(s["count"])
+			kit = true
 		else:
 			txt = String(Items.ITEMS[s["id"]]["label"])
 		UiKit.set_text(_slot_labels[i], txt)
+		# A kit slot takes the mouse (a click uses a kit); every other slot lets a click through to the game.
+		if kit != _is_kit[i]:
+			_is_kit[i] = kit
+			_boxes[i].mouse_filter = Control.MOUSE_FILTER_STOP if kit else Control.MOUSE_FILTER_IGNORE
+			_boxes[i].tooltip_text = "Use a repair kit (%s)" % KeyMapText.key_of("use_kit") if kit else ""
+
+
+## A mouse event on gear box `slot`. Only a left click on a kit slot counts: the press picks the slot, the
+## release on the same slot uses a kit (HudInput.click("use_kit"), the same as R); a slide off cancels.
+func _on_box_input(event: InputEvent, slot: int) -> void:
+	if not (event is InputEventMouseButton) or not _is_kit[slot]:
+		return
+	var mb := event as InputEventMouseButton
+	if mb.button_index != MOUSE_BUTTON_LEFT:
+		return
+	if mb.pressed:
+		_press_slot = slot
+	else:
+		if _press_slot == slot and Rect2(Vector2.ZERO, _boxes[slot].size).has_point(mb.position) and hud != null:
+			hud.router.click("use_kit")
+		_press_slot = -1
+	_boxes[slot].accept_event()
 
 
 ## Write the key reminder for seat `role` ("admiral", "pilot" or
@@ -91,5 +128,11 @@ func refresh_slots(h: PilotProfile) -> void:
 ## made from the key list (KeyMapText.key_line), with the first key of each action as it is
 ## now, so it follows the player's own changes; with the standard keys it reads
 ## "Tab Admiral board · B hangar · ..." as it always did. The line is kept until a key changes.
-func refresh_keys(role: String) -> void:
-	UiKit.set_text(_keys, KeyMap.key_line(role))
+## `with_wing` (default false) is true for a pilot with a wing: the line then also
+## ends with the order key, " · X wing orders (hold)", so the pilot sees it too.
+func refresh_keys(role: String, with_wing: bool = false) -> void:
+	var line := KeyMap.key_line(role)
+	# A pilot with a wing also sees the order key.
+	if with_wing and role == "pilot":
+		line += " · %s wing orders (hold)" % KeyMapText.key_of("wheel")
+	UiKit.set_text(_keys, line)

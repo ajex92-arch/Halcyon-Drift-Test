@@ -17,7 +17,8 @@ extends RefCounted
 ## Besides the pilot's keys the list defines: "pause" (P), "slow_motion" (the backquote
 ## key) and "fast_motion" (Shift plus it), which step the world speed, "note" (F9), "help"
 ## (H and F12), "debug_launch" (Ctrl+F12, the text overlay's launch) and "wheel" (X and
-## mouse button 5, held to open the order wheel, which nothing reads yet).
+## mouse button 5, held to open the order wheel, which HudInput reads for a pilot's
+## wing) and the eight wing_* actions (no key under the standard wing preset).
 ##
 ## WHO USES IT: Game._ready() calls define_all() (through Game._define_actions()),
 ## and the player's own keys are put on top later by Game.use_remembered_keys() and the

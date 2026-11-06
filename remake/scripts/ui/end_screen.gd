@@ -71,7 +71,10 @@ func _ready() -> void:
 	# Step 4: the top 5 pilots by damage done, and you if you're not
 	# there. New lines land below the buttons, so afterwards the buttons
 	# move back to the bottom.
-	var best: Array = world.profiles.duplicate()
+	var best: Array = []
+	for p: PilotProfile in world.profiles:
+		if not p.is_crew:
+			best.append(p)
 	best.sort_custom(func(a: PilotProfile, b: PilotProfile) -> bool: return a.damage_done > b.damage_done)
 	for i in mini(5, best.size()):
 		var p: PilotProfile = best[i]
@@ -91,7 +94,7 @@ func _fill_team_totals(t: int) -> void:
 	var k := 0
 	var d := 0
 	for p: PilotProfile in world.profiles:
-		if p.team == t:
+		if p.team == t and not p.is_crew:
 			k += p.kills
 			d += p.deaths
 	var lines := [

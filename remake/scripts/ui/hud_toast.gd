@@ -9,7 +9,8 @@ extends PanelContainer
 ## growing upward and to both sides, holding one centred label, Text. The
 ## mouse passes through it. show_text() puts the text in the box and shows
 ## it for 3.5 seconds; tick() counts that time down and fades the box out
-## over the last 0.6 seconds. Normally the box sits 150 pixels above the
+## over the last 0.6 seconds. Normally the box sits 150 pixels (more by the wing strip's
+## height while a strip shows) above the
 ## bottom edge, clear of the ship readout. While a big panel is open it drops
 ## to 6 pixels above the bottom, into the strip under the panel, so it doesn't
 ## cover the panel: in the middle, or, while the ship readout shows there, in
@@ -32,6 +33,13 @@ var hud: Hud
 @onready var _label: Label = $Text
 ## Seconds the hint has left to show (0 = hidden).
 var _t := 0.0
+## True while the hint shown is a refusal: its text is in the danger colour and the danger triangle
+## sits at its left (colour alone never says "refused").
+var _danger := false
+## The room (pixels) a refusal makes at the left of its text for the danger triangle.
+const DANGER_ROOM := 22.0
+## The side (pixels) of the danger triangle in a refusal.
+const DANGER_SIDE := 12.0
 
 
 ## Godot calls this when the box joins the HUD: let long text wrap.
@@ -39,15 +47,41 @@ func _ready() -> void:
 	_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 
 
-## Show `text` for 3.5 seconds (a new hint replaces the old one).
-func show_text(text: String) -> void:
+## Show `text` for 3.5 seconds (a new hint replaces the old one). With `danger` it is a refusal: the text
+## in the danger colour with the danger triangle at its left.
+func show_text(text: String, danger: bool = false) -> void:
+	_set_danger(danger)
 	_label.text = text
 	_t = 3.5
 	visible = true
+	modulate.a = 1.0
 	place()
 
 
-## Put the box in its spot (HudLayout.toast_spot: 150 pixels above the
+## Put the box in refusal dress (danger colour, room for the triangle) or back to normal.
+func _set_danger(on: bool) -> void:
+	_danger = on
+	remove_theme_stylebox_override("panel")
+	_label.remove_theme_color_override("font_color")
+	if on:
+		_label.add_theme_color_override("font_color", Palette.DANGER)
+		var base := get_theme_stylebox("panel")
+		if base is StyleBoxFlat:
+			var sb := (base as StyleBoxFlat).duplicate() as StyleBoxFlat
+			sb.content_margin_left = sb.get_margin(SIDE_LEFT) + DANGER_ROOM
+			add_theme_stylebox_override("panel", sb)
+	queue_redraw()
+
+
+## Draw the danger triangle at the left of a refusal.
+func _draw() -> void:
+	if _danger:
+		var left := get_theme_stylebox("panel").get_margin(SIDE_LEFT) - DANGER_ROOM
+		Glyphs.danger(self, Vector2(left + DANGER_ROOM * 0.5 + 2.0, size.y * 0.5 + 1.0), DANGER_SIDE)
+
+
+## Put the box in its spot (HudLayout.toast_spot: 150 pixels (more by the wing strip's
+## height while a strip shows) above the
 ## bottom, or in the strip under an open panel) and make it no wider than
 ## HudLayout allows (the text wraps instead). We shrink the box to a point
 ## first; its minimum size then grows it back, centred and upward from that

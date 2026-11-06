@@ -129,7 +129,7 @@ func _recent(team: int) -> int:
 func seats(team: int) -> Array:
 	var out: Array = []
 	for p: PilotProfile in world.profiles:
-		if p.team == team and p.role != "admiral":
+		if p.team == team and p.role != "admiral" and not p.is_crew:
 			out.append(p)
 	return out
 

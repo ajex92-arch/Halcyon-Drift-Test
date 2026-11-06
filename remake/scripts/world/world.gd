@@ -98,6 +98,16 @@ var human: PilotProfile = null
 ## True while the human Admiral's board is showing. The HUD keeps it up to
 ## date (HudPanels.toggle_board()); BoardHold and the camera read it.
 var board_open := false
+## True while the pilot's order wheel is open (WingWheel sets it). The human's aim and face
+## points then keep the values they had when the wheel opened (PlayerController), so a click on
+## the wheel never moves the ship.
+var wheel_hold := false
+## True while the pointer is on a HUD control that takes clicks (the ship readout, the button block, a kit gear slot, the
+## wing strip) and the player is not firing. The human's aim and face points then keep the values they had
+## (PlayerController), so a click on a button never turns the ship toward the HUD; the hull turns back toward the
+## pointer when it leaves. The HUD sets it every frame (Hud._process), so it cannot stay on. A fire started in the
+## world (mouse_fire) keeps the aim following the pointer across a control.
+var ui_hold := false
 ## How fast the world runs (normal, slowed, or faster) and which physics frames
 ## get a tick. A new match starts at normal speed, or at the launch option --slow
 ## or --fast (WorldSetup).
@@ -126,7 +136,7 @@ var effects: Effects
 var unit_hash: SpatialHash
 ## Match flow: respawns, hyperspace spool countdowns and the win condition.
 var rules: MatchRules
-## Sends the minion waves (and runs Fleet Command minion buying).
+## Sends the minion waves.
 var minion_director: MinionDirector
 ## Keeps the six lane defense posts: their records, rebuild timers and
 ## rebuilds. The waves launch from them.

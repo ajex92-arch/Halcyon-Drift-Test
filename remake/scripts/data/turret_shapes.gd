@@ -294,3 +294,28 @@ const VHORR := {
 		],
 	},
 }
+
+## The Scum turrets: jury-rigged. Only the light turret (the Scum guns are all that class) has one;
+## TurretPaint falls back to the Aurelian drawing for any other class. A lopsided scrap plate for
+## a base, a rust cap that sits off centre, a barrel made of two pipes joined by a clamp so it
+## bends in the middle, and a second pipe lashed alongside it.
+const SCUM := {
+	"light": {"r": 0.7, "extent": 2.05,
+		"base": [
+			[Vector2(0.62, -0.5), Vector2(0.72, 0.18), Vector2(0.4, 0.7), Vector2(-0.3, 0.74), Vector2(-0.74, 0.3), Vector2(-0.66, -0.38), Vector2(-0.18, -0.7)],
+			[Vector2(-0.3, 0.4), Vector2(-0.95, 0.52), Vector2(-0.88, 0.05), Vector2(-0.6, 0.0)],
+		],
+		"cap": [
+			[Vector2(0.34, -0.18), Vector2(0.4, 0.26), Vector2(-0.05, 0.46), Vector2(-0.46, 0.2), Vector2(-0.36, -0.3)],
+		],
+		"barrels": [
+			[Vector2(0.4, -0.36), Vector2(1.4, -0.36), Vector2(1.4, -0.24), Vector2(0.4, -0.24)],
+			[Vector2(0.2, -0.13), Vector2(1.15, -0.13), Vector2(1.15, 0.13), Vector2(0.2, 0.13)],
+			[Vector2(1.05, -0.09), Vector2(2.05, -0.03), Vector2(2.05, 0.21), Vector2(1.05, 0.17)],
+			[Vector2(0.95, -0.22), Vector2(1.28, -0.22), Vector2(1.28, 0.28), Vector2(0.95, 0.28)],
+		],
+		"accent": [
+			[Vector2(1.85, -0.04), Vector2(2.05, -0.03), Vector2(2.05, 0.21), Vector2(1.85, 0.19)],
+		],
+	},
+}

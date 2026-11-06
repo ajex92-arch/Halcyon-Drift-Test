@@ -12,12 +12,13 @@ extends PanelContainer
 ## tests/wheel_check.gd checks it). It holds one column, Col, with these
 ## rows from top to bottom:
 ##   Head (Texts (Title, Status), Close): the title with the treasury, the
-##     status line under it (what is building and researching), and Close
-##     (at least 40 pixels tall);
+##     status line under it (what the build list and the research are
+##     doing), and Close (at least 40 pixels tall);
 ##   Away: the note, in the highlight colour, shown while the Admiral is out
 ##     flying their own ship;
 ##   Tabs (Research, Build, Mothership, Fleet, Pilots): one button per tab
-##     (page), 120 pixels wide; each button's text is its tab's name;
+##     (page), 120 pixels wide; each button's node name is its tab key (the
+##     Fleet button reads Yard);
 ##   Scroll > Content: the scroll area (at least 120 pixels tall) and the
 ##     column inside it that holds the current tab's cards;
 ##   Detail: the details line (at least 36 pixels tall), which explains the
@@ -30,19 +31,19 @@ extends PanelContainer
 ##                 (AdmiralBoardBuild)
 ##   Mothership  - status, upgrades, moving it (from 20:00).
 ##                 (AdmiralBoardMothership)
-##   Fleet       - rally waypoint and Fleet Command minion control.
-##                 (AdmiralBoardFleet)
+##   Fleet       - called Yard on screen: the rally waypoint, the fleet ships
+##                 and the build list. (AdmiralBoardFleet, AdmiralBoardYardList)
 ##   Pilots      - the scoreboard (scenes/ui/scoreboard.tscn, placed
 ##                 inside the board).
 ## A tab's "cards" (its buttons and labels) depend on the game: which
-## nodes, techs and minions there are, and how wide the board is. So they
+## nodes, techs and hulls there are, and how wide the board is. So they
 ## are made in code: picking a tab (_set_tab) throws the old tab's cards
 ## away and builds the new tab's cards once. Then, 4 times a second,
 ## _refresh() rewrites their texts and colours, so prices, timers and
 ## reasons stay up to date.
 ## Every action goes through AdmiralCommand (world.command), so the human
 ## follows the same rules as the AI admiral. Map tools (bay, ward,
-## waypoint, move, fleet orders) "arm" the CommandOverlay (the Admiral's
+## waypoint, move, rally) "arm" the CommandOverlay (the Admiral's
 ## clickable map layer) and close the board, so the Admiral can click the
 ## map. The Admiral can command while flying their own ship, except moving
 ## the mothership, which needs them docked.
@@ -60,7 +61,7 @@ extends PanelContainer
 ## button moved the camera). The HUD then hides the board.
 signal closed
 ## Sent when a map tool was armed; `tool` is its name ("bay", "ward",
-## "waypoint", "move", "fleet_move" or "fleet_hold"). The HUD then hides
+## "waypoint" or "move"). The HUD then hides
 ## the board so the Admiral can click the map.
 signal tool_armed(tool: String)
 
@@ -75,10 +76,14 @@ var overlay: CommandOverlay
 ## The team this board commands: the human Admiral's team (World.human_team), set
 ## by setup().
 var team := Rules.HALCYON
-## The tab being shown (one tab button's text: "Research", "Build",
-## "Mothership", "Fleet" or "Pilots"). The HUD reads it to rebuild the same
-## tab after a resize.
+## The tab being shown (one tab button's key, its node name: "Research", "Build",
+## "Mothership", "Fleet" or "Pilots"; the Fleet tab reads "Yard" on screen). The
+## HUD reads it to rebuild the same tab after a resize.
 var tab := "Research"
+## The Yard tab's choices, which stay while the board is open: "count" (ships in a
+## squadron, 1 to 3), "repeat" (buy again when done) and "rally" ("mothership",
+## "lane" or "point", the picked spot being kept on the command overlay).
+var yard := {"count": 3, "repeat": false, "rally": "mothership"}
 ## key -> CardButton / Label / Button, refreshed at 4 Hz (4 times a
 ## second). Each key starts with what it is, e.g. "fac:<facility id>",
 ## "tech:<tech id>", "node:<node id>", or is a plain name like "drones".
@@ -91,15 +96,15 @@ var _scoreboard: Scoreboard = null
 
 ## The title line: "Admiral board · treasury N".
 @onready var _title: Label = $Col/Head/Texts/Title
-## The line under the title: what is building and researching, and how
-## many mining drones we have.
+## The line under the title: what the build list and the research are
+## doing, and how many mining drones we have.
 @onready var _status: Label = $Col/Head/Texts/Status
 ## The note, in the highlight colour, shown while the Admiral is out flying their
 ## own ship.
 @onready var _away: Label = $Col/Away
 ## The tab buttons in the Tabs row, in the order they appear. Each one's
-## text is its tab's name; _set_tab() colours the selected one in the highlight
-## colour.
+## node name is its tab key (the Fleet button reads Yard); _set_tab()
+## colours the selected one in the highlight colour.
 @onready var _tab_buttons: Array[Button] = [$Col/Tabs/Research, $Col/Tabs/Build, $Col/Tabs/Mothership, $Col/Tabs/Fleet, $Col/Tabs/Pilots]
 ## The column inside the scroll area that holds the current tab's cards.
 @onready var _content: VBoxContainer = $Col/Scroll/Content
@@ -110,11 +115,12 @@ var _scoreboard: Scoreboard = null
 
 ## Godot calls this when the board joins the HUD (the frame is already
 ## there, from the scene): Close sends `closed`, and each tab button shows
-## the tab it names. The tab contents come later, from _set_tab().
+## the tab whose key is its node name (its text is only what the Admiral reads: the
+## Fleet tab reads "Yard"). The tab contents come later, from _set_tab().
 func _ready() -> void:
 	$Col/Head/Close.pressed.connect(func() -> void: closed.emit())
 	for b in _tab_buttons:
-		b.pressed.connect(_set_tab.bind(b.text))
+		b.pressed.connect(_set_tab.bind(String(b.name)))
 
 
 ## Connect the board to world `w` and map layer `ov`, command the human's team,
@@ -142,7 +148,7 @@ func _exit_tree() -> void:
 		Events.admiral_result.disconnect(_on_order_result)
 
 
-## Show tab `t` (one tab button's text): colour its button in the highlight colour, throw
+## Show tab `t` (one tab button's key): colour its button in the highlight colour, throw
 ## away the old cards, build the new tab's cards and fill them in at once.
 ## Other files call it too (the HUD after a resize, tests/ui_tour.gd).
 func _set_tab(t: String) -> void:
@@ -151,8 +157,8 @@ func _set_tab(t: String) -> void:
 	# highlight colour.
 	var hi := UiKit.accent()
 	for b in _tab_buttons:
-		b.add_theme_color_override("font_color", hi if b.text == t else Palette.ICE)
-		b.add_theme_stylebox_override("normal", UiKit.box(Palette.INK, hi if b.text == t else Palette.LINE, 8))
+		b.add_theme_color_override("font_color", hi if String(b.name) == t else Palette.ICE)
+		b.add_theme_stylebox_override("normal", UiKit.box(Palette.INK, hi if String(b.name) == t else Palette.LINE, 8))
 	# Step 2: remove the old cards (queue_free deletes a node at the end of
 	# this frame).
 	for c in _content.get_children():
@@ -263,7 +269,8 @@ func _refresh() -> void:
 	var ts := _ts()
 	UiKit.set_text(_title, "Admiral board  ·  treasury %s" % Util.money(ts.treasury))
 	# Step 1: the status line: the facility building now (first in its
-	# queue) and the research running now, with seconds left.
+	# queue), the research running now, with seconds left, and the build
+	# list (ships building, the ore the next waiting item needs).
 	var bits: Array = []
 	if not ts.building.is_empty():
 		var b: Dictionary = ts.building[0]
@@ -271,9 +278,16 @@ func _refresh() -> void:
 	if not ts.research.is_empty():
 		var r: Dictionary = ts.research[0]
 		var s := "Researching %s (%ds)" % [Tech.TECHS[r["id"]]["label"], int(ceil(float(r["left"])))]
-		if ts.research.size() > 1:
-			s += " +%d queued" % (ts.research.size() - 1)
+		var waiting := ts.production.idle_count(Production.RESEARCH)
+		if ts.research.size() > 1 or waiting > 0:
+			s += " +%d queued" % (ts.research.size() - 1 + waiting)
 		bits.append(s)
+	var yard_n := ts.production.ships_building()
+	if yard_n > 0:
+		bits.append("Yard: %d building" % yard_n)
+	var ore_need := ts.production.ore_short()
+	if ore_need > 0:
+		bits.append("next item needs %d ore" % ore_need)
 	# Step 2: "nothing going on", then the drone count, joined with dots.
 	if bits.is_empty():
 		bits.append("Nothing building or researching")

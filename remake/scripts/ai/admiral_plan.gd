@@ -11,8 +11,8 @@ extends RefCounted
 ## research queue is full) may be jumped over, but only a few steps ahead
 ## (LOOKAHEAD), so the list mostly keeps its order.
 ##
-## WHO USES IT: AdmiralAI.tick() calls AdmiralPlan.next_step(), then pays
-## for the step with AdmiralCommand.build_facility() or
+## WHO USES IT: AdmiralAI.tick() calls AdmiralPlan.next_step(), then queues
+## the step with AdmiralCommand.build_facility() or
 ## AdmiralCommand.research(). The ids and prices come from Tech.FACILITIES
 ## and Tech.TECHS (scripts/data/tech.gd). TeamState (scripts/team/
 ## team_state.gd) says what is done, under way, or blocked.
@@ -25,7 +25,7 @@ extends RefCounted
 ##   "f" = a facility, a module built onto our mothership (Tech.FACILITIES),
 ##   "t" = a tech, a research upgrade (Tech.TECHS).
 ## The steps are taken from top to bottom. The Fleet Command Module ("fleet")
-## is left out on purpose (see AdmiralFleetCommand for why).
+## is left out on purpose: it has no job now.
 const PLAN := [
 	["f", "research"], ["t", "fusionBombs"], ["t", "repairBays"], ["t", "corvetteChassis"],
 	["f", "platform"], ["f", "corvette"], ["t", "platformMissiles"], ["t", "lanceBeams"],

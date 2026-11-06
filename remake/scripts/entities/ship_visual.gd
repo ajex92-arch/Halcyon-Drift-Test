@@ -14,13 +14,32 @@ extends Node2D
 ##     the arrow, the bars and the name upright, this node turns itself back
 ##     the other way ("counter-rotates"), so its drawing frame always lines
 ##     up with the world. The ship's shape is then turned by hand.
+##   - The hull itself is not drawn again every frame. It is drawn on a kept
+##     picture, a DrawCache node called "Hull" on a "Spin" node that turns with the
+##     ship (so its picture is drawn with the nose along +x), and _update_hull() tells it
+##     once a frame what the hull looks like now. It is drawn again only when
+##     something it shows changes: the hit flash, ace, the human's ship, how hot
+##     the engines glow, a nose gun's kick, the pulse of the veins of a big Cinder
+##     hull, the camera zoom (by 2%) or a test switch of DrawParts. The four shield
+##     arcs have a kept picture of their own on the same "Spin" node (ShieldArcs:
+##     drawn again when a zone's fill moves by a thirty-second or the hit glow starts
+##     or ends; the usual play zoom and further out draw all four arcs as one command),
+##     and the bars and the name have one of their own that stays upright (drawn again
+##     when a bar moves by a 64th). What changes by the frame stays on this node's own
+##     picture: the heads of the turning guns, a Bomber's torpedo run and the human's
+##     drift arrow; a ship with none of those asks for no redraw of its own at all. A ship the fog hides,
+##     or one far from the camera's view (ViewCull), is not brought up to date until it shows or comes near again.
 ##   - The camera can zoom far out (a "Homeworld" zoom, after the space game
 ##     of that name). Ships are drawn bigger than life when needed so they
 ##     are always at least MIN_PX screen pixels long, and lines are
 ##     multiplied by `px` (world units per screen pixel) so they keep the
 ##     same thickness on screen at any zoom.
 ##   - The flames are CPUParticles2D nodes (small dots of light fired out by
-##     Godot): one for the main engine and one for each side thruster.
+##     Godot): one for the main engine and one for each side thruster. At the usual
+##     play zoom and further out (camera zoom under DrawCache.CLOSE_ZOOM) each holds
+##     half its dots, and far out (under FAR_FLAMES_ZOOM) the flames are stopped and
+##     hidden. The three emitters are made all the same (each takes a number from the
+##     match's shared random sequence), only their dots change.
 ##   - The four big hulls of both teams (EngineStreams.HULLS) have several engine
 ##     nozzles and show an engine stream from each one. It is still the one main
 ##     flame emitter, starting its dots from one point, but each frame the point
@@ -52,9 +71,9 @@ extends Node2D
 ##     reload; the Bomber the human flies also shows a hint and a sight (RunPaint,
 ##     FanPaint).
 ##   - When a gun fires, its barrel kicks back and slides home (GunKick): each frame
-##     _draw() lets the ship's GunKick look at the guns' cooldowns (it reads them,
-##     it never changes them) and hands it to TurretPaint, and to AurelianPaint for
-##     the amber hulls' nose guns.
+##     _update_hull() lets the ship's GunKick look at the guns' cooldowns (it reads
+##     them, it never changes them) and _draw() hands it to TurretPaint, and the hull
+##     picture to AurelianPaint for the amber hulls' nose guns.
 ##   - With --sim-only (Game.sim_only) it draws nothing at all: it hides
 ##     itself, makes no flames and does no per-frame work. One detail keeps
 ##     the match exactly the same: making a CPUParticles2D takes one number
@@ -66,12 +85,13 @@ extends Node2D
 ##     drawn as always. The three flame emitters are still made with "flames"
 ##     off, for the same random-number reason as above.
 ##
-## WHO USES IT: Godot runs it as part of ship.tscn. It reads the Ship's
+## WHO USES IT: Godot runs it as part of ship.tscn (it makes the DrawCache of the hull
+## itself, when it starts). It reads the Ship's
 ## thrust_* values, boosting, ace_t, flash, shields, velocity and f_max,
 ## and the pilot profile's is_human, and the ship's mounts. AurelianPaint draws
 ## the Aurelian hulls, CinderPaint the Cinder hulls (and tints their flames),
 ## TurretPaint the turrets, EngineStreams works out the big hulls' stream places.
-## DrawParts holds the test-only switches it reads.
+## DrawParts holds the test-only switches it reads. ShieldArcs draws the shield arcs.
 
 ## Each hull's plain outline: a list of corner points, nose pointing right (+x),
 ## for a ship 36 units long (they are scaled to the hull's real length). The
@@ -100,6 +120,18 @@ const MIN_PX := 16.0
 ## so they do not drown out the alien hull itself (the user, Sun 2026-10-18:
 ## "The engine effects are too large and overwhelm the design").
 const CINDER_JET_SIZE := 0.75
+## How many dots a flame emitter holds close up (the side flames always; the main flame
+## of a ship with one stream, see EngineStreams.dots()).
+const JET_DOTS := 24
+## The share of its dots an emitter holds at the usual play zoom and further out (the
+## camera zoom under DrawCache.CLOSE_ZOOM).
+const PLAY_DOT_SHARE := 0.5
+## The fewest dots an emitter is ever cut down to.
+const FEWEST_DOTS := 4
+## The camera zoom under which a ship shows no flames at all (the view is wider than
+## about 8,500 screen pixels of the game's 1280-wide picture: the widest pilot zoom-out
+## and the admiral's overview). The emitters are still there, stopped and hidden.
+const FAR_FLAMES_ZOOM := 0.15
 
 ## The ship we draw (our parent node).
 var ship: Ship
@@ -121,6 +153,8 @@ var _drawn := false
 ## True while the three flame emitters are parked (stopped and hidden) because
 ## the test switch DrawParts.flames is off.
 var _jets_hidden := false
+## The share of its dots each emitter holds now (1 close up, PLAY_DOT_SHARE further out).
+var _dot_share := 1.0
 ## The speed the three flame emitters run at: the world's speed (WorldSpeed;
 ## 1.0 normal, less in slow motion), set when it changes.
 var _jet_speed := 1.0
@@ -135,6 +169,36 @@ var _kicks := GunKick.new()
 var _plan := {}
 ## Which step of the round the emitter is on: it moves on one step every frame.
 var _hop := 0
+## The node the kept pictures hang on (made in _ready()). It turns with the ship, so
+## their pictures are drawn with the nose pointing along +x.
+var _spin: Node2D
+## The kept picture of the hull (a child of _spin).
+var _hull: DrawCache
+## True while the hull's kept picture has glowing veins that pulse (a big Cinder
+## hull), so the picture is drawn again each time the pulse takes a new step.
+var _pulses := false
+## The kept picture of the four shield arcs (a child of _spin, over the hull).
+var _shield: DrawCache
+## The size of each shield zone (front, rear, left, right) as of the last look (worked out again
+## only when the shield total or focus change).
+var _caps := PackedFloat32Array([0.0, 0.0, 0.0, 0.0])
+## The shield total the sizes in _caps were worked out for (-1 = not yet).
+var _caps_total := -1.0
+## The shield focus the sizes in _caps were worked out for (-1 = not yet).
+var _caps_focus := -1
+## The kept picture of the hull bar, the shield bar and the name (upright, drawn
+## over this node's own drawing).
+var _gauges: DrawCache
+## True when the last _draw() of this node drew something (guns' heads, a torpedo
+## run, the drift arrow), so the next frame asks for one more drawing that clears it
+## once nothing is left to draw.
+var _live_drawn := false
+## The mount list the flags below were worked out for (a new list means new flags).
+var _mounts_seen: Array = []
+## How many mounts the list had then.
+var _mounts_n := -1
+## True when any of the ship's guns turns (so a head is drawn for it, each frame).
+var _has_heads := false
 
 
 ## Find our ship and make the three flame emitters. With --sim-only
@@ -157,6 +221,26 @@ func _ready() -> void:
 			randi()
 		return
 	DrawParts.read_options()
+	# The kept pictures that turn with the ship (see DrawCache) hang on one node, the
+	# "Spin", which turns the way the ship turns and is drawn behind everything this
+	# node draws. The hull's is the first.
+	_spin = Node2D.new()
+	_spin.name = "Spin"
+	_spin.show_behind_parent = true
+	add_child(_spin)
+	_hull = DrawCache.new()
+	_hull.name = "Hull"
+	_hull.draw.connect(_draw_hull_layer)
+	_spin.add_child(_hull)
+	_shield = DrawCache.new()
+	_shield.name = "Shield"
+	_shield.draw.connect(_draw_shield_layer)
+	_spin.add_child(_shield)
+	# The bars and the name stay upright and are drawn over everything else of this node.
+	_gauges = DrawCache.new()
+	_gauges.name = "Gauges"
+	_gauges.draw.connect(_draw_gauges_layer)
+	add_child(_gauges)
 	main_jet = _jet(Color(1.0, 0.85, 0.6))
 	port_jet = _jet(Palette.SIDE_JET)
 	star_jet = _jet(Palette.SIDE_JET)
@@ -168,7 +252,7 @@ func _ready() -> void:
 func _jet(col: Color) -> CPUParticles2D:
 	var p := CPUParticles2D.new()
 	# How many dots, how long they live, how they fly.
-	p.amount = 24
+	p.amount = JET_DOTS
 	p.lifetime = 0.35
 	p.local_coords = false
 	p.emitting = false
@@ -188,17 +272,55 @@ func _jet(col: Color) -> CPUParticles2D:
 	return p
 
 
-## Every frame: counter-rotate, refresh the flames and ask for a redraw. (Test
-## only: with DrawParts.redraw off we ask for a redraw just until the first
-## picture is drawn; Godot keeps that picture.)
+## Every frame: counter-rotate, refresh the flames, tell the kept pictures (hull,
+## shield arcs, bars) what they should look like, and ask for a redraw of this node's
+## own picture only while it has something that changes by the frame: the heads of
+## the turning guns, a Bomber's torpedo run or the human's drift arrow. (Test only:
+## with DrawParts.redraw off we ask for a redraw just until the first picture is
+## drawn; Godot keeps that picture.)
 func _process(_dt: float) -> void:
 	if ship == null or not ship.alive:
 		return
 	rotation = -ship.rotation
+	# A ship nobody can see (the fog hides it) needs no update: it is brought up to date on the
+	# first frame it shows again (a gun's kick starts over after a gap, see GunKick).
+	if not is_visible_in_tree():
+		return
+	# Nor is one far from the camera's view (see ViewCull): it is brought up to date on the first
+	# frame it comes near.
+	if not ViewCull.near(get_viewport(), ship.global_position, ship.radius + 900.0):
+		return
 	is_human = ship.profile != null and ship.profile.is_human
-	_update_jets()
-	if DrawParts.redraw or not _drawn:
+	var cam := get_viewport().get_camera_2d()
+	var z := cam.zoom.x if cam != null else 1.0
+	_update_jets(z)
+	_update_hull(z)
+	_update_shield(z)
+	_update_gauges(z)
+	var live := _wants_live(z)
+	if not _drawn or (DrawParts.redraw and (live or _live_drawn)):
 		queue_redraw()
+	_live_drawn = live
+
+
+## Does this ship have something to draw on this node's own picture that changes from
+## frame to frame (and so needs a new drawing every frame)? That is the heads of its
+## turning guns (when the ship is big enough on the screen to show them), a torpedo
+## run's fan and the human's drift arrow.
+func _wants_live(z: float) -> bool:
+	if is_human or ship.run_mount != null:
+		return true
+	if not TurretPaint.is_on():
+		return false
+	if ship.mounts.size() != _mounts_n or not is_same(ship.mounts, _mounts_seen):
+		_mounts_seen = ship.mounts
+		_mounts_n = ship.mounts.size()
+		_has_heads = false
+		for m: WeaponMount in ship.mounts:
+			if m.mount_type != WeaponMount.FIXED:
+				_has_heads = true
+				break
+	return _has_heads and maxf(float(ship.def.get("length", 26.0)) * z, MIN_PX) >= TurretPaint.HIDE_SHIP_PX
 
 
 ## How much bigger than life to draw the ship (1 = true size) so it is at
@@ -224,8 +346,15 @@ func set_streams(nozzle_list: Array) -> void:
 	_nozzles = nozzle_list if n >= 2 else []
 	_plan = EngineStreams.plan(_nozzles) if n >= 2 else {}
 	_hop = 0
-	main_jet.amount = EngineStreams.dots(n)
+	main_jet.amount = _dots(EngineStreams.dots(n))
 	main_jet.spread = EngineStreams.FAN_DEG if n >= 2 else 12.0
+
+
+## How many dots an emitter that holds `full` dots at the close zooms holds now: all of
+## them close up, half of them (at least FEWEST_DOTS) at the usual play zoom and further
+## out, where the dots are a pixel or two each and half as many read the same.
+func _dots(full: int) -> int:
+	return full if _dot_share >= 1.0 else maxi(FEWEST_DOTS, int(float(full) * _dot_share))
 
 
 ## Place and switch the three flame emitters: the main flame at the tail
@@ -233,9 +362,10 @@ func set_streams(nozzle_list: Array) -> void:
 ## each of its engine nozzles), the side flames on each flank. (Test
 ## only: with DrawParts.flames off the emitters are parked instead, stopped and
 ## hidden, and none of the work below is done; they come back when it is on.)
-func _update_jets() -> void:
-	# Step 0: the test switch for the flames (normally on).
-	if not DrawParts.flames:
+func _update_jets(z: float) -> void:
+	# Step 0: the test switch for the flames (normally on), and no flames at all far out
+	# (the camera zoom under FAR_FLAMES_ZOOM: the dots are specks there).
+	if not DrawParts.flames or z < FAR_FLAMES_ZOOM:
 		if not _jets_hidden:
 			_jets_hidden = true
 			for j: CPUParticles2D in [main_jet, port_jet, star_jet]:
@@ -246,6 +376,16 @@ func _update_jets() -> void:
 		_jets_hidden = false
 		for j: CPUParticles2D in [main_jet, port_jet, star_jet]:
 			j.visible = true
+	# Half the dots from the usual play zoom outward (see _dots()); all of them close up.
+	var share := 1.0 if DrawCache.is_close(z) else PLAY_DOT_SHARE
+	if share != _dot_share:
+		_dot_share = share
+		main_jet.amount = _dots(EngineStreams.dots(_streams))
+		port_jet.amount = _dots(JET_DOTS)
+		star_jet.amount = _dots(JET_DOTS)
+	# A ship whose engines are all off and whose three emitters have stopped has nothing to place.
+	if ship.thrust_main <= 0.1 and ship.thrust_port <= 0.1 and ship.thrust_star <= 0.1 and not (main_jet.emitting or port_jet.emitting or star_jet.emitting):
+		return
 	# In slow motion (WorldSpeed) the flames run at the world's speed too. At a
 	# faster speed Godot has already scaled the frame time, so it counts as 1.
 	var world_speed := minf(ship.world.speed.factor, 1.0) if ship.world != null else 1.0
@@ -254,8 +394,6 @@ func _update_jets() -> void:
 		for j: CPUParticles2D in [main_jet, port_jet, star_jet]:
 			j.speed_scale = world_speed
 	# Zoom helpers: px = world units per screen pixel; k = drawing scale.
-	var cam := get_viewport().get_camera_2d()
-	var z := cam.zoom.x if cam != null else 1.0
 	var px := 1.0 / maxf(0.02, z)
 	var k := _scale()
 	var length := float(ship.def.get("length", 26.0)) * k
@@ -348,26 +486,23 @@ func _draw() -> void:
 	var k := _scale()
 	var length := float(ship.def.get("length", 26.0))
 	var u := length * k / 36.0
-	var col := Palette.team(ship.team)
 	var rot := ship.rotation
-	# Which guns have just fired (read from their cooldowns), for the kick of their barrels.
-	_kicks.look_all(ship.mounts, ship.world.time if ship.world != null else 0.0)
-	_draw_hull(u, rot, col, px)
+	# The hull, the shield arcs and the bars are not drawn here but on their kept
+	# pictures. While the game is paused _process() does not run, so the camera asks
+	# for this redraw and the kept pictures are brought up to date from here.
+	if get_tree().paused:
+		_update_hull(z)
+		_update_shield(z)
+		_update_gauges(z)
 	# The guns that turn, as small turrets on the hull (a fixed gun gets none).
 	TurretPaint.draw_mounts(self, ship, k, u, px, rot, _kicks)
-	# Shield arcs sit on a ring around the ship.
-	var sr := maxf(length * k * 0.62, ship.radius * 1.3)
-	if DrawParts.arcs:
-		_draw_shield_arcs(sr, rot, px)
 	# A Bomber's torpedo run: the fan of lines and the bar (RunPaint).
 	if ship.run_mount != null:
+		var sr := maxf(length * k * 0.62, ship.radius * 1.3)
 		RunPaint.draw(self, ship, px, sr + 8.0 * px, maxf(34.0 * px, minf(140.0 * px, length * k * 0.9)), is_human)
 	# Velocity arrow: only on the ship the human flies, at any zoom.
 	if DrawParts.arrow and is_human:
 		_velocity_arrow(px)
-	# Bars and callsign.
-	if (DrawParts.bars or DrawParts.name_tag) and (is_human or z > 0.3):
-		_draw_bars_and_name(sr, length * k, col, px, z)
 
 
 ## The ship's shape at scale `u`, turned to `rot`: filled and outlined in the
@@ -378,70 +513,147 @@ func _draw() -> void:
 ## rules, glowing veins and engine lights (its engines glow harder the harder
 ## they burn). (Test only: the outline is left out when DrawParts.outline is
 ## off, and the hit flash with it; the fill stays.)
-func _draw_hull(u: float, rot: float, col: Color, px: float) -> void:
+func _draw_hull(ci: CanvasItem, u: float, rot: float, col: Color, px: float) -> void:
 	var edge := Palette.ACE if ship.ace_t > 0.0 else col
 	var edge_w := 2.2 if is_human else 1.4
 	# The hit flash strength (0 = not hit just now).
 	var hit := Palette.HIT_FLASH if ship.flash > 0.0 else 0.0
 	# How hot the engines glow, 0..1.
-	var heat := clampf(0.35 + 0.65 * ship.thrust_main + (0.3 if ship.boosting else 0.0), 0.0, 1.0)
+	var heat := _heat()
 	if CinderPaint.alien(ship.team):
-		CinderPaint.draw_shape(self, CinderPaint.hull(ship.hull_id), Vector2(u, u), rot, px, edge, edge_w, hit, heat, float(ship.uid) * 1.7)
+		CinderPaint.draw_shape(ci, CinderPaint.hull(ship.hull_id), Vector2(u, u), rot, px, edge, edge_w, hit, heat, float(ship.uid) * 1.7)
 		return
 	if AurelianPaint.on(ship.team):
 		# The nose guns of the amber hulls kick back too (they are part of the hull's picture).
 		var nose_age := _kicks.fixed_age
-		AurelianPaint.draw_shape(self, AurelianPaint.hull(ship.hull_id), u, rot, px, edge, edge_w, hit, heat, 1.0, GunKick.fixed_back(_kicks.fixed_weapon, nose_age), GunKick.is_flash(nose_age))
+		AurelianPaint.draw_shape(ci, AurelianPaint.hull(ship.hull_id), u, rot, px, edge, edge_w, hit, heat, 1.0, GunKick.fixed_back(_kicks.fixed_weapon, nose_age), GunKick.is_flash(nose_age))
 		return
 	var pts := PackedVector2Array()
 	for p: Vector2 in HULLS.get(ship.hull_id, HULLS["fighter"]):
 		pts.append((p * u).rotated(rot))
-	draw_colored_polygon(pts, Palette.HULL_FILL)
+	ci.draw_colored_polygon(pts, Palette.HULL_FILL)
 	if DrawParts.outline:
 		var closed := pts.duplicate()
 		closed.append(pts[0])
 		if hit > 0.0:
 			edge = Palette.hit_edge(edge, hit)
 			edge_w = Palette.hit_width(edge_w, hit)
-		draw_polyline(closed, edge, edge_w * px, true)
+		ci.draw_polyline(closed, edge, edge_w * px, true)
 
 
-## Shield arcs on a ring of radius `sr`: one per zone (front, rear, left,
-## right), brighter and thicker when full, extra bright just after a hit,
-## and hidden when the zone is empty or has no share.
-func _draw_shield_arcs(sr: float, rot: float, px: float) -> void:
+## How hot the engines glow, 0..1: a low glow at rest, more with the main engine's
+## push, and more again while boosting.
+func _heat() -> float:
+	return clampf(0.35 + 0.65 * ship.thrust_main + (0.3 if ship.boosting else 0.0), 0.0, 1.0)
+
+
+## Tell the hull's kept picture what the hull looks like now (once a frame, `z` is
+## the camera zoom), so it is drawn again only when that changed (see DrawCache). The
+## picture depends on: whether the hull is hit, ace or the human's, which look is on,
+## how hot the engines glow (in steps of 1/8), the veins' pulse (a big Cinder hull),
+## how far the nose guns are kicked back and whether they flash, the camera zoom (in
+## steps of 2%, and whether it is a close one: DrawCache.is_close()) and the test switches of DrawParts. It also lets the ship's GunKick
+## look at the guns once a frame, which has to happen on every frame (a shot is seen
+## as a jump of a gun's cooldown), and turns the kept pictures with the ship.
+func _update_hull(z: float) -> void:
+	_spin.rotation = ship.rotation
+	_kicks.look_all(ship.mounts, ship.world.time if ship.world != null else 0.0)
+	var nose_age := _kicks.fixed_age
+	var bits := (1 if ship.ace_t > 0.0 else 0) | (2 if is_human else 0) | (4 if ship.flash > 0.0 else 0)
+	bits |= (8 if CinderPaint.alien(ship.team) else 0) | (16 if AurelianPaint.on(ship.team) else 0) | (32 if GunKick.is_flash(nose_age) else 0)
+	bits |= (int(_heat() * 8.0) << 6) | (DrawParts.version << 28) | ((1 << 26) if DrawCache.is_close(z) else 0)
+	if _pulses:
+		bits |= CinderPaint.pulse_step(float(ship.uid) * 1.7) << 20
+	_hull.want(ship.hull_id, DrawCache.STATE_BASE, bits, GunKick.fixed_back(_kicks.fixed_weapon, nose_age), z)
+
+
+## Tell the shield arcs' kept picture what the arcs look like now (see ShieldArcs.key()).
+func _update_shield(z: float) -> void:
 	var sh := ship.shields
-	for zone in 4:
-		var cap := sh.cap(zone)
-		if cap <= 0.0:
-			continue
-		var frac := sh.values[zone] / cap
-		# Each zone's arc is centred on its side and spans 0.7 rad each way.
-		var center_a: float = rot + float([0.0, PI, -PI / 2.0, PI / 2.0][zone])
-		var a := 0.12 + 0.45 * frac
-		if sh.since_hit < 0.25:
-			a += 0.35
-		if frac <= 0.01:
-			continue
-		draw_arc(Vector2.ZERO, sr, center_a - 0.7, center_a + 0.7, 12, Palette.with_alpha(Palette.SHIELD, a), (1.0 + 2.0 * frac) * px, true)
+	if sh.max_total != _caps_total or sh.focus != _caps_focus:
+		_caps_total = sh.max_total
+		_caps_focus = sh.focus
+		for zone in 4:
+			_caps[zone] = sh.cap(zone)
+	_shield.want(ship.hull_id, DrawCache.STATE_BASE, ShieldArcs.key(sh, _caps, z) | (DrawParts.version << 28), 0.0, z)
+
+
+## Tell the bars' kept picture what the bars and the name look like now: nothing at all
+## when they are not shown (too far out), else the hull and shield fill in 64ths and
+## whether the name is shown (the name itself in `detail`, as a number).
+func _update_gauges(z: float) -> void:
+	var bits := 0
+	var detail := 0.0
+	if (DrawParts.bars or DrawParts.name_tag) and (is_human or z > 0.3):
+		bits = 1 | (int(ship.hull_frac() * 64.0) << 1) | (int(ship.shields.fraction() * 64.0) << 8) | (DrawParts.version << 28)
+		if is_human or z > 0.45:
+			bits |= (1 << 16) | ((1 << 17) if is_human else 0)
+			detail = float(ship.display_name.hash() & 0xFFFFFF)
+	_gauges.want(ship.hull_id, DrawCache.STATE_BASE, bits, detail, z)
+
+
+## Draw the hull on its kept picture (the `draw` signal of _hull): the ship pointing
+## along +x, because the picture turns with the ship, at the camera zoom of now.
+func _draw_hull_layer() -> void:
+	if ship == null or not ship.alive:
+		return
+	var cam := get_viewport().get_camera_2d()
+	var z := cam.zoom.x if cam != null else 1.0
+	_hull.drawn_at(z)
+	var px := 1.0 / maxf(0.02, z)
+	var u := float(ship.def.get("length", 26.0)) * _scale() / 36.0
+	# A big Cinder hull has veins that pulse: its picture is drawn again at each pulse step.
+	_pulses = CinderPaint.alien(ship.team) and CinderPaint.has_pulse(CinderPaint.hull(ship.hull_id), u, px)
+	_draw_hull(_hull, u, 0.0, Palette.team(ship.team), px)
+
+
+## The radius of the ring the shield arcs sit on, and the bars sit above: 62% of the
+## drawn length, at least 1.3 times the ship's radius.
+func _ring_radius(z: float) -> float:
+	var length := float(ship.def.get("length", 26.0))
+	return maxf(length * _scale() * 0.62, ship.radius * 1.3)
+
+
+## Draw the four shield arcs on their kept picture (the `draw` signal of _shield): the
+## ship pointing along +x, because the picture turns with the ship. Which look the arcs
+## get depends on the zoom (ShieldArcs).
+func _draw_shield_layer() -> void:
+	if ship == null or not ship.alive:
+		return
+	var cam := get_viewport().get_camera_2d()
+	var z := cam.zoom.x if cam != null else 1.0
+	_shield.drawn_at(z)
+	if DrawParts.arcs:
+		ShieldArcs.draw(_shield, ship.shields, _ring_radius(z), 1.0 / maxf(0.02, z), z)
+
+
+## Draw the hull bar, the shield bar and the name on their kept picture (the `draw`
+## signal of _gauges), when they are shown at the zoom of now.
+func _draw_gauges_layer() -> void:
+	if ship == null or not ship.alive:
+		return
+	var cam := get_viewport().get_camera_2d()
+	var z := cam.zoom.x if cam != null else 1.0
+	_gauges.drawn_at(z)
+	if (DrawParts.bars or DrawParts.name_tag) and (is_human or z > 0.3):
+		_draw_bars_and_name(_gauges, _ring_radius(z), float(ship.def.get("length", 26.0)) * _scale(), Palette.team(ship.team), 1.0 / maxf(0.02, z), z)
 
 
 ## The hull bar (team colour), the thin shield bar above it, and (when
-## close enough, or for the human) the name above them. `drawn_len` is the
-## ship's drawn length; the bars sit just above the shield ring `sr`. (Test
+## close enough, or for the human) the name above them, drawn on `ci`. `drawn_len` is
+## the ship's drawn length; the bars sit just above the shield ring `sr`. (Test
 ## only: DrawParts.bars and DrawParts.name_tag can each leave their part out.)
-func _draw_bars_and_name(sr: float, drawn_len: float, col: Color, px: float, z: float) -> void:
+func _draw_bars_and_name(ci: CanvasItem, sr: float, drawn_len: float, col: Color, px: float, z: float) -> void:
 	var bw := maxf(34.0 * px, minf(140.0 * px, drawn_len * 0.9))
 	var by := -sr - 10.0 * px
 	if DrawParts.bars:
-		draw_rect(Rect2(-bw / 2.0, by, bw, 3.0 * px), Palette.with_alpha(Palette.VOID, 0.75))
-		draw_rect(Rect2(-bw / 2.0, by, bw * ship.hull_frac(), 3.0 * px), col)
-		draw_rect(Rect2(-bw / 2.0, by - 4.0 * px, bw * ship.shields.fraction(), 2.0 * px), Palette.SHIELD)
+		ci.draw_rect(Rect2(-bw / 2.0, by, bw, 3.0 * px), Palette.with_alpha(Palette.VOID, 0.75))
+		ci.draw_rect(Rect2(-bw / 2.0, by, bw * ship.hull_frac(), 3.0 * px), col)
+		ci.draw_rect(Rect2(-bw / 2.0, by - 4.0 * px, bw * ship.shields.fraction(), 2.0 * px), Palette.SHIELD)
 	if DrawParts.name_tag and (is_human or z > 0.45):
 		var font := ThemeDB.fallback_font
 		var label := "YOU" if is_human else ship.display_name.to_upper()
-		draw_string(font, Vector2(-60.0 * px, by - 8.0 * px), label, HORIZONTAL_ALIGNMENT_CENTER, 120.0 * px, int(11.0 * px), Palette.ICE if is_human else Palette.NEUTRAL)
-
+		ci.draw_string(font, Vector2(-60.0 * px, by - 8.0 * px), label, HORIZONTAL_ALIGNMENT_CENTER, 120.0 * px, int(11.0 * px), Palette.ICE if is_human else Palette.NEUTRAL)
 
 ## An arrow showing which way and how fast the ship drifts (its velocity),
 ## up to 1.45x its top-speed length. Over top speed (by more than 4%) it

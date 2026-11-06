@@ -414,7 +414,7 @@ func _pick_station(ship: Ship, ts: TeamState) -> String:
 	# is empty (nothing changes) unless the feature is on, active for our
 	# team, and wants this seat to move.
 	var grouped := {}
-	if not world.features.is_empty() and world.features.has("group_late"):
+	if not world.features.is_empty() and FeatureRegistry.active_for(world, ship.team, "group_late"):
 		var grp: Object = world.features["group_late"]
 		if grp.call("active", ship.team):
 			rally = false

@@ -18,10 +18,10 @@ const TEXTS := [
 	["Not enough in the team treasury (120 short)", "money"], ["Not enough in the team treasury", "money"],
 	["Drone limit reached (14)", "room"], ["Drone build queue is full (6 at a time)", "room"],
 	["Build queue is full (2 at a time)", "room"], ["Research queue is full (3 at a time)", "room"],
-	["You already have 3 repair bays", "room"], ["Minion cap reached (12)", "room"],
+	["You already have 3 repair bays", "room"],
 	["Every turret slot here is taken", "room"],
 	["Needs Platform Missiles research", "unlock"], ["Needs Repair Bays research", "unlock"],
-	["Needs the Fleet Command Module", "unlock"], ["Needs the Research Module", "unlock"],
+	["Needs the Research Module", "unlock"],
 	["Needs Lance Beams research", "unlock"], ["Already built or being built", "unlock"],
 	["Already researched or queued", "unlock"],
 	["That spot is inside an asteroid", "place"], ["The bay can't reach that spot", "place"],
@@ -37,7 +37,7 @@ const TEXTS := [
 	["The mothership can't move right now", "time"], ["The post stands", "time"],
 	["The post is being rebuilt", "time"], ["The post was destroyed: rebuild in 4:10", "time"],
 	["Enemy ships are too close", "time"], ["Enemy ships are too close: 2 pilot ships within 900, nearest 400", "time"],
-	["A turret was just destroyed here: no building for 30s", "time"], ["The mothership can't launch minions", "time"],
+	["A turret was just destroyed here: no building for 30s", "time"],
 	["That unit is gone", "gone"], ["That squadron is gone", "gone"], ["You have no wingmen", "gone"],
 	["Target not in sight", "gone"],
 	["Not a speed we have", "value"], ["That order is not valid", "value"], ["No such item", "value"],
@@ -77,8 +77,8 @@ static func words(t) -> void:
 			missing.append(kind)
 	t.check("(n) every kind has a TARGETS row, a SETTINGS row, an applies mode, an action word and a who-may-send rule (%d kinds)" % OrderKinds.ALL.size(), missing.is_empty(), ", ".join(missing))
 	t.check("(n) the tables hold no kind that ALL lacks", OrderKinds.TARGETS.size() == OrderKinds.ALL.size() and OrderKinds.SETTINGS.size() == OrderKinds.ALL.size() and OrderKinds.ACTION.size() == OrderKinds.ALL.size())
-	# The eleven words that already existed belong to the eleven old kinds.
-	var old_kinds := [OrderKinds.DRONE, OrderKinds.MODULE, OrderKinds.RESEARCH, OrderKinds.TURRET, OrderKinds.POST, OrderKinds.BAY, OrderKinds.WARD, OrderKinds.WAYPOINT, OrderKinds.MOTHERSHIP_MOVE, OrderKinds.MINION_BUY, OrderKinds.MINION_ORDER]
+	# The nine words that already existed belong to the nine old kinds.
+	var old_kinds := [OrderKinds.DRONE, OrderKinds.MODULE, OrderKinds.RESEARCH, OrderKinds.TURRET, OrderKinds.POST, OrderKinds.BAY, OrderKinds.WARD, OrderKinds.WAYPOINT, OrderKinds.MOTHERSHIP_MOVE]
 	var seen := {}
 	var problems := PackedStringArray()
 	var not_decisions: Array = EconomyPart.NOT_DECISIONS
@@ -88,7 +88,8 @@ static func words(t) -> void:
 			if seen.has(word):
 				problems.append("%s used twice" % word)
 			seen[word] = kind
-		if Hud.RESULT_OK.has(word) and not old_kinds.has(kind):
+		# PRODUCE has a toast word of its own ("Queued in the yard.").
+		if Hud.RESULT_OK.has(word) and not old_kinds.has(kind) and kind != OrderKinds.PRODUCE:
 			problems.append("%s equals a toast word" % word)
 		if word in not_decisions and not (word == "yard" or word.begins_with("squad_") or word == "drone" or word == "waypoint" or word == "order"):
 			problems.append("%s equals a NOT_DECISIONS entry" % word)
@@ -132,9 +133,6 @@ static func sample_records() -> Array:
 	out.append(Order.make(OrderKinds.WAYPOINT, 0, 5, true, {"siege": 1}, [], "point", p))
 	out.append(Order.make(OrderKinds.WAYPOINT, 1, 5, false, {"siege": 0}, [], "point", f))
 	out.append(Order.make(OrderKinds.MOTHERSHIP_MOVE, 0, 5, true, {}, [], "point", p))
-	out.append(Order.make(OrderKinds.MINION_BUY, 0, 5, true, {"type": "fighter", "lane": "top"}))
-	out.append(Order.make(OrderKinds.MINION_ORDER, 0, 5, true, {"type": "move"}, [12, 13], "point", p))
-	out.append(Order.make(OrderKinds.MINION_ORDER, 0, 5, true, {"type": "lane", "lane": "bot"}, [12], "lane", "bot"))
 	out.append(Order.make(OrderKinds.SIEGE, 1, 5, false, {"phase": "gather"}, [], "lane", "mid"))
 	out.append(Order.make(OrderKinds.SIEGE, 1, 5, false, {"phase": ""}))
 	out.append(Order.make(OrderKinds.GAME_SPEED, 0, -2, false, {"hundredths": 200}))

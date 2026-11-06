@@ -8,8 +8,9 @@ extends Node
 ## HOW IT WORKS:
 ##   1. _ready() makes the screen layer and applies a few launch options
 ##      (Game, in scripts/autoload/game.gd, explains them all). Then it
-##      either starts the match at once (test runs and runs without a
-##      window) or shows the start screen and waits for a choice.
+##      either starts the match at once (test runs, runs without a window,
+##      and the pause menu's Restart, which names the seat in
+##      Game.restart_role) or shows the start screen and waits for a choice.
 ##   2. start(role) builds the World for that seat, adds the HUD (the
 ##      panels drawn over the game) and the sound player when there is a
 ##      window (neither with --sim-only, the speed mode of windowless test
@@ -102,11 +103,17 @@ func _ready() -> void:
 			await RenderingServer.frame_post_draw
 			get_viewport().get_texture().get_image().save_png(str(Game.opt("snap")))
 			get_tree().quit())
-	# Step 4: test runs (--auto or --all-ai) and windowless runs start at
-	# once. --all-ai makes the human a spectator (watching only); otherwise
-	# --role picks the seat (default "pilot").
+	# Step 4: a restart from the pause menu starts at once in the seat it was
+	# made in (Game.restart_role, read and emptied here). Test runs (--auto or
+	# --all-ai) and windowless runs start at once too. --all-ai makes the human
+	# a spectator (watching only); otherwise --role picks the seat (default
+	# "pilot").
 	var auto: bool = bool(Game.opt("auto", false)) or bool(Game.opt("all-ai", false)) or DisplayServer.get_name() == "headless"
-	if auto:
+	var again := Game.restart_role
+	Game.restart_role = ""
+	if again != "":
+		start(again)
+	elif auto:
 		var role := "spectator" if Game.opt("all-ai", false) else str(Game.opt("role", "pilot"))
 		start(role)
 	elif ResourceLoader.exists(START_SCENE):
@@ -205,7 +212,9 @@ func start(role: String) -> void:
 		world.launch(world.human)
 	# Step 7: one line about the match: the seat, the rule variants, and how
 	# many rocks, ore nodes, monster camps and route-map points there are.
-	print("match: role=%s variants=%s rocks=%d nodes=%d camps=%d route_nodes=%d" % [role, Game.variants, world.asteroids.pos.size(), world.nodes.size(), world.map.camps.size(), world.map.route.node_count()])
+	# (A per-team option adds ` team_variants=...`, so a log shows which team held what.)
+	var team_part := (" team_variants=%s" % [Game.team_variants]) if Game.has_team_variants() else ""
+	print("match: role=%s variants=%s rocks=%d nodes=%d camps=%d route_nodes=%d%s" % [role, Game.variants, world.asteroids.pos.size(), world.nodes.size(), world.map.camps.size(), world.map.route.node_count(), team_part])
 
 
 ## Godot calls this every physics tick (normally 60 times a second). Count

@@ -30,8 +30,8 @@ extends RefCounted
 ##   7. After 20:00, moving our mothership up the mid lane (always mid)
 ##      when we are at least as strong as the enemy
 ##      (AdmiralMothershipMover).
-##   8. Buying minions (small computer-flown lane ships), if we own the
-##      Fleet Command Module (AdmiralFleetCommand).
+##   8. Buying fleet ships: the computer's yard, the fundable head, the fill
+##      schedule and a capital ship to save for (AdmiralProduction).
 ##   9. Taking the field: launching the admiral's own ship when the base is
 ##      attacked or 2 or more pilots are down, and docking it again when
 ##      that is over (AdmiralField). The thinking above carries on while the
@@ -39,13 +39,19 @@ extends RefCounted
 ##      and far from home the ship stays docked, or is recalled at once: only
 ##      a docked admiral can order the fall-back (step 7).
 ##
+## Before step 1 of its very first think, an admiral whose team holds the test
+## tool "ai_calib" (--variant-team0=ai_calib:on, see Rules.VARIANT_DEFAULTS)
+## draws one random number and throws it away: it shifts the shared random
+## sequence so that the lane's luck check can play a seed twice as different
+## matches. It is off in every normal match, and then nothing is drawn.
+##
 ## WHO USES IT: World makes one for each team whose admiral is the computer
 ## (World.admiral_ai, in World.setup) and calls tick() every physics frame
 ## while the match is being played.
 ## Its parts live next to it in scripts/ai/: admiral_plan.gd,
 ## admiral_lanes.gd, admiral_builder.gd, admiral_waypoint.gd,
 ## admiral_siege.gd, admiral_mothership_mover.gd,
-## admiral_fleet_command.gd and admiral_field.gd. (A "part" is a helper
+## admiral_production.gd and admiral_field.gd. (A "part" is a helper
 ## object that does one job for this admiral.) This file keeps the timers
 ## and the order of the to-do list; the parts do the work.
 ##
@@ -60,9 +66,6 @@ extends RefCounted
 const PLAN := AdmiralPlan.PLAN
 ## How far ahead the plan may skip blocked steps; see AdmiralPlan.LOOKAHEAD.
 const LOOKAHEAD := AdmiralPlan.LOOKAHEAD
-## The minion buying order for Fleet Command; see
-## AdmiralFleetCommand.FLEET_MIX.
-const FLEET_MIX := AdmiralFleetCommand.FLEET_MIX
 
 ## The game world (all ships, nodes, teams and the AdmiralCommand).
 var world: World
@@ -104,8 +107,8 @@ var waypoint: AdmiralWaypoint
 var siege: AdmiralSiege
 ## Moving our own mothership after 20:00.
 var mothership_mover: AdmiralMothershipMover
-## Buying minions when we own Fleet Command.
-var fleet: AdmiralFleetCommand
+## Buying fleet ships (the yard's build list).
+var production: AdmiralProduction
 ## Taking the field in the admiral's own ship (needs the admiral's seat and
 ## pilot brain that WorldSetup makes before this admiral).
 var field: AdmiralField
@@ -123,7 +126,7 @@ func _init(w: World, t: int) -> void:
 	waypoint = AdmiralWaypoint.new(w, t, lanes)
 	siege = AdmiralSiege.new(w, t, lanes)
 	mothership_mover = AdmiralMothershipMover.new(w, t, lanes)
-	fleet = AdmiralFleetCommand.new(w, t, lanes)
+	production = AdmiralProduction.new(w, t, lanes)
 	field = AdmiralField.new(w, t)
 
 
@@ -141,6 +144,14 @@ func tick(dt: float) -> void:
 		return
 	think_t = 1.0
 	think_count += 1
+	# The calibration switch (Rules.VARIANT_DEFAULTS "ai_calib", a test tool): the
+	# team that holds it draws ONE extra number from the shared random sequence
+	# at its first think, and throws it away. The teams' first thinks are at
+	# 0.5 s and 1.0 s, so a seed run with the switch on for team 0 and again on
+	# for team 1 shifts the sequence at two different points and plays two
+	# different matches. A team that does not hold it draws nothing.
+	if think_count == 1 and FeatureRegistry.is_on_for(team, "ai_calib"):
+		randf()
 	var ts := world.teams[team]
 	var cmd := world.command
 	# Step 1: drones (counting the ones still being built). The economy
@@ -148,11 +159,11 @@ func tick(dt: float) -> void:
 	# target) jumps every queue (playtest: a team that lost its drones never
 	# recovered). The target is 6, plus 1 for every 75 s of match time, up
 	# to the drone limit (14). A drone costs 200 credits.
-	var drones := world.mining_drone_count(team) + ts.drone_queue.size()
+	var drones := world.mining_drone_count(team) + ts.drones_queued()
 	var want_drones := mini(int(Structures.MINING_DRONE["max"]), 6 + int(world.time / 75.0))
 	# Not while the build queue is full (6 at a time): the order would only
 	# fail with "Drone build queue is full", every second.
-	if drones < maxi(4, int(want_drones * 0.6)) and ts.can_afford(200.0) and ts.drone_queue.size() < 6:
+	if drones < maxi(4, int(want_drones * 0.6)) and ts.can_afford(200.0) and ts.drones_queued() < RtsHulls.DEPTH_DRONES:
 		cmd.build_drone(team)
 	# Step 2: a destroyed defense post is rebuilt (once its timer has run out),
 	# then a lost lane turret is bought again.
@@ -179,8 +190,8 @@ func tick(dt: float) -> void:
 	var spare := ts.treasury - reserve * 0.5
 	# Step 1 may just have queued a drone: count again, so one think never
 	# queues two (and not into a full queue, as in step 1).
-	drones = world.mining_drone_count(team) + ts.drone_queue.size()
-	if drones < want_drones and spare > 200.0 and ts.drone_queue.size() < 6:
+	drones = world.mining_drone_count(team) + ts.drones_queued()
+	if drones < want_drones and spare > 200.0 and ts.drones_queued() < RtsHulls.DEPTH_DRONES:
 		cmd.build_drone(team)
 		spare -= 200.0
 	# ...a repair bay (once researched, a try at most every 40 s) with over
@@ -209,9 +220,9 @@ func tick(dt: float) -> void:
 	# admiral never moves it.
 	if world.time > Rules.move_unlock_time() and not weak:
 		mothership_mover.maybe_move()
-	# Step 8: Fleet Command, only if our team owns the module.
-	if world.minion_director.controlled(team):
-		fleet.run(ts)
+	# Step 8: buy fleet ships (a weak admiral buys none).
+	if not weak:
+		production.run(ts, spare)
 	# Step 9: take the field, or dock again (AdmiralField). All of the above
 	# ran as usual whether the admiral's own ship is out or not.
 	field.update(ts)

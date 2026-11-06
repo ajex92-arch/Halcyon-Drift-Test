@@ -22,7 +22,7 @@ extends RefCounted
 ##            parses them)
 ##   route    a button, menu or panel that does the same with the mouse; "" is
 ##            allowed for now and counted as a warning by the key check
-##   since    the stage that makes the row work: "today" or "RT2" (LIVE_STAGES)
+##   since    the stage that makes the row work: "today", "RT2" or "wingmen" (LIVE_STAGES)
 ##            work now; any later name only labels the "comes with" column
 ##   group    where the page files it: Camera, Selection, Orders, Build, Base,
 ##            Pilot or Shared
@@ -65,7 +65,7 @@ const MODE_LABELS := {
 
 ## The stages whose rows work now (only these become InputMap actions). A later
 ## stage appends its name here, which is the one edit that makes its rows live.
-const LIVE_STAGES := ["today", "RT2"]
+const LIVE_STAGES := ["today", "RT2", "wingmen"]
 
 ## What the "comes with" column says for a row that is not live yet, by stage.
 const COMES_WITH := {
@@ -89,17 +89,17 @@ const COMES_WITH := {
 const ROWS := [
 	# --- shared: every mode ------------------------------------------------------
 	{"id": "cancel", "mode": "shared", "label": "Cancel, then close", "keys": "Esc", "route": "Close buttons", "since": "today", "group": "Shared"},
-	{"id": "pause", "mode": "shared", "label": "Pause", "keys": "P", "route": "", "since": "RT2", "group": "Shared"},
+	{"id": "pause", "mode": "shared", "label": "Pause", "keys": "P", "route": "Menu button", "since": "RT2", "group": "Shared"},
 	{"id": "note", "mode": "shared", "label": "Write a note", "keys": "F9", "route": "", "since": "today", "group": "Shared"},
 	{"id": "slow_motion", "mode": "shared", "label": "Speed: slower", "keys": "QuoteLeft", "route": "Speed row", "since": "today", "group": "Shared"},
 	{"id": "fast_motion", "mode": "shared", "label": "Speed: faster", "keys": "Shift+QuoteLeft", "route": "Speed row", "since": "RT2", "group": "Shared"},
-	{"id": "toggle_fullscreen", "mode": "shared", "label": "Full screen", "keys": "F11|Alt+Enter|Alt+KPEnter", "route": "", "since": "today", "group": "Shared", "web_skip": "F11"},
-	{"id": "admiral_board", "mode": "shared", "label": "Admiral board, command view", "keys": "Tab", "route": "", "since": "today", "group": "Shared"},
+	{"id": "toggle_fullscreen", "mode": "shared", "label": "Full screen", "keys": "F11|Alt+Enter|Alt+KPEnter", "route": "Menu > Full screen", "since": "today", "group": "Shared", "web_skip": "F11"},
+	{"id": "admiral_board", "mode": "shared", "label": "Admiral board, command view", "keys": "Tab", "route": "Board button (Admiral)", "since": "today", "group": "Shared"},
 	{"id": "debug_launch", "mode": "shared", "label": "Debug launch (text overlay only)", "keys": "Ctrl+F12", "route": "", "since": "RT2", "group": "Shared"},
 	{"id": "zoom_in", "mode": "shared", "label": "Zoom in", "keys": "Equal|KPAdd", "route": "Mouse wheel", "since": "today", "group": "Camera"},
 	{"id": "zoom_out", "mode": "shared", "label": "Zoom out", "keys": "Minus|KPSubtract", "route": "Mouse wheel", "since": "today", "group": "Camera"},
-	{"id": "center_on_ship", "mode": "shared", "label": "Centre the camera on your ship", "keys": "Space", "route": "", "since": "today", "group": "Camera"},
-	{"id": "wheel", "mode": "shared", "label": "Order wheel (hold)", "keys": "X|Mouse5", "route": "", "since": "RT2", "group": "Shared", "note": "Nothing opens a wheel yet."},
+	{"id": "center_on_ship", "mode": "shared", "label": "Centre the camera on your ship", "keys": "Space", "route": "Centre button (click again to let go)", "since": "today", "group": "Camera"},
+	{"id": "wheel", "mode": "shared", "label": "Order wheel (hold)", "keys": "X|Mouse5", "route": "Wing button", "since": "RT2", "group": "Shared", "note": "Hold: the wing's order wheel; tap: a quick order."},
 	{"id": "all_squadrons", "mode": "shared", "label": "Every squadron", "keys": "M", "route": "Select-all button", "since": "RT4", "group": "Selection"},
 	{"id": "group_1", "mode": "shared", "label": "Group 1 (Ctrl sets, Shift adds)", "keys": "F1", "route": "Group buttons", "since": "RT4", "group": "Selection"},
 	{"id": "group_2", "mode": "shared", "label": "Group 2", "keys": "F2", "route": "Group buttons", "since": "RT4", "group": "Selection"},
@@ -119,21 +119,31 @@ const ROWS := [
 	{"id": "fire", "mode": "flying", "label": "Fire", "keys": "Mouse1", "route": "Left click", "since": "today", "group": "Pilot", "fixed": true, "note": "The left mouse button is the click."},
 	{"id": "special", "mode": "flying", "label": "Ship ability", "keys": "G|Mouse2", "route": "Right click", "since": "today", "group": "Pilot", "fixed": true, "note": "Read directly by the flight code."},
 	{"id": "face_lock", "mode": "flying", "label": "Hold your heading (face lock)", "keys": "Ctrl", "route": "", "since": "today", "group": "Pilot", "fixed": true, "action": false, "note": "Read directly by the flight code."},
-	{"id": "shield_front", "mode": "flying", "label": "Shields: front", "keys": "Up", "route": "", "since": "today", "group": "Pilot"},
-	{"id": "shield_rear", "mode": "flying", "label": "Shields: rear", "keys": "Down", "route": "", "since": "today", "group": "Pilot"},
-	{"id": "shield_left", "mode": "flying", "label": "Shields: left", "keys": "Left", "route": "", "since": "today", "group": "Pilot"},
-	{"id": "shield_right", "mode": "flying", "label": "Shields: right", "keys": "Right", "route": "", "since": "today", "group": "Pilot"},
-	{"id": "energy_weapons", "mode": "flying", "label": "Energy: weapons", "keys": "1", "route": "", "since": "today", "group": "Pilot"},
-	{"id": "energy_shields", "mode": "flying", "label": "Energy: shields", "keys": "2", "route": "", "since": "today", "group": "Pilot"},
-	{"id": "energy_thrusters", "mode": "flying", "label": "Energy: engines", "keys": "3", "route": "", "since": "today", "group": "Pilot"},
-	{"id": "energy_balanced", "mode": "flying", "label": "Energy: balanced", "keys": "4", "route": "", "since": "today", "group": "Pilot"},
-	{"id": "use_kit", "mode": "flying", "label": "Use a repair kit", "keys": "R", "route": "", "since": "today", "group": "Pilot"},
-	{"id": "assist_toggle", "mode": "flying", "label": "Flight assist on or off", "keys": "V", "route": "", "since": "today", "group": "Pilot"},
-	{"id": "hangar", "mode": "flying", "label": "Hangar", "keys": "B", "route": "", "since": "today", "group": "Pilot"},
-	{"id": "dock", "mode": "flying", "label": "Dock, or launch from the hangar", "keys": "F", "route": "Hangar: Launch", "since": "today", "group": "Pilot"},
-	{"id": "help", "mode": "flying", "label": "Help", "keys": "H|F12", "route": "", "since": "today", "group": "Pilot"},
-	{"id": "center_camera", "mode": "flying", "label": "Camera: free or follow", "keys": "C", "route": "", "since": "today", "group": "Camera"},
+	{"id": "shield_front", "mode": "flying", "label": "Shields: front", "keys": "Up", "route": "Shield zone on the readout", "since": "today", "group": "Pilot"},
+	{"id": "shield_rear", "mode": "flying", "label": "Shields: rear", "keys": "Down", "route": "Shield zone on the readout", "since": "today", "group": "Pilot"},
+	{"id": "shield_left", "mode": "flying", "label": "Shields: left", "keys": "Left", "route": "Shield zone on the readout", "since": "today", "group": "Pilot"},
+	{"id": "shield_right", "mode": "flying", "label": "Shields: right", "keys": "Right", "route": "Shield zone on the readout", "since": "today", "group": "Pilot"},
+	{"id": "energy_weapons", "mode": "flying", "label": "Energy: weapons", "keys": "1", "route": "Energy button on the readout", "since": "today", "group": "Pilot"},
+	{"id": "energy_shields", "mode": "flying", "label": "Energy: shields", "keys": "2", "route": "Energy button on the readout", "since": "today", "group": "Pilot"},
+	{"id": "energy_thrusters", "mode": "flying", "label": "Energy: engines", "keys": "3", "route": "Energy button on the readout", "since": "today", "group": "Pilot"},
+	{"id": "energy_balanced", "mode": "flying", "label": "Energy: balanced", "keys": "4", "route": "Energy button on the readout", "since": "today", "group": "Pilot"},
+	{"id": "use_kit", "mode": "flying", "label": "Use a repair kit", "keys": "R", "route": "Kit gear slot", "since": "today", "group": "Pilot"},
+	{"id": "assist_toggle", "mode": "flying", "label": "Flight assist on or off", "keys": "V", "route": "Assist button", "since": "today", "group": "Pilot"},
+	{"id": "hangar", "mode": "flying", "label": "Hangar", "keys": "B", "route": "Hangar button", "since": "today", "group": "Pilot"},
+	{"id": "dock", "mode": "flying", "label": "Dock, or launch from the hangar", "keys": "F", "route": "Dock button; Launch when docked", "since": "today", "group": "Pilot"},
+	{"id": "help", "mode": "flying", "label": "Help", "keys": "H|F12", "route": "Help button", "since": "today", "group": "Pilot"},
+	{"id": "center_camera", "mode": "flying", "label": "Camera: free or follow", "keys": "C", "route": "Camera button (Admiral)", "since": "today", "group": "Camera"},
 	{"id": "team_wheel", "mode": "flying", "label": "Team wheel", "keys": "T|Mouse4", "route": "Team strip", "since": "RT11", "group": "Pilot"},
+	# The wing's orders on a key each (the "wing_commands" preset B gives them keys; with the standard one-key
+	# way (preset A) they have none and the page leaves them out). The mouse way is the strip's Wing button.
+	{"id": "wing_follow", "mode": "flying", "label": "Wing: form on me", "keys": "", "route": "Wing button", "since": "wingmen", "group": "Pilot"},
+	{"id": "wing_cover", "mode": "flying", "label": "Wing: cover me", "keys": "", "route": "Wing button", "since": "wingmen", "group": "Pilot"},
+	{"id": "wing_attack", "mode": "flying", "label": "Wing: attack my target", "keys": "", "route": "Wing button", "since": "wingmen", "group": "Pilot"},
+	{"id": "wing_guard", "mode": "flying", "label": "Wing: guard that ship", "keys": "", "route": "Wing button", "since": "wingmen", "group": "Pilot"},
+	{"id": "wing_hold", "mode": "flying", "label": "Wing: hold here", "keys": "", "route": "Wing button", "since": "wingmen", "group": "Pilot"},
+	{"id": "wing_regroup", "mode": "flying", "label": "Wing: regroup", "keys": "", "route": "Wing button", "since": "wingmen", "group": "Pilot"},
+	{"id": "wing_formation", "mode": "flying", "label": "Wing: next formation", "keys": "", "route": "Wing button", "since": "wingmen", "group": "Pilot"},
+	{"id": "wing_fire", "mode": "flying", "label": "Wing: next fire setting", "keys": "", "route": "Wing button", "since": "wingmen", "group": "Pilot"},
 
 	# --- flying with the board open: only the rows that differ from flying --------------
 	{"id": "camera_up", "mode": "flying_board", "label": "Camera up", "keys": "", "route": "Screen edge", "since": "today", "group": "Camera", "link": "thrust_forward"},
@@ -147,6 +157,10 @@ const ROWS := [
 	{"id": "fire", "mode": "flying_board", "label": "Fire (rests)", "keys": "", "route": "", "since": "today", "group": "Pilot", "fixed": true, "note": "Map clicks select; they never fire the guns."},
 	{"id": "alert_jump", "mode": "flying_board", "label": "Jump to the newest alert", "keys": "J|Backspace", "route": "Alert list", "since": "RT6", "group": "Selection"},
 	{"id": "idle_next", "mode": "flying_board", "label": "Next idle squadron", "keys": "I", "route": "Idle button", "since": "RT6", "group": "Selection"},
+	# The wing's attack and cover keys (preset B: I and U) stay the Admiral's while the board is open: these rows
+	# of the same names take the preset's keys off in this mode.
+	{"id": "wing_attack", "mode": "flying_board", "label": "Wing: attack my target (rests)", "keys": "", "route": "Wing button", "since": "wingmen", "group": "Pilot", "note": "While the board is open this key is the Admiral's."},
+	{"id": "wing_cover", "mode": "flying_board", "label": "Wing: cover me (rests)", "keys": "", "route": "Wing button", "since": "wingmen", "group": "Pilot", "note": "While the board is open this key is the Admiral's."},
 	{"id": "research_board", "mode": "flying_board", "label": "Research board", "keys": "U", "route": "Research tab", "since": "RT10", "group": "Base"},
 
 	# --- home: the docked command view -----------------------------------------------
@@ -168,9 +182,9 @@ const ROWS := [
 	{"id": "idle_all", "mode": "home", "label": "Every idle squadron", "keys": "Ctrl+I", "route": "Idle button", "since": "RT6", "group": "Selection"},
 	{"id": "alert_jump", "mode": "home", "label": "Jump to the newest alert", "keys": "J|Backspace", "route": "Alert list", "since": "RT6", "group": "Selection"},
 	{"id": "research_board", "mode": "home", "label": "Research board", "keys": "U", "route": "Research tab", "since": "RT10", "group": "Base"},
-	{"id": "hangar", "mode": "home", "label": "Hangar", "keys": "B", "route": "", "since": "today", "group": "Base"},
-	{"id": "help", "mode": "home", "label": "Help", "keys": "H|F12", "route": "", "since": "today", "group": "Base"},
-	{"id": "center_camera", "mode": "home", "label": "Camera: free or follow ship", "keys": "C", "route": "", "since": "today", "group": "Camera"},
+	{"id": "hangar", "mode": "home", "label": "Hangar", "keys": "B", "route": "Hangar button", "since": "today", "group": "Base"},
+	{"id": "help", "mode": "home", "label": "Help", "keys": "H|F12", "route": "Help button", "since": "today", "group": "Base"},
+	{"id": "center_camera", "mode": "home", "label": "Camera: free or follow ship", "keys": "C", "route": "Camera button", "since": "today", "group": "Camera"},
 	{"id": "team_wheel", "mode": "home", "label": "Team wheel", "keys": "T|Mouse4", "route": "Team strip", "since": "RT11", "group": "Shared"},
 	# The command card: every action of the card, unbound here; the chosen layout (PRESETS) gives them keys.
 	{"id": "order_move", "mode": "home", "label": "Move", "keys": "", "route": "Command card", "since": "RT4", "group": "Orders", "page": "orders"},
@@ -222,7 +236,9 @@ const ROWS := [
 ## "home_layout" is the home keys: B (W A S D move the camera, a 3x3 grid R T Y / F G H
 ## / V B N beside them), A (the classic grid Q W E R / A S D F / Z X C V, the camera on
 ## the arrows) and C (a letter for each order, no grid). Until the command view exists
-## they change the page, the Keys help page and the key check, not what a key does in play.
+## the home layouts change the page, the Keys help page and the key check, not what a key
+## does in play. "wing_commands" (the second group) does change play: preset B sends
+## the wing orders.
 const PRESETS := [
 	{
 		"id": "home_layout",
@@ -266,6 +282,27 @@ const PRESETS := [
 					"order_attack_move": "R", "order_defend": "G", "order_patrol": "V", "order_hold": "Z", "order_stop": "Shift+Z",
 					"order_retreat": "F", "order_merge": "N", "order_position": "Ctrl+Z", "order_stance": "Ctrl+X",
 					"order_formation": "Ctrl+V", "order_full_assault": "Ctrl+R", "order_full_retreat": "Ctrl+F",
+				}},
+			},
+		},
+	},
+	{
+		"id": "wing_commands",
+		"label": "Wing commands",
+		"tab": "flying",
+		"default": "A",
+		"presets": {
+			"A": {
+				"label": "A: one key, X (hold for the wheel)",
+				"text": "Hold X for the order wheel, or tap it: an enemy under the mouse is attacked, one of your big ships guarded, empty space means form on me. The strip's Wing button opens the same wheel. The eight keys below have none.",
+				"rows": {},
+			},
+			"B": {
+				"label": "B: a key for each order",
+				"text": "Y form on me, U cover me, I attack my target, O guard that ship, K hold here, L regroup, N next formation, Shift+N next fire setting. The X wheel still works. While the Admiral's board is open I and U stay the Admiral's.",
+				"rows": {"flying": {
+					"wing_follow": "Y", "wing_cover": "U", "wing_attack": "I", "wing_guard": "O", "wing_hold": "K", "wing_regroup": "L",
+					"wing_formation": "N", "wing_fire": "Shift+N",
 				}},
 			},
 		},

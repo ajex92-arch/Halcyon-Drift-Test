@@ -38,8 +38,10 @@ extends Node
 ##   pierce    a hit with a pierce of 1 leaves the shields and their refill
 ##             wait alone and hurts the hull in full; a pierce of 0.5 splits
 ##             the hit; a pierce of 0 is soaked by the shield first; every
-##             weapon has a whole-percent pierce and the three torpedoes
-##             skip the shield completely; an ion hit never reaches the hull;
+##             weapon has a whole-percent pierce, the pilots' torpedo skips
+##             the shield completely and the Light Bomber minion's torpedo
+##             and the torpedo turret's are soaked by it; an ion hit never
+##             reaches the hull;
 ##   blast     the share of a torpedo or flak hit that a target takes follows
 ##             its size and speed (BlastScale), before the shield;
 ##   tail gun  the Bomber's rear gun faces the tail, shoots at an enemy behind
@@ -602,13 +604,15 @@ func _check_pierce() -> void:
 	_expect(absf(f.shields.total() - (shield1 - hit)) < 0.001, "pierce 0: the shields lost %s, wanted %s" % [shield1 - f.shields.total(), hit])
 	_expect(f.hull == hull0, "pierce 0: the hull was hurt")
 	_expect(f.shields.since_hit == 0.0, "pierce 0: the refill wait was not restarted")
-	# Every weapon has a whole-percent pierce between 0 and 100, and the three
-	# torpedoes skip the shield completely.
+	# Every weapon has a whole-percent pierce between 0 and 100. The pilots'
+	# torpedo skips the shield completely; the Light Bomber minion's torpedo and
+	# the torpedo turret's do not skip any of it.
 	for wid: String in Weapons.WEAPONS:
 		var p = Weapons.get_def(wid).get("pierce")
 		_expect(p is int and int(p) >= 0 and int(p) <= 100, "pierce: %s has no whole-percent pierce (%s)" % [wid, p])
-	for wid: String in ["torpedo", "m_torp", "turret_torp"]:
-		_expect(int(Weapons.get_def(wid)["pierce"]) == 100, "pierce: the torpedo %s does not skip the shield completely" % wid)
+	_expect(int(Weapons.get_def("torpedo")["pierce"]) == 100, "pierce: the pilots' torpedo does not skip the shield completely")
+	for wid: String in ["m_torp", "turret_torp"]:
+		_expect(int(Weapons.get_def(wid)["pierce"]) == 0, "pierce: the torpedo %s skips part of the shield" % wid)
 	# An ion hit only loads the shield: with the shield down it still does not reach the hull.
 	var ion := DamageInfo.new()
 	ion.kind = Rules.W_ION

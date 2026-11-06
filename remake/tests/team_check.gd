@@ -383,6 +383,7 @@ func _check_start_accent() -> void:
 		Game._difficulty_open = false
 		Game._team_open = false
 		Game._unlock_open = false
+		Game._fog_off_open = false
 		var screen: StartScreen = (load("res://scenes/ui/start_screen.tscn") as PackedScene).instantiate()
 		add_child(screen)
 		_check_screen_accent(screen, ACCENT_VHORR if side == Rules.CINDER else ACCENT_AUREL, "start screen made with %s chosen" % Rules.TEAM_DISPLAY[side])

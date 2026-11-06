@@ -12,7 +12,7 @@ extends RefCounted
 ##   team, seat  who sent it (seat: a pilot 0-4, the Admiral 5, the deputy -1, a test -2)
 ##   human       true when it came from a human's screen
 ##   kind        a word from OrderKinds
-##   subjects    the squadrons (or, for a minion order, the minion ids) it is for
+##   subjects    the squadrons it is for
 ##   target_kind "none", "point", "unit", "lane", "node", "item", "squadron" or "id"
 ##   target      a Vector2i point (a human's) or Vector2 point (the computer's, kept
 ##               as it is), a unit or squadron id, a String id, or 0

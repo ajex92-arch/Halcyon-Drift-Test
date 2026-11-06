@@ -23,11 +23,12 @@ extends Node
 ## The tour covers the screens a player really meets, each in its busiest
 ## state: the hangar (all four tabs, and opened in flight), the docked
 ## message, the flying HUD with a full kill feed, earnings log and pop-up
-## hint, the help pages (the Keys page too) and the Controls page, the scoreboard, the pause message, both
+## help pages (the Keys page too) and the Controls page, the scoreboard, the pause menu (its buttons, the
+## question before a restart and Look around), both
 ## motherships in trouble, the dead screen with the hangar open over it,
 ## the end screen (with a pop-up hint shown just before the match ends)
 ## and the start screen; for an admiral the board's five tabs, the map
-## tool, the help, the pause and the hangar.
+## tool, the help, the pause menu and the hangar.
 ##
 ## HOW TO RUN IT ("godot" is the Godot console program, started from the
 ## folder that holds remake/):
@@ -63,10 +64,10 @@ extends Node
 ## WHO USES IT: main.gd loads it for --test=ui_tour (for --test=<name> it
 ## loads tests/<name>.gd, adds it after the World and calls setup()), and
 ## builds the HUD headless only for --force-hud. It finds the node named
-## "Hud" and calls the HUD's own functions: Hud._toggle_help(), _toggle_controls(),
+## "Hud" and calls the HUD's own functions: Hud._toggle_help(), _toggle_controls(), _toggle_pause_menu(),
 ## _show_scoreboard(), _toggle_board(), _on_match_over(),
-## Hangar._set_tab() / launch(), AdmiralBoard._set_tab(), HelpPanel._show()
-## and CommandOverlay arm() / apply_at() / disarm(). tests/lib/ui_dump.gd
+## Hangar._set_tab() / launch(), AdmiralBoard._set_tab(), HelpPanel._show(),
+## PauseMenu.ask() and CommandOverlay arm() / apply_at() / disarm(). tests/lib/ui_dump.gd
 ## prints the dumps.
 
 ## The start screen, shown once at the end of the pilot tour (--auto runs
@@ -373,6 +374,14 @@ func _pilot_steps() -> Array:
 		[8.6, func() -> void: await _shot("p05_help")],
 		[8.8, func() -> void: hud.help._show("Admiral")],
 		[9.0, func() -> void: await _shot("p05a_help_admiral")],
+		# The help section about the jungle and the Scum (the sixth entry of the page "The match", scrolled to the top of the list).
+		[9.005, func() -> void: hud.help._show("The match")],
+		[9.01, func() -> void:
+			await get_tree().process_frame
+			var scroll := hud.help.get_node("Col/Scroll") as ScrollContainer
+			scroll.scroll_vertical = int((hud.help._body.get_child(5) as Control).position.y)
+			await get_tree().process_frame
+			await _shot("p05a1_help_jungle")],
 		# The help's Keys page, then the Controls page that its button opens (which hides the help).
 		[9.02, func() -> void: hud.help._show("Keys")],
 		[9.04, func() -> void: await _shot("p05b_help_keys")],
@@ -385,14 +394,21 @@ func _pilot_steps() -> Array:
 			_check_scoreboard(hud.scoreboard, "pilot scoreboard")
 			await _shot("p06_scoreboard")],
 		# Close the scoreboard and jump the match clock to 64 s, past the
-		# first minion wave's time (45 s), for a picture of a wave. Pause
-		# for a picture of the pause message first.
+		# first minion wave's time (45 s), for a picture of a wave. Open the
+		# pause menu for its pictures first: the buttons, then the question
+		# before a restart, then resume.
 		[10.0, func() -> void:
 			hud._show_scoreboard(false)
 			world.time = 64.0
-			get_tree().paused = true],
+			hud._toggle_pause_menu()],
 		[10.4, func() -> void: await _shot("p06a_pause")],
-		[10.5, func() -> void: get_tree().paused = false],
+		[10.45, func() -> void: hud.pause_menu.ask(PauseMenu.VIEW_RESTART)],
+		[10.48, func() -> void: await _shot("p06b_pause_ask")],
+		# Back to the buttons, then Look around: the card goes, the game stays paused, the big message names the keys.
+		[10.485, func() -> void: hud.pause_menu.show_card()],
+		[10.49, func() -> void: hud.pause_menu.look_around()],
+		[10.495, func() -> void: await _shot("p06c_look")],
+		[10.5, func() -> void: hud._toggle_pause_menu()],
 		[14.5, func() -> void: await _shot("p07_wave")],
 		# Both motherships in trouble: the longest top bar and banner text.
 		[14.7, func() -> void: _trouble(true)],
@@ -485,7 +501,8 @@ func _admiral_steps() -> Array:
 			hud.overlay.disarm()
 			world.camera.look_at_point(Vector2(MapLayout.CX, MapLayout.CY))],
 		[11.0, func() -> void: await _shot("a08_map_mid")],
-		# The help (the Admiral page), the pause message, the hangar an
+		# The help (the Admiral page), the pause menu (its buttons, then the
+		# question before going back to the start screen), the hangar an
 		# admiral can open with B, and both motherships in trouble.
 		[11.2, func() -> void:
 			hud._toggle_help()
@@ -498,10 +515,15 @@ func _admiral_steps() -> Array:
 		[11.68, func() -> void: await _shot("a08a2_controls")],
 		[11.8, func() -> void:
 			hud._toggle_controls()
-			get_tree().paused = true],
+			hud._toggle_pause_menu()],
 		[12.2, func() -> void: await _shot("a08b_pause")],
+		[12.22, func() -> void: hud.pause_menu.ask(PauseMenu.VIEW_START)],
+		[12.26, func() -> void: await _shot("a08c_pause_ask")],
+		[12.27, func() -> void: hud.pause_menu.show_card()],
+		[12.28, func() -> void: hud.pause_menu.look_around()],
+		[12.29, func() -> void: await _shot("a08d_look")],
 		[12.3, func() -> void:
-			get_tree().paused = false
+			hud._toggle_pause_menu()
 			hud._open_hangar()],
 		[12.8, func() -> void: await _shot("a09_hangar")],
 		[13.0, func() -> void:

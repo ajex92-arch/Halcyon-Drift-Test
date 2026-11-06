@@ -235,7 +235,7 @@ func _page() -> void:
 	page.show_mode("home")
 	_check("the Home tab has the layout picker", page._pickers.visible and page._pickers.get_child_count() >= 3)
 	page.show_mode("flying")
-	_check("the Flying tab has no layout picker", not page._pickers.visible)
+	_check("the Flying tab has only the wing commands picker (no layout picker)", page._pickers.visible and page._pickers.get_child_count() >= 2)
 	# Step 2: capture and Esc.
 	var btn := Button.new()
 	btn.text = "R"

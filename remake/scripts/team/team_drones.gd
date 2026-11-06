@@ -12,10 +12,11 @@ extends RefCounted
 ##     ("free_every"). When it runs out, the mothership builds a free drone
 ##     that picks its own node, and the clock starts again. With 3 or more
 ##     drones, the clock is simply kept full.
-##   - Ordered drones: the admiral pays for drones
-##     (AdmiralCommand.build_drone), which wait in TeamState.drone_queue.
-##     The first one is finished after 6 s ("build"), then the next one
-##     starts: one at a time.
+##   - Ordered drones: the admiral orders drones (AdmiralCommand.build_drone),
+##     which wait in the build list (Production). It pays for the first and
+##     moves it into TeamState.drone_queue when the drone bay is free; that
+##     one is finished after 6 s ("build"), then the next one starts: one at
+##     a time.
 ## When a drone is destroyed, MiningDrone calls note_drone_loss() with the
 ## node it was working. danger() counts the recent losses at a node, so
 ## WorldMining.best_node_for_drone() can steer drones away from nodes where
@@ -23,8 +24,9 @@ extends RefCounted
 ##
 ## WHO USES IT: TeamState makes one (TeamState.drone_line) and forwards
 ## _drone_line(), note_drone_loss() and drone_danger() here.
-## AdmiralCommand.build_drone() fills the queue; the AI admiral and the
-## admiral board read TeamState.drone_queue and drones_lost.
+## AdmiralCommand.build_drone() adds to the build list (Production), which
+## starts one at a time into drone_queue; the AI admiral and the admiral
+## board read TeamState.drone_queue and drones_lost.
 
 ## The team this part belongs to (we read and change its drone fields).
 ## It is reached through a weak link: see `_ts_ref`.
@@ -50,7 +52,7 @@ func tick(dt: float) -> void:
 	var world := ts.world
 	var team := ts.team
 	# Step 1: free drones. Count living drones plus the ones in the queue.
-	var count := world.mining_drone_count(team) + ts.drone_queue.size()
+	var count := world.mining_drone_count(team) + ts.drones_queued()
 	if count < int(Structures.MINING_DRONE["free_floor"]):
 		ts.free_drone_t -= dt
 		# The clock ran out: build one free drone (it picks its own node).

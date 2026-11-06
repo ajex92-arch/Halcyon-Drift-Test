@@ -1,7 +1,7 @@
 class_name SnubFighter
 extends Unit
-## WHAT THIS IS: a small automatic fighter that a Derelict Carrier (a
-## jungle monster camp) launches. Neutral, like its carrier.
+## WHAT THIS IS: the Scum Fighter: a small automatic fighter that a Scum Carrier (a
+## jungle den, a Derelict in the code) launches. Neutral, like its carrier.
 ##
 ## HOW IT WORKS: it chases whoever its carrier is fighting: it flies
 ## straight at the target, then circles it once within 450 world units
@@ -39,13 +39,16 @@ func setup(w: World, from: Derelict) -> void:
 	carrier = from
 	team = Rules.NEUTRAL
 	kind = Unit.K_SNUB
-	size_class = Rules.SIZE_SMALL
 	var d: Dictionary = Jungle.SNUB
+	size_class = int(d["size"])
 	radius = float(d["radius"])
 	hull_max = float(d["hull"])
 	hull = hull_max
-	speed = float(d["speed"])
-	accel = float(d["accel"])
+	# A small craft (size class 0) flies at Rules.SMALL_CRAFT_PACE of its row's
+	# top speed and accel.
+	var pace := Rules.craft_pace(size_class)
+	speed = float(d["speed"]) * pace
+	accel = float(d["accel"]) * pace
 	turn = float(d["turn"])
 	display_name = d["label"]
 	# Step 2: appear just outside the carrier, at a random angle, and toss
@@ -105,4 +108,4 @@ func sim_update(dt: float) -> void:
 
 ## Combat.kill() calls this when we are shot down: a small puff of sparks.
 func on_killed(_info: DamageInfo) -> void:
-	world.effects.puff(global_position, Palette.DERELICT, 8)
+	ScumPaint.fighter_burst(world.effects, global_position)

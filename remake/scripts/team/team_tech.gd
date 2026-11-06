@@ -1,9 +1,9 @@
 class_name TeamTech
 extends RefCounted
 ## WHAT THIS IS: the tech-tree part of a team (TeamState). It decides
-## whether a facility or a research project may be queued, pays for it,
-## moves the queues on each tick, and turns finished research into the
-## team's upgrades. DESIGN.md A13.
+## whether a facility or a research project may be queued, moves the
+## queues on each tick, and turns finished research into the team's
+## upgrades. DESIGN.md A13.
 ##
 ## HOW IT WORKS: the tech-tree data lives in Tech (scripts/data/tech.gd).
 ## There are two kinds of tech:
@@ -13,8 +13,11 @@ extends RefCounted
 ##   research    upgrades such as "Improved Bombs". At most 3 are queued;
 ##               only the first one makes progress, and only while the
 ##               team owns the Research Module.
-## Queuing pays the full price at once from the team treasury. Each tick
-## the first entry of each queue counts its seconds down. When one
+## Queuing puts the item in the team's build list (Production), which pays the
+## full price from the team treasury when the item starts and then puts it in
+## the queue here, with the building queue and the research queue holding only the
+## one item being worked on. Each tick the first entry of each queue counts its
+## seconds down. When one
 ## finishes, it is written down (TeamState.facilities or TeamState.done,
 ## and the time in unlock_times) and announced on Events (the game's
 ## message board: facility_done or research_done). Finished research also
@@ -56,23 +59,26 @@ func planned_tech() -> Dictionary:
 	var out := ts.done.duplicate()
 	for r: Dictionary in ts.research:
 		out[r["id"]] = true
+	# The research waiting or on hold in the build list counts too.
+	for id: String in ts.production.idle_whats(Production.RESEARCH):
+		out[id] = true
 	return out
 
 
-## Is facility `id` in the build queue?
+## Is facility `id` in the build queue (being built, or waiting or on hold in the list)?
 func is_building(id: String) -> bool:
 	for b: Dictionary in ts.building:
 		if b["id"] == id:
 			return true
-	return false
+	return ts.production.has_idle(Production.MODULE, id)
 
 
-## Is research `id` in the research queue?
+## Is research `id` in the research queue (being done, or waiting or on hold in the list)?
 func is_researching(id: String) -> bool:
 	for r: Dictionary in ts.research:
 		if r["id"] == id:
 			return true
-	return false
+	return ts.production.has_idle(Production.RESEARCH, id)
 
 
 ## Why facility `id` can't be queued now, or "" if it can. The cost is
@@ -88,9 +94,10 @@ func facility_blocker(id: String) -> String:
 	var b := "" if UnlockAll.is_unlocked(ts) else Tech.facility_blocker(id, ts.facilities, ts.done)
 	if b != "":
 		return b
-	# Rule 3: room in the build queue.
-	if ts.building.size() >= 2:
-		return "Build queue is full (2 at a time)"
+	# Rule 3: room in the build queue (the one being built and the ones waiting
+	# or on hold in the list: RtsHulls.DEPTH_MODULES).
+	if ts.building.size() + ts.production.idle_count(Production.MODULE) >= RtsHulls.DEPTH_MODULES:
+		return "Build queue is full (%d at a time)" % RtsHulls.DEPTH_MODULES
 	return ""
 
 
@@ -108,48 +115,51 @@ func tech_blocker(id: String) -> String:
 	var b := "" if UnlockAll.is_unlocked(ts) else Tech.tech_blocker(id, ts.facilities, planned_tech())
 	if b != "":
 		return b
-	# Rule 3: room in the research queue.
-	if ts.research.size() >= 3:
-		return "Research queue is full (3 at a time)"
+	# Rule 3: room in the research queue (the one being done and the ones waiting
+	# or on hold in the list: RtsHulls.DEPTH_RESEARCH).
+	if ts.research.size() + ts.production.idle_count(Production.RESEARCH) >= RtsHulls.DEPTH_RESEARCH:
+		return "Research queue is full (%d at a time)" % RtsHulls.DEPTH_RESEARCH
 	return ""
 
 
-# --- queuing (paying up front) ----------------------------------------------------
+# --- queuing (the list pays when an item starts) ----------------------------------------------------
 
-## Queue facility `id`: check the rules (facility_blocker), pay its cost
-## from the treasury, and add it to the end of the build queue. Returns ""
-## when it worked, or why not (nothing is paid then).
+## Queue facility `id`: check the rules (facility_blocker) and put it at the end
+## of the build list. Nothing is paid now: the list pays when the item starts
+## (Production). Returns "" when it worked, or why not.
 func queue_facility(id: String) -> String:
-	# Step 1: may it be queued at all?
 	var b := facility_blocker(id)
 	if b != "":
 		return b
-	# Step 2: pay for it (TeamState.spend says no if we are short).
-	var cost: float = float(Tech.FACILITIES[id]["cost"])
-	if not ts.spend(cost):
-		return "Not enough in the team treasury (%d short)" % int(ceil(cost - ts.treasury))
-	# Step 3: join the queue with its whole build time still to go.
-	var time: float = float(Tech.FACILITIES[id]["time"])
-	ts.building.append({"id": id, "left": time, "total": time})
+	ts.production.add_module(id)
 	return ""
 
 
-## Queue research `id`: check the rules (tech_blocker), pay its cost from
-## the treasury, and add it to the end of the research queue. Returns ""
-## when it worked, or why not (nothing is paid then).
+## Queue research `id`: check the rules (tech_blocker) and put it at the end of
+## the build list. Nothing is paid now: the list pays when the item starts
+## (Production). Returns "" when it worked, or why not.
 func queue_research(id: String) -> String:
-	# Step 1: may it be queued at all?
 	var b := tech_blocker(id)
 	if b != "":
 		return b
-	# Step 2: pay for it.
-	var cost: float = float(Tech.TECHS[id]["cost"])
-	if not ts.spend(cost):
-		return "Not enough in the team treasury (%d short)" % int(ceil(cost - ts.treasury))
-	# Step 3: join the queue with its whole research time still to go.
-	var time: float = float(Tech.TECHS[id]["time"])
-	ts.research.append({"id": id, "left": time, "total": time})
+	ts.production.add_research(id)
 	return ""
+
+
+## Start building facility `id` on the module dock (Production calls this when the
+## item has started and paid): it joins the building queue with `left` seconds still
+## to go (a negative `left` = its whole build time).
+func start_facility(id: String, left: float = -1.0) -> void:
+	var time: float = float(Tech.FACILITIES[id]["time"])
+	ts.building.append({"id": id, "left": time if left < 0.0 else left, "total": time})
+
+
+## Start research `id` in the laboratory (Production calls this when the item has
+## started and paid): it joins the research queue with `left` seconds still to go (a
+## negative `left` = its whole research time).
+func start_research(id: String, left: float = -1.0) -> void:
+	var time: float = float(Tech.TECHS[id]["time"])
+	ts.research.append({"id": id, "left": time if left < 0.0 else left, "total": time})
 
 
 # --- what the tech gives us --------------------------------------------------------

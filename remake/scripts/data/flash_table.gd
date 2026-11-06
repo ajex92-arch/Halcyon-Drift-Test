@@ -78,6 +78,12 @@ const ROWS := [
 		"note": "The pop-up hint fades in and out over 0.6 s. A fade, not a flash."},
 	{"name": "Salvage gold tint", "file": "scripts/features/salvage_core.gd", "kind": "slide", "rate": 0, "min_gap_ms": 0, "where": "world", "since": "today", "today": true,
 		"note": "A ship carrying a salvage core is tinted gold while it carries it (set and cleared with the state, not on a timer). Not a flash."},
+	{"name": "Undock slide", "file": "scripts/world/rts_fx.gd", "kind": "slide", "rate": 0, "min_gap_ms": 0, "where": "world", "since": "RT3", "today": false,
+		"note": "A bought small ship is drawn moving from the middle of the mothership to its launch spot over 1.5 s. A movement drawn once, not a flash."},
+	{"name": "Warp streak", "file": "scripts/world/rts_fx.gd", "kind": "streak", "rate": 0, "min_gap_ms": 0, "where": "world", "since": "RT3", "today": false,
+		"note": "A bright head with a trail runs from the map's edge to a capital ship's warp spot over 4 s, and a ring opens round the ship when it appears. It grows, moves and fades once, with no blinking."},
+	{"name": "wing confirm", "file": "scripts/ui/wing_strip.gd", "kind": "pulse", "rate": "per event", "min_gap_ms": 334, "where": "screen", "since": "wingmen", "today": false,
+		"note": "When a wing order is carried out, the border of the wing strip's chips lights ICE white for one 120 ms pulse (WingStrip.PULSE_MS). It is never repeated, and a new order less than 334 ms after the last one gives no pulse (WingStrip.PULSE_GAP_MS), so it flashes at most three times a second."},
 ]
 
 ## Scripts that use a tween, a timer or an animation player and are not in ROWS because they draw

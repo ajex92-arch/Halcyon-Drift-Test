@@ -34,6 +34,15 @@ extends Control
 ##   Alarm       over the whole screen, hidden until needed: HudAlarm: the
 ##               sound and the edge marker that warn you a Bomber's run is
 ##               aimed at your ship (made in code by setup())
+##   WingStrip   a child of ShipStatus, just above it: the pilot's wing, one chip
+##               for each wingman and a Wing button (WingStrip; made in code by
+##               setup(); hidden without a wing)
+##   SeatBar     right of ShipStatus: the block of buttons that are click twins of keys
+##               (Dock, Hangar, Scores or Board, Centre or Camera, Assist, Help, Menu;
+##               SeatBar; made in code by setup())
+##   WingWheel   the order wheel, over the whole HUD while it is open (WingWheel;
+##               made in code by setup())
+## The wing's marks on the map (WingMarks) are a child of the World, like the overlay.
 ## _ready() gives the HUD the game's look (UiKit.make_theme()). setup()
 ## then sets the interface's highlight colour to the human's team (amber for
 ## Aurelian and for a spectator, red for Vhorr: UiKit.set_accent_team(), and a
@@ -46,24 +55,29 @@ extends Control
 ## it. Every 0.1 seconds (10 times a second) _refresh() tells every widget
 ## to update its text.
 ## Big panels: Hangar (B), Admiral board (Tab, admiral), Scoreboard (hold
-## Tab, pilots), Help (H), the Controls page (from the help's Keys page) and the
-## End screen. They are made from their own
+## Tab, pilots), Help (H), the Controls page (from the help's Keys page), the
+## Pause menu (P or Esc) and the End screen. They are made from their own
 ## scenes when first needed. HudPanels keeps only one of them open at a
 ## time. HudLayout keeps the pieces out of each other's way: it moves the
 ## top bar, the gear slots and the ship readout aside when the window is
 ## narrow, and hides the pieces a big panel would cover while it is open.
-## HudInput routes the keys: Esc closes panels or cancels a map
-## tool, C switches the Admiral's camera between free and following their
-## ship, P pauses, F launches when docked (in flight, PlayerController
-## uses F to dock instead), and F9 opens the note box (NoteBox: it pauses the
-## match, and Enter saves a one-line note with a screenshot). The note box is
-## made the first time F9 is pressed. DESIGN.md A15 shows the layout.
+## HudInput routes the keys: Esc closes panels, cancels a map tool, or (with
+## nothing to close) opens the pause menu, C switches the Admiral's camera
+## between free and following their ship, P opens the pause menu (or resumes),
+## X and the wing keys give a pilot's wing orders, F launches when docked (in
+## flight, PlayerController uses F to dock instead), and F9 opens the note box
+## (NoteBox: it pauses the match, and Enter saves a one-line note with a
+## screenshot). The note box is made the first time F9 is pressed. DESIGN.md
+## A15 shows the layout.
+## Mouse-only play (T-114): the buttons, the readout and a kit gear slot call router.click(), which does
+## what the key does. Every frame _process() also sets World.ui_hold: true while the pointer is on one of
+## them and the player is not firing, which keeps the ship's aim still (_pointer_on_buttons()).
 ##
 ## WHO USES IT: main.gd loads scenes/ui/hud.tscn and calls setup(world).
 ## tests/ui_tour.gd finds the "Hud" node and uses hud.hangar, hud.board,
-## hud.overlay, _toggle_help(), _show_scoreboard() and _toggle_board();
-## tests/note_check.gd uses hud.note_box. Its parts: the widgets above,
-## HudPanels (opens and closes panels) and HudInput (menu keys).
+## hud.overlay, _toggle_help(), _toggle_pause_menu(), _show_scoreboard() and
+## _toggle_board(); tests/note_check.gd uses hud.note_box. Its parts: the widgets
+## above, HudPanels (opens and closes panels) and HudInput (menu keys).
 
 ## The end-of-match screen (who won, totals, top pilots).
 const END_SCENE := preload("res://scenes/ui/end_screen.tscn")
@@ -78,7 +92,7 @@ const NOTE_SCENE := preload("res://scenes/ui/note_box.tscn")
 ## reason instead.
 const RESULT_OK := {"facility": "Module queued.", "research": "Research queued.", "turret": "Turret under construction.", "post": "Defense post being rebuilt.",
 	"bay": "Repair bay launched: it will fly there and anchor.", "ward": "Ward launched.", "waypoint": "Rally waypoint set.",
-	"move": "The mothership is moving.", "drone": "Mining drone queued.", "order": "Orders sent.", "minion": "Minion launched."}
+	"move": "The mothership is moving.", "drone": "Mining drone queued.", "produce": "Queued in the yard."}
 
 ## The game world this HUD shows (set by setup()).
 var world: World
@@ -99,6 +113,8 @@ var scoreboard: Scoreboard = null
 var help: HelpPanel = null
 ## The Controls page (opened from the help's Keys page). Made on first use; null until then.
 var controls: ControlsPage = null
+## The pause menu (P or Esc). Made on first use; null until then.
+var pause_menu: PauseMenu = null
 ## The end-of-match screen. Made when the match ends; null until then.
 var end_screen: EndScreen = null
 ## The note box (F9). Made the first time the key is pressed; null until then.
@@ -122,6 +138,14 @@ var panels: HudPanels
 var layout: HudLayout
 ## Part: decides what each menu key does.
 var router: HudInput
+## The pilot's wing strip above the ship readout (a child of the readout; hidden without a wing).
+var wing_strip: WingStrip
+## The block of buttons right of the ship readout (SeatBar: Dock, Hangar, Scores or Board, Centre or Camera, Assist, Help, Menu).
+var seat_bar: SeatBar
+##The pilot's order wheel (hidden until the order key is held or the Wing button is clicked).
+var wing_wheel: WingWheel
+## The marks the wing puts on the map (a child of the World, like the overlay).
+var wing_marks: WingMarks
 
 ## Seconds until the next full refresh (counts down from 0.1).
 var _t := 0.0
@@ -148,10 +172,29 @@ func setup(w: World) -> void:
 	overlay = OVERLAY_SCENE.instantiate()
 	world.add_child(overlay)
 	overlay.setup(world)
+	# The wing's marks on the map sit just under the overlay.
+	wing_marks = WingMarks.new()
+	world.add_child(wing_marks)
+	wing_marks.setup(self)
 	layout = HudLayout.new(self)
 	panels = HudPanels.new(self)
 	resized.connect(layout.apply)
 	router = HudInput.new(self)
+	# The wing strip rides on the ship readout (so it follows the layout's sideways shift and hides with it);
+	# the order wheel covers the whole HUD while it is open.
+	wing_strip = WingStrip.new()
+	status.add_child(wing_strip)
+	wing_strip.setup(self)
+	# The seat bar (the button block right of the readout) and the readout's and the gear slots' clicks go
+	# through the router. The bar is made before the order wheel, so the wheel draws over it.
+	status.hud = self
+	slots.hud = self
+	seat_bar = SeatBar.new()
+	add_child(seat_bar)
+	seat_bar.setup(self)
+	wing_wheel = WingWheel.new()
+	add_child(wing_wheel)
+	wing_wheel.setup(self)
 	# Step 2: tell the widgets (already in the scene) what they show.
 	me_panel.world = w
 	feed.world = w
@@ -175,6 +218,7 @@ func setup(w: World) -> void:
 	Events.credits_earned.connect(me_panel.on_credits)
 	Events.respawned.connect(_on_respawned)
 	Events.admiral_result.connect(_on_admiral_result)
+	Events.rts_event.connect(_on_rts_event)
 	Events.match_over.connect(_on_match_over)
 	# Step 4: a first hint. Pilots start in the hangar to pick a ship.
 	if world.human_role == "pilot":
@@ -211,6 +255,18 @@ func _toggle_help() -> void:
 ## Show or hide the Controls page. Forwards to HudPanels.toggle_controls().
 func _toggle_controls() -> void:
 	panels.toggle_controls()
+
+
+## Open the pause menu (and pause the game), or end the pause if the menu holds
+## it. Forwards to HudPanels.toggle_pause_menu().
+func _toggle_pause_menu() -> void:
+	panels.toggle_pause_menu()
+
+
+## Is the game being held paused by the pause menu (also while the help pages
+## are open over it)?
+func _pause_menu_active() -> bool:
+	return pause_menu != null and pause_menu.active
 
 
 ## Hide every big panel except `keep` (null hides them all). Forwards to
@@ -253,10 +309,94 @@ func _unhandled_input(event: InputEvent) -> void:
 
 ## Pop up a short hint for 3.5 seconds (see HudToast). Connected to
 ## Events.toast, so any script can show one. Not once the match is over:
-## the end screen has the whole window.
-func toast(text: String) -> void:
+## the end screen has the whole window. With `danger` the hint is a refusal: danger
+## colour and the danger triangle.
+func toast(text: String, danger: bool = false) -> void:
 	if end_screen == null:
-		toast_box.show_text(text)
+		toast_box.show_text(text, danger)
+
+
+# --- the pilot's wing (the real code lives in SquadOrders, WingStrip and WingWheel) -----------
+
+## Can the human give their wing an order now: a pilot with a live ship and a wing, the match
+## being played, no board and no big panel open?
+func wing_ready() -> bool:
+	var h := world.human
+	if h == null or world.human_role != "pilot" or world.phase != "play" or world.board_open or _any_panel_open():
+		return false
+	if h.ship == null or not is_instance_valid(h.ship) or not h.ship.alive:
+		return false
+	var lead := Squads.lead_record(world, h.team, h.slot)
+	return lead != null and Squads.wing_alive(world, lead.wing_id)
+
+
+## The world point under the reticle now (the pilot's aim point), or under the mouse with no ship.
+func wing_aim() -> Vector2:
+	var h := world.human
+	if h != null and h.ship != null and is_instance_valid(h.ship) and h.ship.alive:
+		return h.ship.controls.aim_point
+	return world.mouse_world()
+
+
+## Give the human pilot's wing the gesture `name` ("tap", "follow", "cover", "attack", "guard", "hold",
+## "regroup", "formation", "fire", "next_formation", "next_fire"; `arg` is a formation or fire value) with
+## the reticle at `aim` (the aim point now when it is Vector2.INF). The one door the tap, the wheel and the
+## key preset use. A refusal is shown at once as a danger pop-up; what was carried out is confirmed when it
+## is (wing_event). Returns the refusal text or "".
+func wing_command(name: String, arg: int = 0, aim: Vector2 = Vector2.INF) -> String:
+	var h := world.human
+	if h == null or world.human_role != "pilot":
+		return ""
+	var g := SquadOrders.gesture(world, h, name, arg, wing_aim() if aim == Vector2.INF else aim)
+	var sent := SquadOrders.send(world, g)
+	var why := str(sent["text"])
+	if why != "":
+		toast(why, true)
+	return why
+
+
+## The Wing button was clicked: open the order wheel under the mouse as a click wheel, or close it.
+func wing_wheel_toggle() -> void:
+	if wing_wheel.is_open:
+		wing_wheel.close()
+	elif wing_ready():
+		wing_wheel.open_at(get_viewport().get_mouse_position(), wing_aim(), true)
+
+
+## A happening on the event stream (Events.rts_event): the pop-ups of the human pilot's wing. An order of
+## theirs that was carried out is confirmed (and the strip pulses once); one refused when it was carried
+## out is explained (a refusal at the moment of sending was shown by wing_command()); the wing going home,
+## launching and a wingman lost say so. A repeated order says nothing.
+func _on_rts_event(ev: Dictionary) -> void:
+	var h := world.human
+	if h == null or world.human_role != "pilot" or int(ev.get("team", -1)) != h.team:
+		return
+	var data: Dictionary = ev.get("data", {})
+	var lead := Squads.lead_record(world, h.team, h.slot)
+	match str(ev.get("kind", "")):
+		"order_done":
+			var kind := str(data.get("kind", ""))
+			if int(data.get("seat", -1)) == h.slot and OrderKinds.SQUADRON_KINDS.has(kind):
+				var text := SquadOrders.confirm_text(world, kind, int(data.get("squad", 0)))
+				if text != "":
+					toast(text)
+					wing_strip.confirm()
+		"order_refused":
+			if int(data.get("seat", -1)) == h.slot and OrderKinds.SQUADRON_KINDS.has(str(data.get("kind", ""))) and str(data.get("at", "")) == "apply":
+				var why := SquadOrders.refusal_text(str(data.get("reason", "")))
+				if why != "":
+					toast(why, true)
+		"wing_home":
+			if lead != null and int(data.get("squad", -1)) == lead.wing_id:
+				toast("Wing heading home")
+		"wing_launched":
+			if lead != null and int(data.get("squad", -1)) == lead.wing_id:
+				toast("Wing launched (%d)" % int(data.get("count", 0)))
+		"ship_lost":
+			if int(data.get("wing", 0)) == 1:
+				var rec: Squad = world.squads.get(int(data.get("squad", 0)))
+				if rec != null and rec.owner_seat == h.slot and rec.team == h.team:
+					toast("Wingman lost (%s)" % Formations.short_hull(rec.hull_id), true)
 
 
 ## Someone respawned. If it is the human pilot, open the hangar so they can
@@ -286,6 +426,8 @@ func _on_admiral_result(team: int, action: String, ok: bool, message: String) ->
 ## would be drawn over the end screen's text).
 func _on_match_over(winner: int, reason: String) -> void:
 	get_tree().paused = false
+	if pause_menu != null:
+		pause_menu.end_session()
 	_close_others(null)
 	overlay.disarm()
 	toast_box.visible = false
@@ -302,10 +444,22 @@ func _process(dt: float) -> void:
 	if world == null:
 		return
 	toast_box.tick(dt)
+	router.wing_tick()
+	world.ui_hold = _pointer_on_buttons() and not world.mouse_fire
 	_t -= dt
 	if _t <= 0.0:
 		_t = 0.1
 		_refresh()
+
+
+## Is the pointer over a HUD control that takes clicks and is showing: the ship readout (and the wing strip on it), the
+## button block or a kit gear slot? Asked every frame; World.ui_hold keeps the ship's aim still while it is true.
+func _pointer_on_buttons() -> bool:
+	var over := get_viewport().gui_get_hovered_control()
+	if over == null or not over.is_visible_in_tree():
+		return false
+	return over == status or status.is_ancestor_of(over) or seat_bar.is_ancestor_of(over) or over == seat_bar \
+			or slots.is_ancestor_of(over)
 
 
 ## Update every widget's text from the game state. Old feed lines fade out
@@ -325,9 +479,11 @@ func _refresh() -> void:
 		ship = h.ship
 	status.visible = ship != null
 	status.set_ship(ship)
+	wing_strip.refresh()
+	seat_bar.refresh()
 	# Step 3: gear slots for pilots (and for an Admiral flying a ship).
 	slots.slots_box.visible = h != null and (world.human_role == "pilot" or ship != null)
-	slots.refresh_keys(world.human_role)
+	slots.refresh_keys(world.human_role, h != null and Squads.lead_record(world, h.team, h.slot) != null)
 	# Step 4: move the pieces out of each other's way (after step 2, which
 	# may have shown the ship readout again).
 	layout.apply()

@@ -157,8 +157,8 @@ func _gain_at(pos: Vector2) -> float:
 	if k > 1.3:
 		return 0.0
 	# Step 3: hidden in the fog for the team on screen? Silent. (A
-	# spectator, viewer_team -1, hears everything.)
-	if world.viewer_team >= 0 and not world.vision.is_visible(world.viewer_team, pos):
+	# spectator, viewer_team -1, hears everything, and so does anyone while the No fog option is on: FogOff.)
+	if world.viewer_team >= 0 and not FogOff.is_on() and not world.vision.is_visible(world.viewer_team, pos):
 		return 0.0
 	# Step 4: fade with distance from the centre, never below 0.15.
 	return clampf(1.25 - k * 0.75, 0.15, 1.0)

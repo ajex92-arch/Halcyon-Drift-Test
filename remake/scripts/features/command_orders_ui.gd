@@ -1,7 +1,7 @@
 class_name CommandOrdersUi
 extends RefCounted
 ## WHAT THIS IS: the "Command orders" section of the Admiral board's Fleet
-## tab: one button per order that a feature module added (Sensor Sweep,
+## (Yard) tab: one button per order that a feature module added (Sensor Sweep,
 ## Supply Drop, Barrage, Bounty, Fortify; see CommandOrders). It shows
 ## nothing in today's game, because then no order is registered.
 ##

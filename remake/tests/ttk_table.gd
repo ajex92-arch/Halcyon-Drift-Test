@@ -248,7 +248,7 @@ func _top_speed(u: Unit) -> float:
 	if u is Ship:
 		return (u as Ship).f_max
 	if u is Minion:
-		return float(Minions.TYPES[(u as Minion).mtype]["speed"])
+		return (u as Minion).speed
 	if u is Mothership:
 		return float((u as Mothership).def["move_speed"])
 	return 0.0

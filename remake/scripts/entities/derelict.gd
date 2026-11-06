@@ -1,7 +1,8 @@
 class_name Derelict
 extends Unit
-## WHAT THIS IS: a jungle "monster" camp: an abandoned (derelict) hull whose
-## automatic guns still fire. The Carrier type also launches snub fighters.
+## WHAT THIS IS: a Scum den ship, one jungle camp (the Scum are the jungle's pirates; the
+## code still calls their ships derelicts): a hull built from wrecks whose automatic guns
+## fire. The Carrier type also launches snub fighters (Scum Fighters).
 ## Camps belong to no team (they are "neutral"). DESIGN.md A10.
 ##
 ## HOW IT WORKS:
@@ -191,5 +192,5 @@ func _launch_snubs(dt: float) -> void:
 ## Combat.kill() calls this when we die: an explosion, and JungleDirector
 ## starts the camp's respawn timer.
 func on_killed(_info: DamageInfo) -> void:
-	world.effects.explosion(global_position, radius * 2.0, Palette.DERELICT)
+	ScumPaint.burst(world.effects, global_position, radius)
 	world.jungle_director.on_camp_killed(camp_id)

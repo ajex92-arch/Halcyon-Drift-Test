@@ -1,8 +1,8 @@
 class_name CommandOverlay
 extends Node2D
 ## WHAT THIS IS: the human Admiral's "map tools": placing a repair bay or a
-## ward, setting the rally waypoint, moving the mothership, and giving
-## orders to minions by clicking on the map. DESIGN.md A15.
+## ward, setting the rally waypoint and moving the mothership by clicking on
+## the map. DESIGN.md A15.
 ##
 ## HOW IT WORKS: the Admiral board "arms" a tool (arm). The next left click
 ## on the map (or on the minimap) sends it as an order to the order queue
@@ -11,18 +11,15 @@ extends Node2D
 ## next tick, reporting back via Events.admiral_result. A right click or Esc
 ## "disarms" it (cancels it).
 ## Tools: "bay" (deploy a repair bay), "ward", "waypoint", "move" (the
-## mothership), "fleet_move" / "fleet_hold" (selected minions).
-## With the Fleet Command module and no tool armed, the Admiral can drag a
-## box on the map to select our minions, and right-click to send the
-## selection there.
+## mothership), "rally" (pick the spot where new fleet ships gather: it sends no
+## order, the Yard tab reads the spot from here).
 ## This node lives under World (not under the HUD), so it draws in world
 ## positions and gets the clicks the HUD's buttons didn't take, before the
 ## ship's guns do. For everyone it also draws the team's rally waypoint
 ## (CommandOverlayDraw does all the drawing).
 ##
 ## WHO USES IT: Hud makes it from scenes/ui/command_overlay.tscn (hud.overlay).
-## AdmiralBoard arms tools and uses select_all(), order_lane(), selected and
-## can_command(); Minimap calls apply_at() and order_at(); HudInput and
+## AdmiralBoard arms tools and uses can_command(); Minimap calls apply_at() and order_at(); HudInput and
 ## HudBanner use tool, disarm() and hint(); tests/ui_tour.gd arms "bay".
 
 ## The instruction shown while each tool is armed (on the banner and next
@@ -32,8 +29,7 @@ const TOOL_TEXT := {
 	"ward": "Click a spot your team can see to place a ward",
 	"waypoint": "Click to set the rally waypoint",
 	"move": "Click a spot in a lane to move the mothership",
-	"fleet_move": "Click where the selected minions should fly",
-	"fleet_hold": "Click where the selected minions should hold",
+	"rally": "Click where new ships should gather",
 }
 
 ## The game world (set by setup()).
@@ -42,9 +38,13 @@ var world: World
 var team := Rules.HALCYON
 ## The armed tool's name (see TOOL_TEXT), or "" when none is armed.
 var tool := ""
-## The minions the Admiral has selected (may hold destroyed ones until
-## _live_selection() tidies the list).
+## The minions the Admiral has selected. Nothing can select any now (the box select
+## below is switched off), and no order takes them.
 var selected: Array = []
+## The spot the Admiral picked with the "rally" tool, in whole world units, and
+## whether one has been picked.
+var rally_spot := Vector2i.ZERO
+var rally_set := false  # true once a spot was picked
 ## Where a box-select drag started (world position), or Vector2.INF
 ## ("infinity", meaning no drag is happening).
 var _drag_from := Vector2.INF
@@ -74,15 +74,11 @@ func can_command() -> bool:
 	return is_admiral() and world.phase == "play"
 
 
-## Arm tool `t`, so the next map click uses it. The fleet tools need some
-## minions selected first; without any, a hint pops up and nothing is armed.
+## Arm tool `t`, so the next map click uses it.
 func arm(t: String) -> void:
 	if not can_command():
 		return
 	tool = t
-	if t.begins_with("fleet") and _live_selection().is_empty():
-		Events.toast.emit("Select minions first: drag a box around them on the map.")
-		tool = ""
 
 
 ## Cancel the armed tool and any box-select drag.
@@ -154,10 +150,10 @@ func apply_at(p: Vector2) -> void:
 			msg = world.orders.submit(Order.make(OrderKinds.WAYPOINT, team, Rules.ADMIRAL_SEAT, true, {"siege": 1}, [], "point", at))
 		"move":
 			msg = world.orders.submit(Order.make(OrderKinds.MOTHERSHIP_MOVE, team, Rules.ADMIRAL_SEAT, true, {}, [], "point", at))
-		"fleet_move":
-			msg = world.orders.submit(Order.make(OrderKinds.MINION_ORDER, team, Rules.ADMIRAL_SEAT, true, {"type": "move"}, _live_uids(), "point", at))
-		"fleet_hold":
-			msg = world.orders.submit(Order.make(OrderKinds.MINION_ORDER, team, Rules.ADMIRAL_SEAT, true, {"type": "hold"}, _live_uids(), "point", at))
+		"rally":
+			# Not an order: the Yard tab uses the spot when it buys ships.
+			rally_spot = at
+			rally_set = true
 		_:
 			# An order that a feature module added (CommandOrders).
 			if cmd.orders.has(tool):
@@ -166,20 +162,10 @@ func apply_at(p: Vector2) -> void:
 		tool = ""
 
 
-## A right click at world point `p`: cancels an armed tool; otherwise, with
-## Fleet Command and some minions selected, sends them to fly there.
-func order_at(p: Vector2) -> void:
+## A right click at world point `_p`: cancels an armed tool; otherwise nothing.
+func order_at(_p: Vector2) -> void:
 	if tool != "":
 		disarm()
-		return
-	if can_command() and world.minion_director.controlled(team) and not _live_selection().is_empty():
-		world.orders.submit(Order.make(OrderKinds.MINION_ORDER, team, Rules.ADMIRAL_SEAT, true, {"type": "move"}, _live_uids(), "point", Order.point(p)))
-
-
-## Send the selected minions down lane `lane` ("top", "mid" or "bot").
-func order_lane(lane: String) -> void:
-	if can_command():
-		world.orders.submit(Order.make(OrderKinds.MINION_ORDER, team, Rules.ADMIRAL_SEAT, true, {"type": "lane", "lane": lane}, _live_uids(), "lane", lane))
 
 
 ## Select every live minion of our team.
@@ -201,18 +187,9 @@ func _live_selection() -> Array:
 	return out
 
 
-## The ids of the selected minions that still exist and are alive: what a minion
-## order carries (an order names units by id, never by node).
-func _live_uids() -> Array[int]:
-	var ids: Array[int] = []
-	for m in _live_selection():
-		ids.append((m as Unit).uid)
-	return ids
-
 
 ## Mouse clicks on the map that no button took (only for the Admiral):
-## left click uses the armed tool, or starts / ends a box-select drag;
-## right click cancels the tool, or orders the selection to fly there.
+## left click uses the armed tool; right click cancels it.
 ## Each click we use is marked "handled" so the ship's guns don't fire.
 func _unhandled_input(event: InputEvent) -> void:
 	if world == null or not is_admiral():
@@ -232,7 +209,7 @@ func _unhandled_input(event: InputEvent) -> void:
 			elif not mb.pressed and _drag_from != Vector2.INF:
 				_finish_drag()
 				get_viewport().set_input_as_handled()
-		# Right button: cancel the tool, or send the selection.
+		# Right button: cancel the tool.
 		elif mb.button_index == MOUSE_BUTTON_RIGHT and mb.pressed:
 			if tool != "":
 				disarm()
@@ -245,10 +222,9 @@ func _unhandled_input(event: InputEvent) -> void:
 		_drag_to = get_global_mouse_position()
 
 
-## Box select only while the admiral is in the chair (not flying a ship:
-## then the camera follows their ship and left click fires the guns).
+## Box select is off: nothing the Admiral can select takes orders now.
 func _fleet_select_allowed() -> bool:
-	return can_command() and world.minion_director.controlled(team) and world.camera.followed() == null
+	return false
 
 
 ## The drag ended: select our live minions inside the box. A tiny box
@@ -263,7 +239,7 @@ func _finish_drag() -> void:
 	for m: Minion in world.minions:
 		if m.team == team and m.alive and r.has_point(m.global_position):
 			selected.append(m)
-	Events.toast.emit("%d minions selected. Right-click to send them, or use the Fleet tab." % selected.size())
+	Events.toast.emit("%d minions selected." % selected.size())
 
 
 ## Every frame: ask Godot to redraw us (queue_redraw makes it call _draw).

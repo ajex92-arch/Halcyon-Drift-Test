@@ -72,6 +72,9 @@ static var _hex := PackedVector2Array()
 ## 1 = Cinder is drawn alien (always, in play), 0 = drawn plain (only while
 ## the gallery test compares the two looks).
 static var _mode := 1
+## The time, in milliseconds, the veins' pulse is held at (-1 = the real clock; only a
+## picture test holds it, see hold_pulse()).
+static var _held_msec := -1
 
 
 ## Is `team` drawn with the alien look? True only for Cinder, and only while
@@ -116,12 +119,26 @@ static func prepare(raw: Dictionary) -> Dictionary:
 	var veins: Array = []
 	for v: Array in raw["veins"]:
 		veins.append(PackedVector2Array(v))
-	# Step 4: the engine lights. A hull with "nozzles" (the big pilot hulls, which show
+	# Step 3b: the fill and every plate cut into triangles once (the same cut that
+	# draw_colored_polygon makes), as one list of points: the fill's points first, then
+	# every plate's, and the plates' colours. A big shape's fill and plates are then drawn
+	# with one command (see draw_shape()).
+	var body_pts := PackedVector2Array(sil)
+	var body_idx := PackedInt32Array(Geometry2D.triangulate_polygon(sil))
+	var plate_cols := PackedColorArray()
+	for part: Dictionary in parts:
+		var plate: PackedVector2Array = part["fill"]
+		var base := body_pts.size()
+		body_pts.append_array(plate)
+		for t: int in Geometry2D.triangulate_polygon(plate):
+			body_idx.append(base + t)
+		for _i in plate.size():
+			plate_cols.append(Palette.CINDER_SHADES[int(part["shade"])])	# Step 4: the engine lights. A hull with "nozzles" (the big pilot hulls, which show
 	# a stream from each nozzle) draws a light at every nozzle; the others list their
 	# lights in "glow".
 	var nozzles: Array = raw.get("nozzles", [])
 	var glow: Array = nozzles if not nozzles.is_empty() else raw["glow"]
-	return {"sil": sil, "line": line, "lo": lo, "lo_line": lo_line, "parts": parts, "veins": veins, "glow": glow, "nozzles": nozzles, "jet": raw.get("jet", []), "len": x_max - x_min, "body": float(raw.get("body", 0.0))}
+	return {"sil": sil, "line": line, "lo": lo, "lo_line": lo_line, "parts": parts, "body_pts": body_pts, "body_idx": body_idx, "plate_cols": plate_cols, "veins": veins, "glow": glow, "nozzles": nozzles, "jet": raw.get("jet", []), "len": x_max - x_min, "body": float(raw.get("body", 0.0))}
 
 
 ## The prepared shape of pilot hull `id` ("fighter" for an unknown id).
@@ -215,28 +232,36 @@ static func draw_shape(ci: CanvasItem, rec: Dictionary, scale: Vector2, rot: flo
 		if DrawParts.outline:
 			ci.draw_polyline(xf * lo_line, line_col, line_w * px * 0.85, false)
 		return
-	# Step 4: the full outline, filled.
+	# Step 4: the full outline, filled. Step 5: big shapes: the layered plates, back to
+	# front. A solid big shape draws the fill and every plate with one command (the
+	# triangles cut at prepare(), in the same order); a see-through one (a tower still
+	# being built) and a shape that is not big draw them one at a time.
 	var sil: PackedVector2Array = rec["sil"]
-	ci.draw_colored_polygon(xf * sil, fill)
 	var big := screen_len >= BIG_PX
-	# Step 5: big shapes: the layered plates, back to front.
-	if big:
-		for part: Dictionary in rec["parts"]:
-			var shade: Color = Palette.CINDER_SHADES[int(part["shade"])]
-			shade.a = alpha
-			var plate: PackedVector2Array = part["fill"]
-			ci.draw_colored_polygon(xf * plate, shade)
+	if big and alpha >= 1.0:
+		var body_cols := PackedColorArray()
+		body_cols.resize(sil.size())
+		body_cols.fill(fill)
+		body_cols.append_array(rec["plate_cols"])
+		RenderingServer.canvas_item_add_triangle_array(ci.get_canvas_item(), rec["body_idx"], xf * (rec["body_pts"] as PackedVector2Array), body_cols)
+	else:
+		ci.draw_colored_polygon(xf * sil, fill)
+		if big:
+			for part: Dictionary in rec["parts"]:
+				var shade: Color = Palette.CINDER_SHADES[int(part["shade"])]
+				shade.a = alpha
+				var plate: PackedVector2Array = part["fill"]
+				ci.draw_colored_polygon(xf * plate, shade)
 	# Step 6: the red outline over the plates (a smooth line; it is the part that
 	# flashes after a hit). (Test only: left out when DrawParts.outline is off; the
 	# fill, plates, veins and lights stay.)
 	if DrawParts.outline:
 		var outline: PackedVector2Array = rec["line"]
-		ci.draw_polyline(xf * outline, line_col, line_w * px, true)
+		ci.draw_polyline(xf * outline, line_col, line_w * px, DrawCache.is_close_px(px))
 	# Step 7: big shapes: the glowing veins (plain lines).
 	if big:
-		var pulse := 0.8 + 0.2 * sin(float(Time.get_ticks_msec()) * PULSE_RATE + phase)
 		var vein := Palette.CINDER_VEIN
-		var vein_col := Color(vein.r, vein.g, vein.b, 0.95 * pulse * alpha)
+		var vein_col := Color(vein.r, vein.g, vein.b, 0.95 * pulse(phase) * alpha)
 		for v: PackedVector2Array in rec["veins"]:
 			ci.draw_polyline(xf * v, vein_col, 1.4 * px, false)
 	# Step 8: the engine lights: a small bright hexagon each (a small shape
@@ -249,13 +274,58 @@ static func draw_shape(ci: CanvasItem, rec: Dictionary, scale: Vector2, rot: flo
 	var halo := Palette.CINDER_VEIN
 	var lights: Array = rec["glow"]
 	var shown := lights.size() if big else mini(1, lights.size())
+	# Every light (and its halo, drawn first) goes into one list of triangles: one command.
+	var light_pts := PackedVector2Array()
+	var light_idx := PackedInt32Array()
+	var light_cols := PackedColorArray()
 	for i in shown:
 		var g: Vector3 = lights[i]
 		var at := xf * Vector2(g.x, g.y)
 		var r := maxf(g.z * scale.x * 0.7, 1.0 * px)
 		if screen_len >= HALO_PX:
-			ci.draw_colored_polygon(Transform2D(0.0, Vector2(r * 2.1, r * 2.1), 0.0, at) * _hex, Color(halo.r, halo.g, halo.b, (0.04 + 0.1 * heat) * alpha))
-		ci.draw_colored_polygon(Transform2D(0.0, Vector2(r, r), 0.0, at) * _hex, Color(spark.r, spark.g, spark.b, (0.55 + 0.4 * heat) * alpha))
+			_add_hex(light_pts, light_idx, light_cols, Transform2D(0.0, Vector2(r * 2.1, r * 2.1), 0.0, at), Color(halo.r, halo.g, halo.b, (0.04 + 0.1 * heat) * alpha))
+		_add_hex(light_pts, light_idx, light_cols, Transform2D(0.0, Vector2(r, r), 0.0, at), Color(spark.r, spark.g, spark.b, (0.55 + 0.4 * heat) * alpha))
+	if not light_idx.is_empty():
+		RenderingServer.canvas_item_add_triangle_array(ci.get_canvas_item(), light_idx, light_pts, light_cols)
+
+
+## Add one engine-light hexagon (the unit hexagon placed by `xf`, in colour `col`) to the
+## lists of points, triangles and colours.
+static func _add_hex(pts: PackedVector2Array, idx: PackedInt32Array, cols: PackedColorArray, xf: Transform2D, col: Color) -> void:
+	var base := pts.size()
+	pts.append_array(xf * _hex)
+	for k in 6:
+		cols.append(col)
+	for k in 4:
+		idx.append_array(PackedInt32Array([base, base + k + 1, base + k + 2]))
+
+
+## How bright the glowing veins are right now, 0.6 to 1.0 (they pulse about once a
+## second and a half). `phase` is a number that is different for every unit, so the
+## veins of different units do not pulse together.
+static func pulse(phase: float) -> float:
+	var msec := _held_msec if _held_msec >= 0 else Time.get_ticks_msec()
+	return 0.8 + 0.2 * sin(float(msec) * PULSE_RATE + phase)
+
+
+## Hold the veins' clock at `msec` milliseconds (0 or more) for good, so every picture
+## shows the same pulse (tests that compare pictures use it); a negative number gives
+## the real clock back.
+static func hold_pulse(msec: int) -> void:
+	_held_msec = msec
+
+
+## The veins' pulse in steps of a fortieth (1 to 17). A kept picture of a shape with
+## veins is drawn again when this changes (see DrawCache).
+static func pulse_step(phase: float) -> int:
+	return int((pulse(phase) - 0.6) * 40.0) + 1
+
+
+## Does a prepared shape `rec` drawn at scale `scale_x` and `px` world units per screen
+## pixel get pulsing veins? True for a big shape (BIG_PX screen pixels long or more)
+## that has any.
+static func has_pulse(rec: Dictionary, scale_x: float, px: float) -> bool:
+	return float(rec["len"]) * scale_x / px >= BIG_PX and not (rec["veins"] as Array).is_empty()
 
 
 ## Draw a turret's gun as a fang: a dark blade with a red edge and a glowing

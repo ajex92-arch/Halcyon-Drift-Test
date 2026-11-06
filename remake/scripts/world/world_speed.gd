@@ -24,7 +24,10 @@ extends RefCounted
 ## on such a frame is "just pressed" for that frame only, and the code that reads
 ## keys (PlayerController) runs inside the tick: step() therefore notes every
 ## action pressed on a frame without a tick, and just_pressed() answers for the
-## tick that follows, so no tap is lost. And Godot's physics server steps once at
+## tick that follows, so no tap is lost. A click on a HUD button that stands for a
+## key (energy, shield zone, kit, assist, dock) is the same: tap() marks the action,
+## the next tick moves it to `_clicked_now`, and just_pressed() answers true for it
+## on that tick only, so the click runs the key's own lines once. And Godot's physics server steps once at
 ## the end of every physics frame; a step also reorders its collision search tree,
 ## and a ship sliding along rocks then resolves its bump a little differently. So
 ## that a slowed match plays out exactly like the same match at normal speed, the
@@ -49,7 +52,8 @@ extends RefCounted
 ## cycles it with the backquote key; the HUD's top bar shows tag() and limited();
 ## the order queue changes it through set_hundredths() (the GAME_SPEED order);
 ## Effects and ShipVisual scale their frame-time animations with the slow part of
-## factor; PlayerController and RecallFeature read taps with just_pressed();
+## factor; PlayerController and RecallFeature read taps with just_pressed(); HudInput.click()
+## (the HUD's buttons, the readout's clicks) marks a click with tap();
 ## tests/speed_check.gd measures it.
 
 ## The slow speeds the key cycles through, in order: normal, three quarters, a half.
@@ -80,6 +84,12 @@ var _acc := 0.0
 ## For each action pressed on a frame without a tick: the physics frame it was
 ## pressed on. just_pressed() uses the ones newer than the last tick.
 var _tapped := {}
+## Actions a mouse click stands in for, not yet seen by a tick (tap() adds one; the next
+## tick moves them to `_clicked_now`).
+var _clicked := {}
+## The actions the tick now running was handed by a click: just_pressed() answers true for
+## them, on this tick only.
+var _clicked_now := {}
 ## The physics frame of the tick before the one now running.
 var _prev_tick_frame := -1
 ## The physics frame of the last tick (the one now running, inside it).
@@ -207,6 +217,9 @@ func step() -> bool:
 ## Note that a tick is being taken on this frame (for just_pressed() and limited()),
 ## with the physics server switched on.
 func _take_tick() -> void:
+	# A click that stood in for a key press is seen by this tick and no other.
+	_clicked_now = _clicked
+	_clicked = {}
 	_prev_tick_frame = _last_tick_frame
 	_last_tick_frame = Engine.get_physics_frames()
 	ticks_taken += 1
@@ -291,4 +304,11 @@ func _note_taps() -> void:
 ## without a tick since the previous tick. At normal speed there are no such
 ## frames and it is the same as Input.is_action_just_pressed().
 func just_pressed(action: String) -> bool:
-	return Input.is_action_just_pressed(action) or int(_tapped.get(action, -1)) > _prev_tick_frame
+	return Input.is_action_just_pressed(action) or int(_tapped.get(action, -1)) > _prev_tick_frame or _clicked_now.has(action)
+
+
+## A mouse click stands in for a press of action `action` (the HUD's buttons call this): the next
+## tick sees it through just_pressed() exactly as it sees a key tap, once. It adds nothing to the
+## simulation: PlayerController runs the same lines for the click as for the key.
+func tap(action: String) -> void:
+	_clicked[action] = true

@@ -96,7 +96,7 @@ func print_minute(world: World) -> void:
 		var k := 0
 		var d := 0
 		for p in world.profiles:
-			if p.team == t:
+			if p.team == t and not p.is_crew:
 				if p.role != "admiral":
 					credits += p.credits
 					pilots += 1

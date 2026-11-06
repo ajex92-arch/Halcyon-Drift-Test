@@ -104,8 +104,10 @@ func setup(w: World, file: String) -> void:
 	_seed = Game.opt("seed")
 	_t = w.time
 	_next_write = (floorf(_t / WRITE_EVERY) + 1.0) * WRITE_EVERY
-	# One page per pilot (the human's too).
+	# One page per pilot (the human's too; a bought ship's crew is not a pilot).
 	for p: PilotProfile in world.profiles:
+		if p.is_crew:
+			continue
 		var page := StatsPilotRecord.new(p, world.pilot_ai.get(p))
 		pages.append(page)
 		_by_pilot[p] = page

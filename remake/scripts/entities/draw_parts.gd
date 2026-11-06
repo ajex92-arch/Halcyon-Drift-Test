@@ -1,8 +1,8 @@
 class_name DrawParts
 extends RefCounted
 ## WHAT THIS IS: the test-only "parts switches" of the ship and unit
-## drawing. Every ship and minion draws itself again every frame from several
-## parts (its flames, shield arcs, drift arrow, bars, name, hull outline). Each
+## drawing. Every ship and minion is drawn from several parts (its flames,
+## shield arcs, drift arrow, bars, name, hull outline). Each
 ## switch here turns ONE part off, so a test can measure what that part costs
 ## (the draw-cost table) without changing anything else. With no switch
 ## given, every part is drawn exactly as always: nothing here changes a match
@@ -26,8 +26,12 @@ extends RefCounted
 ##       name      the name tag above a ship
 ##       outline   the line round a hull (the fill stays), for every hull
 ##       redraw    a painter draws once and then stops asking for a new picture
-##                 every frame (Godot keeps the last picture). Only right for a
-##                 crowd that stands still, which is what the bench uses it for.
+##                 every frame (Godot keeps the last picture). It only stops the
+##                 painter's own picture, the one that changes by the frame (the
+##                 guns' heads, a structure's bars and lines): the kept pictures
+##                 (DrawCache) are drawn again when something they show changes,
+##                 switch or no switch. Only right for a crowd that stands still,
+##                 which is what the bench uses it for.
 ##     `all` names every part; `drawing` names every part except redraw (the six
 ##     things that are drawn, with the picture still redrawn every frame); `none`
 ##     names none. Example:
@@ -65,6 +69,10 @@ static var redraw := true
 ## True once the option has been read (or set_off() was called), so it is read
 ## only once and never overrides a setting made by code.
 static var _read := false
+## A number that goes up each time the switches change (set_off()). A kept picture
+## (DrawCache) is drawn again when it changes, so it follows a switch made while a
+## test runs.
+static var version := 0
 
 
 ## Read --bench-off=<parts> (a comma-separated list of PARTS, `drawing` or `all`) from the
@@ -109,6 +117,7 @@ static func set_off(list: String) -> PackedStringArray:
 			off.append(w)
 		else:
 			unknown.append(w)
+	version += 1
 	flames = not off.has("flames")
 	arcs = not off.has("arcs")
 	arrow = not off.has("arrow")

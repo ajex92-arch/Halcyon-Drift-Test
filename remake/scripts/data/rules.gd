@@ -43,18 +43,19 @@ extends RefCounted
 # One switch for a whole group of rules. Every place that applies one of them
 # asks damage_modifiers_removed() first.
 
-## THE SWITCH for the damage modifiers (DESIGN.md A5). false: the game plays
-## with all of them. They are the damage table
-## (DAMAGE: how much each weapon kind hurts each size of target), the Fighter
-## cannon's bonus against small ships, the fixed multipliers for who hits what
-## (MOTHERSHIP_ATTACKER and the minion multipliers, the turret "backdoor"
-## cut, the paint bonus, the asteroid multiplier), the flat half damage of a
-## flak burst on a mothership, and the damage parts of the lance_role,
-## minion_cap and bomber_role variants. true: they are all removed, and every
-## hit does its raw damage to every kind of target. This one constant is the
-## default for every match; the option --damage-modifiers-removed (or
-## =0 / =false) overrides it for one run (Game reads it).
-const DAMAGE_MODIFIERS_REMOVED := false
+## THE SWITCH for the damage modifiers (DESIGN.md A5). The modifiers are the
+## damage table (DAMAGE: how much each weapon kind hurts each size of target),
+## the Fighter cannon's bonus against small ships, the fixed multipliers for
+## who hits what (MOTHERSHIP_ATTACKER and the minion multipliers, the turret
+## "backdoor" cut, the paint bonus, the asteroid multiplier), the flat half
+## damage of a flak burst on a mothership, and the damage parts of the
+## lance_role, minion_cap and bomber_role variants. true: they are all
+## removed, and every hit does its raw damage to every kind of target; the
+## build starts like this. false: the game plays with all of them. This one
+## constant is the default for every match; the option
+## --damage-modifiers-removed (or =0 / =false) overrides it for one run (Game
+## reads it).
+const DAMAGE_MODIFIERS_REMOVED := true
 
 
 ## Is this match played with the damage modifiers removed? The answer is
@@ -96,8 +97,8 @@ const HALCYON := 0
 ## Team number 1: Vhorr, the red team (internal label: Cinder). Its mothership starts on the right
 ## (east) side of the map.
 const CINDER := 1
-## Team number 2: neutral. The derelict monsters of the jungle and their
-## snub fighters belong to no side.
+## Team number 2: neutral. The Scum, the pirates of the jungle (their derelict ships and
+## the snub fighters those launch), belong to no side.
 const NEUTRAL := 2
 ## Internal team labels, by team number (team 2 is "Derelict"): logs, JSON, tools and node names use
 ## them, so team 0 stays "Halcyon" and team 1 stays "Cinder" here. The names the player sees are in
@@ -106,7 +107,7 @@ const TEAM_NAMES := ["Halcyon", "Cinder", "Derelict"]
 ## Player-facing team names, by team number (same order as TEAM_NAMES): what every screen says, so team 0
 ## is "Aurelian" and team 1 is "Vhorr". TEAM_NAMES stays the internal label for logs, JSON, tools and node
 ## names; text built from it (a place name) goes through display_label() on its way to the screen.
-const TEAM_DISPLAY := ["Aurelian", "Vhorr", "Derelict"]
+const TEAM_DISPLAY := ["Aurelian", "Vhorr", "Scum"]
 
 ## The enemy team of `team`: 0 gives 1, and 1 gives 0. The neutral team (2)
 ## has no enemy team, so it gives -1, which means "none".
@@ -170,6 +171,17 @@ const SIZE_TORPEDO := 6
 ## `radius`. Minions, drones, wards, turrets, repair bays, the motherships and
 ## the bigger pilot ships are not affected.
 const SMALL_PILOT_HIT_MUL := 1.1
+## The pace of the small craft (size class 0 that fly as ships): the share of
+## their table top speed and engine pushes (main, reverse and side) they fly
+## with. 0.8 = 20% lower. The strike craft (Scout, Fighter, Lance Fighter,
+## Bomber), the Snub-Fighter minion and the jungle snub fighters fly at it; the
+## top speed and the pushes drop by the same share, so the time to reach top
+## speed stays the same. Turning and the boost multipliers are not touched, and
+## gear, research (Fighter Drive) and buffs multiply on top of it. Mining and
+## repair drones and wards do not ask for it, and a minion row with its own
+## "pace" field (the Light Bomber, 1.0) uses that instead (Minions.pace()). Read
+## it through craft_pace().
+const SMALL_CRAFT_PACE := 0.8
 # --- weapon kinds (rows of the damage table) -----------------------------------
 # Every weapon has a "kind" (the "kind" field in weapons.gd). It picks the
 # damage-table row (not while the damage modifiers are removed), and some
@@ -565,7 +577,7 @@ const AI_OPENING_HOLD := 10.0
 ## The latest the opening can last (seconds of match time). It normally ends
 ## earlier, when our first minion wave reaches the pilot's anchor;
 ## this limit is the safety net for a wave that never gets there (it was
-## destroyed, or the team runs its minions through Fleet Command).
+## destroyed).
 const AI_OPENING_MAX := 180.0
 
 # --- variants (DESIGN.md A2: unclear conflicts are tested) ----------------------------
@@ -763,14 +775,20 @@ const VARIANT_DEFAULTS := {
 	## being the admiral"): "off" | "on"
 	"mutiny": "off",
 	## Extra treasury sinks for the AI admiral (deep-dive carry-over,
-	## AdmiralSinksFeature): "off" | "fleet" (build Fleet Command, refresh wards)
+	## AdmiralSinksFeature): "off" | "fleet" (refresh wards; the value "fleet" is
+	## kept so the presets load)
 	"admiral_sinks": "off",
-	## Fleet Command minion limit (FleetCapFeature): the most bought minions a
-	## team may have alive at once, as a whole number written as text. The
-	## default "30" is today's limit (Minions.CONTROL_CAP) and installs nothing;
-	## any other whole number, such as "45" or "10", sets the limit for both
-	## teams (the AI admiral and a human admiral alike)
+	## The old Fleet Command minion limit (FleetCapFeature), as a whole number written
+	## as text. It loads and is ignored: nothing buys minions now, and the fleet limit
+	## is RtsHulls.CAP_IN_FORCE.
 	"fleet_cap": "30",
+	## The AI lane's calibration switch, a test tool (AdmiralAI.tick()): "off" |
+	## "on". "on" for a team makes that team's admiral draw ONE extra random
+	## number at its first think, so the two runs of a seed with the switch on
+	## for team 0 and then for team 1 become different matches (they measure how
+	## big plain luck is). Nothing else changes; it has no feature module and is
+	## never in a preset.
+	"ai_calib": "off",
 }
 
 
@@ -779,6 +797,14 @@ const VARIANT_DEFAULTS := {
 ## motherships and torpedoes (4..6) count as capital (3).
 static func size_index(size_class: int) -> int:
 	return clampi(size_class, 0, 3)
+
+
+## The pace factor of a craft of size class `size_class`: SMALL_CRAFT_PACE for
+## a small craft (size class 0), 1.0 for everything bigger. ShipStats (pilot
+## ships), Minions.pace() (for a minion row without its own "pace") and
+## SnubFighter multiply their top speed and pushes by it.
+static func craft_pace(size_class: int) -> float:
+	return SMALL_CRAFT_PACE if size_class == SIZE_SMALL else 1.0
 
 
 ## One cell of the damage table: the multiplier for weapon kind `kind` (a
@@ -865,8 +891,8 @@ const TUNABLES := {
 	# Pilot torpedoes (BomberRoleFeature, the bomber_role variant). Read only
 	# while the damage modifiers are kept.
 	"torp_small_mult": "damage multiplier of a PILOT's torpedo against small craft (the torp row of DAMAGE, 0.35; BomberRoleFeature)",
-	# The Fleet Command minion limit (FleetCapFeature, the fleet_cap variant).
-	"fleet_cap": "most bought minions a team may have alive at once, Fleet Command mode (Minions.CONTROL_CAP, 30; Minions.control_cap())",
+	# The old Fleet Command minion limit (FleetCapFeature, the fleet_cap variant); nothing reads it now.
+	"fleet_cap": "old limit on bought minions, ignored (Minions.CONTROL_CAP, 30; Minions.control_cap())",
 	# The hyperspace spool-up as the Hyperspace Module's card shows it (RedeployFeature).
 	"hyperspace_spool": "seconds a hyperspace launch spools up, for the Hyperspace Module's card text only (World.HYPERSPACE_SPOOL, 6; Tech.facility_blurb(); RedeployFeature sets its own SPOOL, 4)",
 }

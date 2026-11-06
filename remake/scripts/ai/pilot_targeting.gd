@@ -146,7 +146,7 @@ func pick_target(ship: Ship, r: float) -> Unit:
 	# kept (minions, drones, wards and small pilots).
 	var bomber_lane := ship.hull_id == "bomber" and brain.state == "lane"
 	# Feature hook (eff:on): the weapon-aware target score, see EffFeature.
-	var eff_on := world.features.has("eff")
+	var eff_on := FeatureRegistry.active_for(world, ship.team, "eff")
 	var best_adj := 0.0
 	for u: Unit in world.unit_hash.query(ship.global_position, r * STICK_RANGE if stick_on else r, _scratch):
 		# Step 1: only live, visible enemies truly within r (the pilot we
@@ -236,7 +236,7 @@ func pick_target(ship: Ship, r: float) -> Unit:
 	# ships and bombers want it much more (+100 instead of +900).
 	var ems := world.mothership(1 - ship.team)
 	# (ms:nosmall: small non-bomber ships leave the mothership alone.)
-	if ems != null and ems.alive and ems.hull_dist(ship.global_position) < r * 0.8 and not (world.features.has("ms") and MsNosmallFeature.skips(ship)):
+	if ems != null and ems.alive and ems.hull_dist(ship.global_position) < r * 0.8 and not (FeatureRegistry.active_for(world, ship.team, "ms") and MsNosmallFeature.skips(ship)):
 		var s2 := ems.hull_dist(ship.global_position) + (100.0 if ship.size_class >= Rules.SIZE_LARGE or ship.hull_id == "bomber" else 900.0)
 		if s2 < best_s:
 			best = ems
@@ -330,7 +330,7 @@ func push_target(ship: Ship, station: Vector2) -> Unit:
 	if ems != null and ems.alive and ems.hull_dist(station) < PUSH_RANGE + 1500.0:
 		if not ship.is_small() or ship.hull_id == "bomber" or brain.senses.minions_at_hull(ems, ship.team, 2500.0) >= 3:
 			# (ms:nosmall: a small non-bomber ship never pushes the mothership.)
-			if world.features.has("ms") and MsNosmallFeature.skips(ship):
+			if FeatureRegistry.active_for(world, ship.team, "ms") and MsNosmallFeature.skips(ship):
 				return null
 			return ems
 	return null

@@ -11,14 +11,12 @@ extends RefCounted
 ##
 ## WHO USES IT: tests/order_check.gd.
 
-## A stand-in pilot record for a crew ship: it answers is_crew with true.
+## A pilot record flagged as a crew ship's (is_crew is true), not a pilot's.
 class CrewProfile extends PilotProfile:
-	## True: this record belongs to a crew ship, not a pilot.
-	var is_crew := true
-
 	## A crew record for team 0, slot 200.
 	func _init() -> void:
 		super("Crew W1", 0, 200, false)
+		is_crew = true
 
 
 ## A record from seat `seat` for team 0.
@@ -71,16 +69,16 @@ static func table(t) -> void:
 	q.handlers[OrderKinds.SET_STANCE] = func(_o: Dictionary) -> String: return ""
 	# money
 	ts.treasury = 0.0
-	expect(t, "DRONE with no money", rec(OrderKinds.DRONE, 5, true, {"node": ""}), "money")
-	expect(t, "MODULE with no money", rec(OrderKinds.MODULE, 5, true, {}, [], "id", "research"), "money")
+	# A drone, a module and a research are not refused for money: they wait in the build
+	# list and pay when they start.
+	expect(t, "DRONE with no money waits in the list", rec(OrderKinds.DRONE, 5, true, {"node": ""}), "ok")
+	expect(t, "MODULE with no money waits in the list", rec(OrderKinds.MODULE, 5, true, {}, [], "id", "research"), "ok")
 	expect(t, "TURRET with no money", rec(OrderKinds.TURRET, 5, true, {"ttype": "pd"}, [], "node", free_node.node_id), "money")
 	ts.repair_bays = true
 	expect(t, "BAY with no money", rec(OrderKinds.BAY, 5, true, {}, [], "point", spot_i), "money")
 	expect(t, "WARD with no money", rec(OrderKinds.WARD, 5, true, {}, [], "point", spot_i), "money")
 	ts.repair_bays = false
-	ts.facilities["fleet"] = true
-	expect(t, "MINION_BUY with no money", rec(OrderKinds.MINION_BUY, 5, true, {"type": "fighter", "lane": "mid"}), "money")
-	ts.facilities.erase("fleet")
+
 	ts.treasury = 5000.0
 	# room
 	var drones := ts.drone_queue.duplicate()
@@ -96,8 +94,7 @@ static func table(t) -> void:
 	# unlock
 	expect(t, "BAY without the research", rec(OrderKinds.BAY, 5, true, {}, [], "point", spot_i), "unlock")
 	expect(t, "TURRET torp without the research", rec(OrderKinds.TURRET, 5, true, {"ttype": "torp"}, [], "node", free_node.node_id), "unlock")
-	expect(t, "MINION_BUY without Fleet Command", rec(OrderKinds.MINION_BUY, 5, true, {"type": "fighter", "lane": "mid"}), "unlock")
-	expect(t, "MINION_ORDER without Fleet Command", rec(OrderKinds.MINION_ORDER, 5, true, {"type": "hold"}, [1], "point", Vector2i(10, 10)), "unlock")
+
 	expect(t, "RESEARCH without the Research Module", rec(OrderKinds.RESEARCH, 5, true, {}, [], "id", "repairBays"), "unlock")
 	# place
 	var far := Order.point(w.mothership(1).global_position)
@@ -108,9 +105,7 @@ static func table(t) -> void:
 	expect(t, "POST that stands", rec(OrderKinds.POST, 5, true, {}, [], "lane", "top"), "time")
 	expect(t, "MOTHERSHIP_MOVE before the engines", rec(OrderKinds.MOTHERSHIP_MOVE, 5, true, {}, [], "point", spot_i), "time")
 	# gone
-	ts.facilities["fleet"] = true
-	expect(t, "MINION_ORDER for minions that are gone", rec(OrderKinds.MINION_ORDER, 5, true, {"type": "hold"}, [987654], "point", Vector2i(10, 10)), "gone")
-	ts.facilities.erase("fleet")
+
 	expect(t, "ATTACK at a unit that is gone", rec(OrderKinds.ATTACK, -2, false, {}, [], "unit", 987654), "gone")
 	expect(t, "ATTACK for a squadron that is gone", rec(OrderKinds.ATTACK, -2, false, {}, [4242], "unit", 1), "gone")
 	# online (two human seats), seat, value, unbuilt, unknown
@@ -128,7 +123,7 @@ static func table(t) -> void:
 	expect(t, "a point that is a string", rec(OrderKinds.BAY, 5, true, {}, [], "point", "x"), "value")
 	expect(t, "SET_STANCE with no key", rec(OrderKinds.SET_STANCE, -2, false, {}), "value")
 	expect(t, "PAUSE", rec(OrderKinds.PAUSE, 5, true), "unbuilt")
-	expect(t, "GUARD with no handler", rec(OrderKinds.GUARD, -2, false, {}, [], "unit", 1), "unbuilt")
+	expect(t, "STOP with no handler", rec(OrderKinds.STOP, -2, false), "unbuilt")
 	var appended := rec(OrderKinds.DRONE, 5, true, {"node": ""})
 	appended["mode"] = "append"
 	expect(t, "DRONE in mode append", appended, "unbuilt")
@@ -158,13 +153,13 @@ static func hooks(t) -> void:
 	q.handlers.erase(OrderKinds.HOLD)
 	t.check("(r) a checker refuses at submit", msg == "Too far for the wing" and int(o["id"]) == 0 and q.queue.is_empty(), msg)
 	var dup_cursor := w.events_rts.next_index(0)
-	q.handlers[OrderKinds.CANCEL] = func(_o: Dictionary) -> String: return OrderKinds.TEXT_DUPLICATE
-	var d := rec(OrderKinds.CANCEL, 5, false, {}, [], "item", "i1")
+	q.handlers[OrderKinds.PATROL] = func(_o: Dictionary) -> String: return OrderKinds.TEXT_DUPLICATE
+	var d := rec(OrderKinds.PATROL, 5, false, {}, [], "point", Vector2i(2, 2))
 	d["id"] = q.take_id()
 	d["tick"] = w.tick_count
 	d["apply_tick"] = w.tick_count
 	var dmsg := q.apply(d)
-	q.handlers.erase(OrderKinds.CANCEL)
+	q.handlers.erase(OrderKinds.PATROL)
 	var evs := w.events_rts.read_from(0, dup_cursor)
 	var reason := ""
 	for e: Dictionary in evs:

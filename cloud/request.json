@@ -1,0 +1,1 @@
+{"id": "pubt1", "runs": [{"tag":"det_n900","test":"det_hash","seeds":[7],"extra":"--secs=900","per_job":1,"timeout_min":60,"project":"remake"},{"tag":"det_l300","test":"det_hash","seeds":[7],"extra":"--late --secs=300","per_job":1,"timeout_min":60,"project":"remake"}], "projects_hash": {"remake": "9f8a0266e3acc52c"}}

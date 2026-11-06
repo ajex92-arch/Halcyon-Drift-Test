@@ -36,6 +36,14 @@ var team := 0
 var slot := 0
 ## True for a human (the player, or a human admiral), false for AI pilots.
 var is_human := false
+## True for the crew of a bought fleet ship (a yard ship or a wingman): a profile
+## that is not a pilot. A crew has no money, no gear, no scoreboard line, no share
+## of the ore, no respawn and no shopping trip; its ship is lost for good when it
+## dies. Crew.make() sets it. Pilots keep false.
+var is_crew := false
+## The id of the squad record (Squad) the crew's ship belongs to, or -1 for a
+## pilot. ship_lost events and the audits read it.
+var squad_id := -1
 ## The pilot's own money, in credits. Starts at Rules.START_CREDITS (700).
 var credits := Rules.START_CREDITS
 ## The 6 gear slots (Items.SLOTS). Each is {} (empty) or
@@ -124,20 +132,22 @@ func _init(name_value: String, t: int, slot_index: int, human: bool) -> void:
 
 
 ## Is this one of the computer's field pilots: not the human, and not an
-## admiral's seat? The measuring tests (tests/fun_probe.gd and its parts) use
-## it to count "AI pilots" only; the computer admiral's seat flies a few
-## field trips (AdmiralField) and is measured by admiral_audit instead.
+## admiral's seat, and not the crew of a bought ship? The measuring tests
+## (tests/fun_probe.gd and its parts) use it to count "AI pilots" only; the
+## computer admiral's seat flies a few field trips (AdmiralField) and is
+## measured by admiral_audit instead.
 func is_ai_pilot() -> bool:
-	return not is_human and role != "admiral"
+	return not is_human and role != "admiral" and not is_crew
 
 
 ## Pay the pilot `amount` credits for `reason` ("kill", "minion", "ore"
 ## ...), times income_mult. Nothing happens for 0 or less. It also adds to
 ## `earned` and announces the payment on Events (the game's message board:
 ## credits_earned) with the amount actually paid, so the screens can show
-## "+45 minion". Every payment that has a message goes through here.
+## "+45 minion". Every payment that has a message goes through here. A crew is
+## never paid (it has no money).
 func earn(amount: float, reason: String) -> void:
-	if amount <= 0.0:
+	if amount <= 0.0 or is_crew:
 		return
 	var paid := amount * income_mult
 	credits += paid
@@ -147,8 +157,10 @@ func earn(amount: float, reason: String) -> void:
 
 ## Pay the pilot `amount` credits, times income_mult, without a message: the
 ## steady trickle (Economy.passive_income) and the running pay of a few feature
-## modules. It adds to `credits` and `earned` like earn().
+## modules. It adds to `credits` and `earned` like earn(). A crew is never paid.
 func earn_quietly(amount: float) -> void:
+	if is_crew:
+		return
 	var paid := amount * income_mult
 	credits += paid
 	earned += paid

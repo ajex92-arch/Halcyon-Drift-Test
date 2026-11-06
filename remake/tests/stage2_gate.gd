@@ -65,8 +65,8 @@ var post_log: Array = []
 var launches := {}
 ## The credits each team's admiral had spent at SPEND_AT (-1 = not read yet).
 var spent_at := [-1.0, -1.0]
-## The match time (seconds) at which each team first owned Fleet Command, which stops
-## its free waves (so its defense posts launch nothing); -1 = never.
+## The match time (seconds) at which each team first owned the Fleet Command Module
+## (it has no job now); -1 = never.
 var fleet_at := [-1.0, -1.0]
 ## Per team: the sieges so far, as [start time, reached CONTACT_FAR, reached
 ## CONTACT_NEAR, end time (-1 = still on)].
@@ -221,7 +221,7 @@ func _physics_process(dt: float) -> void:
 		_sample_t = 1.0
 		_sample_sieges()
 		for t in 2:
-			if float(fleet_at[t]) < 0.0 and world.minion_director.controlled(t):
+			if float(fleet_at[t]) < 0.0 and world.teams[t].facilities.has("fleet"):
 				fleet_at[t] = snappedf(world.time, 1.0)
 	if world.time >= secs or world.phase != "play":
 		_done = true

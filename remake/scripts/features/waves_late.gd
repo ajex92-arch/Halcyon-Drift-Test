@@ -3,8 +3,7 @@ extends RefCounted
 ## WHAT THIS IS: the feature module for the "waves_late" rule variant: fewer
 ## free minion waves late in the match (docs/FUN_PLAN.md section 5,
 ## endgame_closure fork, idea B9). REQ-CHANGE: the minions "spawn from the
-## mothership regularly" (free waves). The paid minion control (Fleet
-## Command) is not touched.
+## mothership regularly" (free waves).
 ##
 ## HOW IT WORKS: the variant has two values besides "off" (the default):
 ##   "slow"   from 30:00 the gap between free waves doubles (35 s -> 70 s).

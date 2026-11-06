@@ -19,8 +19,8 @@ extends Control
 ## Clicks: everyone left-clicks (or drags) to move the camera there (an
 ## Admiral who follows their ship with C keeps the camera on it); with an
 ## Admiral map tool armed, a left click places it there instead
-## (CommandOverlay.apply_at). A right click gives selected
-## Fleet Command minions a move order (CommandOverlay.order_at).
+## (CommandOverlay.apply_at). A right click cancels an armed tool
+## (CommandOverlay.order_at).
 ##
 ## WHO USES IT: Hud makes it from scenes/ui/minimap.tscn and calls
 ## setup(world, overlay). It reads World, MapInfo (world.map), Vision
@@ -28,6 +28,8 @@ extends Control
 
 ## Width of the minimap (pixels). Its height keeps the world's shape.
 const MAP_W := 300.0
+## The radius (pixels) of the thin ring around the dots of our own wingmen.
+const WING_RING_R := 3.2
 
 ## The game world (set by setup()).
 var world: World
@@ -102,7 +104,7 @@ func _gui_input(event: InputEvent) -> void:
 				else:
 					world.camera.look_at_point(p)
 					_drag = true
-			# Right: a move order for the selected minions (or cancel a tool).
+			# Right: cancel an armed tool.
 			elif overlay != null:
 				overlay.order_at(p)
 		elif not mb.pressed and mb.button_index == MOUSE_BUTTON_LEFT:
@@ -125,19 +127,19 @@ func _draw() -> void:
 		var pts: PackedVector2Array = world.map.lanes[id]
 		var half: float = float(world.map.lane_half.get(id, 1800.0))
 		_poly(pts, Palette.with_alpha(Palette.LANE, 0.55), half * 2.0 * k)
-	# Derelict camps, once our team has explored their spot.
+	# Scum dens (the derelict camps), once our team has explored their spot: a hazard-yellow square.
 	for c: Dictionary in world.map.camps:
 		var cp: Vector2 = c["pos"]
-		if vt < 0 or world.vision.is_explored(vt, cp):
+		if vt < 0 or FogOff.is_on() or world.vision.is_explored(vt, cp):
 			var m := to_map(cp)
-			draw_rect(Rect2(m - Vector2(2.5, 2.5), Vector2(5, 5)), Palette.with_alpha(Palette.DERELICT, 0.7), false, 1.0)
+			draw_rect(Rect2(m - Vector2(2.5, 2.5), Vector2(5, 5)), Palette.with_alpha(Palette.SCUM_HAZARD, 0.75), false, 1.0)
 	# Resource nodes: a ring in the holder's colour (grey when nobody holds
 	# it, or when it is the enemy's and we haven't explored it), with one
 	# small square per turret under it.
 	for n: ResourceNode in world.nodes:
 		var holder := n.owner_team()
 		var col := Palette.NEUTRAL
-		if holder >= 0 and (holder == vt or vt < 0 or world.vision.is_explored(vt, n.global_position)):
+		if holder >= 0 and (holder == vt or vt < 0 or FogOff.is_on() or world.vision.is_explored(vt, n.global_position)):
 			col = Palette.team(holder)
 		var m := to_map(n.global_position)
 		# A shared jungle node, and any site being built or locked, shows its
@@ -208,11 +210,13 @@ func _draw_units(vt: int) -> void:
 	var me: Ship = null
 	if world.human != null and world.human.ship != null and is_instance_valid(world.human.ship):
 		me = world.human.ship
+	# The seat of the human pilot whose wing is ringed (-1: nobody's).
+	var my_wing_seat := world.human.slot if world.human != null and world.human_role == "pilot" else -1
 	for u: Unit in world.units:
 		if not u.alive or u.kind == Unit.K_MOTHERSHIP:
 			continue
-		# Skip enemies we can't see now (except structures seen before).
-		if vt >= 0 and u.team != vt and not u.visible_to(vt):
+		# Skip enemies we can't see now (except structures seen before; with No fog on, FogOff, none are skipped).
+		if vt >= 0 and not FogOff.is_on() and u.team != vt and not u.visible_to(vt):
 			if not (u.is_structure() and (u.seen_mask & (1 << vt)) != 0):
 				continue
 		# A feature module may black a contact out (the beacons variant).
@@ -225,6 +229,10 @@ func _draw_units(vt: int) -> void:
 			Unit.K_SHIP:
 				var r := 2.2 + float(Rules.size_index(u.size_class)) * 0.8
 				draw_circle(m, r, col)
+				# Our own wingmen get a thin white ring (their crew's seat number says whose they are).
+				var crew := (u as Ship).profile
+				if my_wing_seat >= 0 and u.team == vt and crew != null and crew.slot >= Squads.CREW_SLOT_BASE and Squads.crew_seat(crew.slot) == my_wing_seat:
+					draw_arc(m, WING_RING_R, 0.0, TAU, 12, Palette.ICE, 1.0, true)
 			Unit.K_MINION:
 				draw_rect(Rect2(m - Vector2(0.75, 0.75), Vector2(1.5, 1.5)), Palette.with_alpha(col, 0.85))
 			Unit.K_TURRET:
@@ -241,8 +249,12 @@ func _draw_units(vt: int) -> void:
 				draw_circle(m, 1.5, Palette.VEIL)
 			Unit.K_MINING_DRONE:
 				draw_circle(m, 1.0, Palette.with_alpha(Palette.ORE, 0.9))
-			Unit.K_MONSTER, Unit.K_SNUB:
-				draw_circle(m, 1.6, Palette.DERELICT)
+			# A Scum ship: a toxic-green dot in a hazard-yellow ring; a Scum Fighter a plain green dot.
+			Unit.K_MONSTER:
+				draw_circle(m, 2.4, Palette.SCUM_HAZARD)
+				draw_circle(m, 1.2, Palette.SCUM_GLOW)
+			Unit.K_SNUB:
+				draw_circle(m, 1.3, Palette.SCUM_GLOW)
 	# Our own ship: a white ring with a line showing where its nose points.
 	if me != null and me.alive:
 		var m := to_map(me.global_position)

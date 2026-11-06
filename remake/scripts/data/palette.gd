@@ -1,7 +1,7 @@
 class_name Palette
 extends RefCounted
 ## WHAT THIS IS: the game's box of colours. Colours. Team colours: Aurelian
-## amber, Vhorr red, derelicts grey-teal; and the colour of danger, a magenta
+## amber, Vhorr red, the Scum (pirates) scraped metal and rust; and the colour of danger, a magenta
 ## that belongs to no team (DANGER). Every screen, ship and effect
 ## takes its colours from here, so the whole game looks like one piece.
 ##
@@ -52,8 +52,29 @@ const VEIL := Color(0.4314, 0.7216, 0.6980)
 const ORE := Color(0.7882, 0.6431, 0.4157)
 ## Grey-blue: things no team holds, such as an unclaimed resource node.
 const NEUTRAL := Color(0.6196, 0.6902, 0.7529)
-## Grey-teal: the derelict monsters' colour (the neutral team).
-const DERELICT := Color(0.55, 0.62, 0.58)
+## The Scum (the pirate faction of the jungle, the neutral team) have one colour family, shared by
+## all their ships, turrets and dens: gunmetal and rust, scraped bare metal, hazard-yellow tape and
+## toxic-green engines. No red (that is Vhorr) and no amber (that is Aurelian).
+## Scraped bare metal: the outline of every Scum ship (it is what flashes when one is hit).
+const SCUM_EDGE := Color(0.72, 0.68, 0.60)
+## Gunmetal: the hull fill of the Scum ships (warmer than Aurelian's blue steel, no red tint).
+const SCUM_IRON := Color(0.19, 0.20, 0.21)
+## Nearly black iron: open frame gaps and the sockets the guns sit on.
+const SCUM_IRON_DARK := Color(0.10, 0.105, 0.115)
+## Rusted plate: the heaviest piece of a ship, and the Scum turrets' cap.
+const SCUM_RUST := Color(0.52, 0.28, 0.12)
+## A strapped-on plate, an engine can or a girder: a warm light grey, so a piece that sticks out
+## past the hull still shows against the dark.
+const SCUM_PLATE := Color(0.36, 0.34, 0.31)
+## Hazard-yellow tape: straps, ticks, the Scum mark and the tips of their guns.
+const SCUM_HAZARD := Color(0.96, 0.80, 0.10)
+## Toxic green: engines, launch lights and beacons. The one colour neither team has.
+const SCUM_GLOW := Color(0.62, 1.0, 0.18)
+## The Scum's shots (and the colour of their kills in the news): a pale acid green.
+const SCUM_BOLT := Color(0.82, 1.0, 0.50)
+## The Scum's own colour as a team (the neutral team's, Palette.team(2)): the same as SCUM_EDGE.
+## (The name is the old one, from when the Scum were "derelict monsters".)
+const DERELICT := SCUM_EDGE
 ## Magenta (the "reddish purple" of a colour-blind-safe set): the colour of danger,
 ## refused and lost states. Reserved: no team, faction or interface highlight colour may
 ## come near it (tests/flash_check.gd fails a colour that does), and it is always drawn with
@@ -82,8 +103,8 @@ const LANE := Color(0.20, 0.25, 0.32)
 const BOLT_H := Color(0.9490, 0.8431, 0.6353)
 ## Vhorr's shots.
 const BOLT_C := Color(0.9412, 0.6275, 0.5647)
-## The neutral monsters' shots.
-const BOLT_N := Color(0.70, 0.85, 0.80)
+## The Scum's shots (the neutral team's): SCUM_BOLT.
+const BOLT_N := SCUM_BOLT
 ## The puffs of a boosting engine (Effects).
 const BOOST := Color(1.0, 0.9647, 0.8745)
 ## The outline of an "ace" ship (a pilot on a kill streak).
@@ -190,7 +211,7 @@ const HIT_WIDTH_GAIN := 1.2
 
 
 ## The colour of team `t`: amber for Aurelian, red for Vhorr, and the
-## derelict grey-teal for anything else.
+## Scum's scraped metal for anything else.
 static func team(t: int) -> Color:
 	if t == Rules.HALCYON:
 		return AMBER

@@ -16,7 +16,8 @@ extends Sprite2D
 ##   - never-seen cells: ALPHA_DARK (0.78).
 ## The picture is redrawn every 0.2 s (5 times a second, as often as
 ## Vision updates each team). A spectator (World.viewer_team -1) sees no
-## fog: the picture is hidden and never redrawn.
+## fog, and neither does anyone while the No fog option is on (FogOff): the picture is hidden and
+## never redrawn. The picture is still made, so the minimap can take it.
 ##
 ## WHO USES IT: it is the "FogView" child node of the World scene.
 ## WorldSetup calls setup(). It reads World.vision (lit, explored, stamp)
@@ -59,14 +60,14 @@ func setup(w: World) -> void:
 	tex = ImageTexture.create_from_image(image)
 	texture = tex
 	scale = Vector2(w.vision.cell, w.vision.cell)
-	visible = w.viewer_team >= 0
+	visible = w.viewer_team >= 0 and not FogOff.is_on()
 
 
 ## Every frame (`dt` seconds): every 0.2 s, paint the picture again from
 ## the viewing team's lit and explored cells.
 func _process(dt: float) -> void:
 	# Step 1: nothing to do for a spectator, or before the next redraw.
-	if world == null or world.viewer_team < 0:
+	if world == null or world.viewer_team < 0 or FogOff.is_on():
 		return
 	_t -= dt
 	if _t > 0.0:

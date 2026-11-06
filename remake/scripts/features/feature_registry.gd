@@ -69,7 +69,9 @@ extends RefCounted
 ##                                        nobody used proves nothing
 ##      The AI must use the mechanic, or the test matches show nothing: put
 ##      that AI rule in the feature too where you can, or else behind
-##      world.features.has("slipstream") in the AI file.
+##      FeatureRegistry.active_for(world, team, "slipstream") in the AI file
+##      (the AI's own team, never a read that is the same for both teams: see
+##      PER-TEAM SWITCHES below).
 ##   5. Check: with --variant=slipstream:on the feature works and its usage
 ##      count is above 0; with every key at its default, tests/det_hash.gd
 ##      prints exactly main's hash lines (normal and --late).
@@ -87,6 +89,20 @@ extends RefCounted
 ## UNKNOWN: ...", when --preset names no preset (CouncilPresets), and,
 ## with "DIFFICULTY UNKNOWN: ...", when --difficulty names no level (Difficulty),
 ## and with "TEAM UNKNOWN: ...", when --team names no team the human can play for.
+##
+## PER-TEAM SWITCHES (for tests of an AI change): --variant-team0=<pairs> and
+## --variant-team1=<pairs> take the same name:value pairs as --variant, but each
+## holds for ONE team's AI only (team 0 = Aurelian, team 1 = Vhorr), so a test
+## can play "the new AI against today's AI". A name that is not in
+## Rules.VARIANT_DEFAULTS stops the match with "TEAM VARIANT UNKNOWN: ..." and
+## exit code 3. A module installs when its key is on match-wide or on for either
+## team. The one read an AI decision may use is is_on_for(team, key), or
+## active_for(world, team, key) when the key also has a module; never is_on(),
+## Game.variant() or world.features.has() for an AI decision. The hooks listed in
+## step 4 above (Game.tunables, minion_scale_hook, push_weight_hooks, tick_hooks)
+## and World.pilot_think_hooks are shared by the whole match and cannot differ by
+## team; unit.incoming_mults is per unit, so it can sit on one team's units only.
+## With no per-team option every read gives the same answer as before.
 
 ## Pairs of variant settings that must not be on together (FUN_PLAN 4.5,
 ## "alternatives of which at most one merges"): [key a, value a, key b,
@@ -210,12 +226,11 @@ const FEATURES := [
 	# mutiny: the pilots of a losing team may vote the admiral out
 	# (MutinyFeature).
 	["mutiny", preload("res://scripts/features/mutiny.gd")],
-	# admiral_sinks: the AI admiral builds Fleet Command and refreshes wards
-	# when its treasury piles up (AdmiralSinksFeature).
+	# admiral_sinks: the AI admiral refreshes wards when its treasury piles up
+	# (AdmiralSinksFeature).
 	["admiral_sinks", preload("res://scripts/features/admiral_sinks.gd")],
-	# fleet_cap: the most bought minions a team may have alive in Fleet
-	# Command mode, 30 by default and 60 in the standard rules
-	# (FleetCapFeature).
+	# fleet_cap: the old limit on bought minions; it loads but nothing reads it
+	# now, the fleet limit is RtsHulls.CAP_IN_FORCE (FleetCapFeature).
 	["fleet_cap", preload("res://scripts/features/fleet_cap.gd")],
 ]
 
@@ -245,6 +260,14 @@ static func install(world: World) -> void:
 		push_error("TEAM UNKNOWN: " + Game.team_error)
 		(Engine.get_main_loop() as SceneTree).quit(3)
 		return
+	# Step 0a4: refuse a match whose per-team switch names no variant
+	# (--variant-team0 / --variant-team1, Game.team_variant_error) the same way, so
+	# a typo never plays a whole test without the switch.
+	if Game.team_variant_error != "":
+		print("TEAM VARIANT UNKNOWN: " + Game.team_variant_error)
+		push_error("TEAM VARIANT UNKNOWN: " + Game.team_variant_error)
+		(Engine.get_main_loop() as SceneTree).quit(3)
+		return
 	# Step 0b: refuse a combination that FUN_PLAN 4.5 rules out (CONFLICTS):
 	# nothing is installed and the game quits with exit code 3.
 	var clash := conflict()
@@ -254,9 +277,11 @@ static func install(world: World) -> void:
 		(Engine.get_main_loop() as SceneTree).quit(3)
 		return
 	for entry: Array in FEATURES:
-		# Step 1: skip a feature whose variant is off (the usual case).
+		# Step 1: skip a feature whose variant is off (the usual case). One that
+		# is on for a single team (a per-team switch) is installed too; its AI
+		# reads then use active_for().
 		var key: String = entry[0]
-		if not is_on(key):
+		if not (is_on(key) or is_on_for(0, key) or is_on_for(1, key)):
 			continue
 		# Step 2: make the feature's object and keep it for the match. A
 		# static install() can be called through the object too, so both
@@ -277,16 +302,41 @@ static func install(world: World) -> void:
 	# Step 5: one line in the log naming the features that are on.
 	if not world.features.is_empty():
 		print("features: %s" % ", ".join(PackedStringArray(world.features.keys())))
+	# (Only with a per-team option: one line saying which team holds what.)
+	if Game.has_team_variants():
+		print("team variants: team0=%s team1=%s" % [Game.team_variants[0], Game.team_variants[1]])
 
 
 ## Is the feature with variant key `key` on for this match? "On" means
 ## Game.variant(key) is not "" (not set at all), not "off" and not the
 ## key's default in Rules.VARIANT_DEFAULTS (a default always means today's
 ## game). A feature with several values reads Game.variant(key) itself to
-## see which one was chosen.
+## see which one was chosen. This is the match-wide answer, the same for both
+## teams; an AI decision asks is_on_for() or active_for() instead.
 static func is_on(key: String) -> bool:
 	var v := Game.variant(key)
 	return v != "" and v != "off" and v != str(Rules.VARIANT_DEFAULTS.get(key, "off"))
+
+
+## Is the variant with key `key` on for team `team`'s AI? The same test as
+## is_on(), but on Game.variant_for(team, key): a value given for that team
+## alone (--variant-team0 / --variant-team1) wins over the match-wide one. With
+## no per-team option it equals is_on(key) for both teams. This is the one read
+## an AI decision may use for a switch that has no module.
+static func is_on_for(team: int, key: String) -> bool:
+	var v := Game.variant_for(team, key)
+	return v != "" and v != "off" and v != str(Rules.VARIANT_DEFAULTS.get(key, "off"))
+
+
+## Is feature `key` installed in `world` and on for team `team`'s AI? With no
+## per-team option it is exactly world.features.has(key) (a cheap test, because
+## the AI's reads run inside every pilot's think); otherwise also is_on_for().
+## Every AI decision that today asks world.features.has(key) asks this, with
+## its own team.
+static func active_for(world: World, team: int, key: String) -> bool:
+	if not Game.has_team_variants():
+		return world.features.has(key)
+	return world.features.has(key) and is_on_for(team, key)
 
 
 ## The first CONFLICTS pair that this match's variants switch on together,

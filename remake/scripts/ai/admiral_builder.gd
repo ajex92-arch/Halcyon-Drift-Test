@@ -59,7 +59,7 @@ func _init(w: World, t: int, l: AdmiralLanes) -> void:
 ## (NodePersistFeature), where the node nearest our own mothership comes
 ## first, so a lost turret near home is rebuilt before a far one.
 func _nodes_in_order() -> Array:
-	if not world.features.is_empty() and world.features.has("node_persist"):
+	if not world.features.is_empty() and FeatureRegistry.active_for(world, team, "node_persist"):
 		return world.features["node_persist"].call("nodes_by_distance", team)
 	return world.nodes
 
@@ -88,14 +88,9 @@ func rebuy_lost_sites(ts: TeamState) -> void:
 ## Rebuild each of our defense posts that is ready to be rebuilt (destroyed,
 ## its timer run out, no enemy ships close), while we have its price. The lane
 ## is silent until we do, so this comes before the lane turrets in the admiral's
-## think. AdmiralCommand.post_blocker says whether a post may be rebuilt. A team
-## that owns Fleet Command rebuilds none: its free waves have stopped, so a post
-## would launch nothing.
+## think. AdmiralCommand.post_blocker says whether a post may be rebuilt.
 func rebuild_posts(ts: TeamState) -> void:
 	var cmd := world.command
-	# A post only launches free waves, and a team with Fleet Command has none.
-	if world.minion_director.controlled(team):
-		return
 	for lane: String in MapLayout.LANE_ORDER:
 		if cmd.post_blocker(team, lane) != "":
 			continue

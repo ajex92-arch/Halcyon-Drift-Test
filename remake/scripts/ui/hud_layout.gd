@@ -13,7 +13,9 @@ extends RefCounted
 ##   - the gear slots go from one row of 6 to two rows of 3 when the window
 ##     is too narrow for the gear slots, the ship readout and the minimap in
 ##     one row, and the ship readout is kept between the gear slots and the
-##     minimap;
+##     minimap; the seat bar (the button block, SeatBar) takes its room right of the
+##     readout (in a window too narrow it goes above the minimap) and shows while no
+##     big panel is open;
 ##   - while a big panel (hangar, Admiral board, help, scoreboard) is open,
 ##     the pieces it would cover are hidden instead of peeking out from under
 ##     it: the kill feed, the big message, the minimap and the earnings log.
@@ -59,7 +61,7 @@ const KEYBAR_ROOM := 76.0
 ## ship readout (toast_spot()).
 const TOAST_LIFT := 6.0
 ## How far (pixels) the pop-up hint sits above the bottom edge in flight: it
-## stays clear of the ship readout.
+## stays clear of the ship readout, plus the wing strip's height while the strip shows.
 const TOAST_LIFT_FLIGHT := 150.0
 ## The narrowest (pixels) a pop-up hint or big message is made, however
 ## little room there is; a narrower message would be a tall thin column.
@@ -90,6 +92,7 @@ func apply() -> void:
 	hud.minimap.visible = not panel
 	hud.slots.visible = not table
 	hud.me_panel.earn_box.visible = not panel
+	hud.seat_bar.visible = hud.seat_bar.wanted() and not panel
 	if table:
 		hud.status.visible = false
 	# Step 2: the top bar clears the "me" panel.
@@ -131,14 +134,17 @@ func panel_bottom(strip: bool) -> float:
 ## Where the pop-up hint's box sits: x is how far (pixels) its centre is to
 ## the right of the window's middle, y how far its bottom edge is above the
 ## window's bottom. With no big panel open it is centred, TOAST_LIFT_FLIGHT
-## up, clear of the ship readout. While a big panel is open it drops into the
+## up (plus the wing strip's height while the strip shows), clear of the ship readout.
+## While a big panel is open it drops into the
 ## strip under the panel, TOAST_LIFT up: centred when the ship readout is not
 ## showing; with the readout showing (the panel stops above it, see
 ## panel_bottom()), in the bottom-right corner between the readout and the
 ## window's edge, where the minimap is when no panel is open.
 func toast_spot(panel_open: bool) -> Vector2:
 	if not panel_open:
-		return Vector2(0.0, TOAST_LIFT_FLIGHT)
+		# The wing strip, when it shows, sits just above the readout: the hint goes above it.
+		var strip := WingStrip.CHIP_H + WingStrip.LIFT if hud.wing_strip != null and hud.wing_strip.visible else 0.0
+		return Vector2(0.0, TOAST_LIFT_FLIGHT + strip)
 	if not hud.status.visible:
 		return Vector2(0.0, TOAST_LIFT)
 	# The corner runs from GAP right of the readout to GAP in from the edge,
@@ -196,15 +202,25 @@ func _place_top_bar(vp: Vector2) -> void:
 ## Place the gear slots, the ship readout and the minimap along the bottom.
 ## The minimap and the gear slots stay in their corners. The ship readout is
 ## centred, then kept between them. If the three do not fit in one row, the
-## gear slots shrink to two rows of three first.
+## gear slots shrink to two rows of three first. The seat bar (the button block)
+## sits GAP right of the readout, with the same bottom edge; the room it needs
+## (SeatBar.W and a gap) is counted with the rest, and in a window still too
+## narrow for it the bar goes above the minimap instead. It keeps its place beside
+## the readout while the readout is hidden (no live ship).
 func _place_bottom_row(vp: Vector2) -> void:
 	var status_w := hud.status.get_combined_minimum_size().x
 	var map_w := hud.minimap.get_combined_minimum_size().x
-	var need := GAP + hud.slots.wide_width() + GAP + status_w + GAP + map_w + GAP
+	var bar_room := SeatBar.W + GAP
+	var need := GAP + hud.slots.wide_width() + GAP + status_w + GAP + map_w + GAP + bar_room
 	hud.slots.set_compact(vp.x < need)
 	var low := hud.slots.offset_left + hud.slots.get_combined_minimum_size().x + GAP
-	var high := vp.x - map_w - 2.0 * GAP - status_w
+	var high := vp.x - map_w - 2.0 * GAP - status_w - bar_room
 	_shift_centered(hud.status, vp, status_w, clampf(vp.x * 0.5 - status_w * 0.5, low, maxf(low, high)))
+	var left := _readout_right(vp) + GAP
+	var spot := Vector2(left, vp.y - GAP - SeatBar.H)
+	if left + SeatBar.W > vp.x - map_w - 2.0 * GAP + 0.5:
+		spot = Vector2(vp.x - GAP - SeatBar.W, vp.y - 2.0 * GAP - hud.minimap.get_combined_minimum_size().y - SeatBar.H)
+	hud.seat_bar.place(spot)
 
 
 ## Move control `c`, which is anchored to the middle of an edge and `w`

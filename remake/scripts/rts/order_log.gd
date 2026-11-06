@@ -8,7 +8,8 @@ extends RefCounted
 ##
 ## HOW IT WORKS: the lines are plain UTF-8 text, words separated by single spaces:
 ##   log v1 seed=<n> preset=<name> variants=<json> role=<role> team=<n> rocks=<n> nodes=<n>
-##       camps=<n> route_nodes=<n> wings=off cwings=0 fp0=<units>,<hash8> [build=<text>]
+##       camps=<n> route_nodes=<n> wings=<off or hull,hull,hull> cwings=<0 or 1> fp0=<units>,<hash8> [build=<text>]
+##   (wings= is the wing the human's seat gets, cwings= is 1 when the computer pilots' seats get one: Squads)
 ##   o <apply_tick> <team> <seat> <h|a|t> <id> <KIND> <json> <ok or reason code>   (see Order)
 ##   h <tick> <units> <hash8>      the fingerprint at the top of that tick, every 300 ticks
 ##   end <tick> <units> <hash8>    the last line, written once
@@ -78,7 +79,7 @@ static func make_header(w: World) -> String:
 		"role=%s" % w.human_role, "team=%d" % w.human_team,
 		"rocks=%d" % w.asteroids.pos.size(), "nodes=%d" % w.nodes.size(),
 		"camps=%d" % w.map.camps.size(), "route_nodes=%d" % w.map.route.node_count(),
-		"wings=off", "cwings=0",
+		"wings=%s" % Squads.wings_text(), "cwings=%d" % Squads.cwings_flag(),
 		"fp0=%s" % fingerprint_pair(w),
 	])
 	var build: Variant = Game.opt("build")

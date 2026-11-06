@@ -35,6 +35,11 @@ extends RefCounted
 ## (A hull without a booster can get one from the Boost Cell module. ShipStats
 ## then uses its own push and cap numbers instead of this hull's boost_mul and
 ## boost_cap; boost_drain is still used.)
+## The numbers above are the table's. A small craft (size class 0 in
+## Ships.HULLS: Scout, Fighter, Lance Fighter, Bomber) flies at
+## Rules.SMALL_CRAFT_PACE (0.8) of "max", "accel", "reverse" and "strafe":
+## ShipStats multiplies the pace in with gear and research, so the boost
+## multipliers, the turning numbers and Fighter Drive keep their meaning.
 ##
 ## The four big classes (corvettes, frigates, destroyers, battlecruisers) also
 ## have a "line" entry: the numbers of the ships-of-the-line flight model
@@ -165,9 +170,11 @@ static func row(id: String) -> Dictionary:
 
 
 ## The top speed of hull `id`, in world units per second, before gear and
-## upgrades. PilotAI uses it to judge whether a hyperspace jump saves time.
+## upgrades: the table's "max", times the small craft's pace
+## (Rules.SMALL_CRAFT_PACE) for a small craft. PilotAI uses it to judge whether
+## a hyperspace jump saves time.
 static func top_speed(id: String) -> float:
-	return float(TABLE[id]["max"])
+	return float(TABLE[id]["max"]) * Rules.craft_pace(Ships.size_of(id))
 
 
 ## Does hull `id` have a "line" entry, the numbers of the ships-of-the-line

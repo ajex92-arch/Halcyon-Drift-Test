@@ -316,7 +316,7 @@ func update_docked(dt: float) -> void:
 func _hyperspace_bay() -> Unit:
 	# Feature hook (Forward Redeploy): it chooses a bay or a turret near the
 	# pilot's destination itself (RedeployFeature.pick_site).
-	if world.features.has("redeploy"):
+	if FeatureRegistry.active_for(world, profile.team, "redeploy"):
 		return (world.features["redeploy"] as RedeployFeature).pick_site(self)
 	# Step 1: we need our mothership and the module.
 	var ts := world.teams[profile.team]

@@ -8,7 +8,7 @@ extends Node
 ## game's table), and checks: the preset the game reports; every rule variant of
 ## the match against that table (nothing else may differ from
 ## Rules.VARIANT_DEFAULTS); which feature modules the match installed; and the
-## Fleet Command limit (30 in the old rules, 60 otherwise). Then it builds the
+## old fleet_cap key (no preset names it any more). Then it builds the
 ## start screen as a new run would and checks that no rule-set row is there (no
 ## text about rule sets, presets or the council, the difficulty row right under
 ## the rules text, both seat buttons usable), builds it again with an unknown
@@ -32,11 +32,11 @@ extends Node
 
 ## What "within" switches on: variant -> value (the rest stay at their defaults).
 const WITHIN := {"minion_cap": "on", "lance_role": "on", "bomber_role": "both", "admiral_sinks": "fleet",
-	"redeploy": "on", "gear_mk2": "on", "fleet_cap": "60"}
+	"redeploy": "on", "gear_mk2": "on"}
 ## What "pick", the standard rules, switches on: "within", persistent nodes and
 ## small ships that leave the enemy mothership alone.
 const PICK := {"minion_cap": "on", "lance_role": "on", "bomber_role": "both", "admiral_sinks": "fleet",
-	"redeploy": "on", "gear_mk2": "on", "fleet_cap": "60", "node_persist": "on", "ms": "nosmall"}
+	"redeploy": "on", "gear_mk2": "on", "node_persist": "on", "ms": "nosmall"}
 ## Words a player must not meet on the start screen or in How to play: they
 ## would ask for a choice of rules.
 const FORBIDDEN := "(?i)rule.?set|preset|council|within requirements"
@@ -67,8 +67,8 @@ func _check(what: String, ok: bool, detail: String = "") -> void:
 		fails += 1
 
 
-## The preset, the variants, the installed features and the Fleet Command limit
-## of the match.
+## The preset, the variants, the installed features and the absence of the old
+## fleet_cap key of the match.
 func _check_match() -> void:
 	var asked := str(Game.opt("preset", ""))
 	var want := asked if asked != "" else "pick"
@@ -94,9 +94,12 @@ func _check_match() -> void:
 			missing.append("%s %s" % [key, "missing" if on else "installed"])
 	_check("the feature modules are the preset's", missing.is_empty(), "; ".join(missing))
 	if Game.opt("variant") == null:
-		var cap := Minions.control_cap()
-		var want_cap := 60 if table.has("fleet_cap") else 30
-		_check("the Fleet Command limit is %d" % want_cap, cap == want_cap, "it is %d" % cap)
+		var named := false
+		for preset: String in CouncilPresets.VARIANTS:
+			if str(CouncilPresets.VARIANTS[preset]).contains("fleet_cap"):
+				named = true
+		_check("no preset names the old fleet_cap key", not named)
+		_check("the old fleet limit is its default and nothing tuned it", Minions.control_cap() == Minions.CONTROL_CAP, "it is %d" % Minions.control_cap())
 
 
 ## A start screen as a new run would build it (the settings file is not read),
@@ -106,6 +109,7 @@ func _check_start_screen(blocked: bool) -> void:
 	Game._difficulty_open = false
 	Game._team_open = false
 	Game._unlock_open = false
+	Game._fog_off_open = false
 	var saved_error := Game.preset_error
 	if blocked:
 		Game.preset_error = "unknown preset \"zz\" (the presets are: none, within, pick)"

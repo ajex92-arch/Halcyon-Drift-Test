@@ -7,7 +7,7 @@ extends RefCounted
 ##
 ## HOW IT WORKS: there are three feats, each claimed once per match by the
 ## first team to do it: the first pilot kill, the first turret destroyed and
-## the first derelict camp cleared. Each claim puts a banner in the news feed
+## the first Scum den (derelict camp) cleared. Each claim puts a banner in the news feed
 ## and shows on the scoreboard (a note after the team's heading). At 14:00
 ## the team that holds two or more feats gets the "Vanguard": 300 credits to
 ## each of its pilots (all twelve seats, whether flying or not) and +10% hull
@@ -30,7 +30,7 @@ const VANGUARD_HULL := 1.1
 ## Seconds the Vanguard's hull bonus lasts: 6 minutes.
 const VANGUARD_TIME := 360.0
 ## The feats: id -> the words for the banner and the scoreboard.
-const NAMES := {"kill": "first pilot kill", "turret": "first turret destroyed", "camp": "first camp cleared"}
+const NAMES := {"kill": "first pilot kill", "turret": "first turret destroyed", "camp": "first Scum den cleared"}
 
 ## The match.
 var world: World

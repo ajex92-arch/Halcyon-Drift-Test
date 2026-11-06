@@ -1,16 +1,16 @@
 class_name Jungle
 extends RefCounted
-## WHAT THIS IS: the numbers for the jungle monsters. The "jungle" is the
-## rocky space between the lanes; its monsters are derelict hulls (old,
-## abandoned ships) with automated turrets and, for the bigger camp,
-## automated snub fighters. Killing one pays the pilots who fought it.
-## DESIGN.md A10.
+## WHAT THIS IS: the numbers for the Scum, the pirates of the jungle. The "jungle" is the
+## rocky space between the lanes; the Scum live in dens there, flying ships built from the
+## wrecks of both fleets (called "derelicts" in the code): Scum Raiders with automated guns
+## and, for the bigger den, Scum Carriers with automated Scum Fighters. Killing one pays the
+## pilots who fought it a bounty. DESIGN.md A10.
 ##
-## HOW IT WORKS: CAMPS describes the two kinds of monster camp, SNUB the
-## small fighters a Carrier launches. Monsters are neutral (team 2): they
+## HOW IT WORKS: CAMPS describes the two kinds of Scum den, SNUB the
+## small fighters a Scum Carrier launches. The Scum are neutral (team 2): they
 ## fight whoever attacks them or comes too close, and reset when attackers
 ## leave the leash (the circle around their home spot that they never leave
-## to chase). A reset monster stops shooting and heals back up. Where the
+## to chase). A reset Scum ship stops shooting and heals back up. Where the
 ## camps are on the map is written in MapLayout.CAMPS.
 ##
 ## Tuning target (playtest 2026-10-13): a lone Fighter should beat a
@@ -21,7 +21,7 @@ extends RefCounted
 ##
 ## WHO USES IT: JungleDirector spawns the camps and brings them back after
 ## "respawn" seconds; World makes the units (WorldSpawner); Derelict (the
-## monster) and SnubFighter read their numbers; Economy pays the reward.
+## Scum ship) and SnubFighter read their numbers; Economy pays the bounty.
 
 ## The two kinds of camp: camp type -> its facts. Fields:
 ##   label       the name players see
@@ -39,33 +39,35 @@ extends RefCounted
 ##   snub_every  (Carrier only) seconds between snub launches (12 if
 ##               missing)
 const CAMPS := {
-	"gunship": {"label": "Derelict Gunship", "hull": 600.0, "radius": 50.0, "turrets": 2, "weapon": "monster_gun",
+	"gunship": {"label": "Scum Raider", "hull": 600.0, "radius": 50.0, "turrets": 2, "weapon": "monster_gun",
 		"aggro": 700.0, "leash": 2500.0, "reward": 110.0, "respawn": 80.0, "snubs": 0},
-	"carrier": {"label": "Derelict Carrier", "hull": 1000.0, "radius": 70.0, "turrets": 1, "weapon": "monster_gun",
+	"carrier": {"label": "Scum Carrier", "hull": 1000.0, "radius": 70.0, "turrets": 1, "weapon": "monster_gun",
 		"aggro": 700.0, "leash": 2500.0, "reward": 200.0, "respawn": 120.0, "snubs": 2, "snub_every": 12.0},
 	# battleship and dreadnought (fork teamfights_jungle): only made under the
 	# "salvage_core" and "epic" variants (SalvageCoreFeature, EpicNeutralFeature);
 	# the map never lists them. "pack" = a team job: a lone AI jungler leaves it
 	# alone (the feature's allow_camp()).
-	"battleship": {"label": "Derelict Battleship", "hull": 4000.0, "radius": 95.0, "turrets": 3, "weapon": "battleship_gun",
+	"battleship": {"label": "Scum Battleship", "hull": 4000.0, "radius": 95.0, "turrets": 3, "weapon": "battleship_gun",
 		"aggro": 800.0, "leash": 2500.0, "reward": 450.0, "respawn": 300.0, "snubs": 3, "snub_every": 10.0, "pack": true},
-	"dreadnought": {"label": "Derelict Dreadnought", "hull": 9000.0, "radius": 130.0, "turrets": 4, "weapon": "dreadnought_gun",
+	"dreadnought": {"label": "Scum Dreadnought", "hull": 9000.0, "radius": 130.0, "turrets": 4, "weapon": "dreadnought_gun",
 		"aggro": 800.0, "leash": 2500.0, "reward": 0.0, "respawn": 360.0, "snubs": 4, "snub_every": 12.0, "pack": true},
 }
 
-## The snub fighter a Carrier launches. Fields: label, hull, speed [world
-## units per second], accel [world units per second, per second], turn
-## [radians per second], radius [world units], weapon (weapon id).
-## Its "vision" and "leash" are not read at the moment: a snub follows its
-## carrier's fight and flies home when that fight ends (SnubFighter).
-const SNUB := {"label": "Snub Fighter", "hull": 45.0, "speed": 520.0, "accel": 520.0, "turn": 3.2, "radius": 8.0,
-	"weapon": "snub_gun", "vision": 900.0, "leash": 2200.0}
+## The Scum Fighter a Scum Carrier launches. Fields: label, size (size class, 0
+## small), hull, speed [world units per second], accel [world units per second,
+## per second], turn [radians per second], radius [world units], weapon (weapon
+## id). A small craft flies at Rules.SMALL_CRAFT_PACE of the speed and accel
+## written here (SnubFighter). Its "vision" and "leash" are not read at the
+## moment: a snub follows its carrier's fight and flies home when that fight
+## ends (SnubFighter).
+const SNUB := {"label": "Scum Fighter", "size": 0, "hull": 45.0, "speed": 520.0, "accel": 520.0, "turn": 3.2,
+	"radius": 8.0, "weapon": "snub_gun", "vision": 900.0, "leash": 2200.0}
 
 ## Last hit earns this much extra on top of the damage split.
-## (0.25 = 25% of the monster's reward, for the pilot who made the killing
+## (0.25 = 25% of the bounty, for the pilot who made the killing
 ## blow, if they are one of the helpers who share the reward.)
 const LAST_HIT_BONUS := 0.25
-## Monsters regenerate this fraction of hull per second once reset.
-## (0.2 = 20% of their full hull per second. A monster resets after 6
+## The Scum regenerate this fraction of hull per second once reset.
+## (0.2 = 20% of their full hull per second. A Scum ship resets after 6
 ## seconds without a fight.)
 const RESET_REGEN := 0.2

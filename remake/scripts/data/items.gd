@@ -79,7 +79,7 @@ const ITEMS := {
 	"helm_visor": {"label": "HUD Visor", "category": "helmet", "price": 400.0, "stats": {"vision_pct": 0.15}, "blurb": "+15% vision range."},
 	"helm_target": {"label": "Targeting Helmet", "category": "helmet", "price": 950.0, "stats": {"fire_rate_pct": 0.08, "damage_pct": 0.03}, "blurb": "+8% fire rate, +3% damage."},
 	"helm_neural": {"label": "Neural-Link Helmet", "category": "helmet", "price": 1100.0, "stats": {"redirect_cd_pct": -0.30, "special_cd_pct": -0.15}, "blurb": "Shield focus and energy routing recover 30% faster; ability cooldown -15%."},
-	"helm_salvager": {"label": "Salvager's Helm", "category": "helmet", "price": 650.0, "stats": {"income": 0.4, "bounty_pct": 0.15}, "blurb": "+0.4 credits/s; +15% from kills, minions and monsters."},
+	"helm_salvager": {"label": "Salvager's Helm", "category": "helmet", "price": 650.0, "stats": {"income": 0.4, "bounty_pct": 0.15}, "blurb": "+0.4 credits/s; +15% from kills, minions and Scum bounties."},
 	# Sticks: handling.
 	"stick_precision": {"label": "Precision Stick", "category": "stick", "price": 450.0, "stats": {"turn_pct": 0.10}, "blurb": "+10% turn rate."},
 	"stick_hotas": {"label": "Twin-Grip HOTAS", "category": "stick", "price": 900.0, "stats": {"turn_pct": 0.07, "strafe_pct": 0.12}, "blurb": "+7% turn rate, +12% lateral thrust."},
