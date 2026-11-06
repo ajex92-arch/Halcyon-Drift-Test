@@ -1,0 +1,216 @@
+Godot Engine v4.7.2.stable.official.ed1daf0bf - https://godotengine.org
+preset: pick = minion_cap:on,lance_role:on,bomber_role:both,admiral_sinks:fleet,redeploy:on,gear_mk2:on,node_persist:on,ms:nosmall
+difficulty: none (no human seat), both teams earn x1.00
+features: ms, minion_cap, lance_role, bomber_role, redeploy, gear_mk2, node_persist, admiral_sinks
+match: role=spectator variants={ "retreat": "systems_failure", "escort_wing": "extra", "siege_fix": "off", "breach": "off", "ms_cap": "off", "attrition": "off", "surrender": "off", "breach_extra": "off", "ms_soft": "off", "waves_late": "off", "lanespawn": "off", "eff": "off", "ms": "nosmall", "minion_cap": "on", "escort_pd": "off", "lance_role": "on", "routing_payoff": "off", "jungle_big": "off", "zoom_max": "off", "bomber_role": "both", "slipstream": "off", "redeploy": "on", "recall": "off", "respawn": "off", "respawn_site": "off", "bay_shop": "off", "respawn_curve": "off", "bayA": "off", "econ": "off", "bounties": "off", "gear_mk2": "on", "buyback": "off", "doctrine": "off", "catchup": "off", "pilot_mining": "off", "ms_spend_weak": "off", "morale": "off", "group_late": "off", "salvage_core": "off", "jungle_scale": "off", "node_persist": "on", "epic": "off", "beacons": "off", "camp4": "off", "feats": "off", "assets": "off", "orders": "off", "fortify": "off", "admiral_smart": "off", "ms_move": "off", "home_vision": "off", "mutiny": "off", "admiral_sinks": "fleet", "fleet_cap": "30", "ai_calib": "off" } rocks=3749 nodes=26 camps=14 route_nodes=611
+hash t=5 58 units, c55e3ded
+hash t=10 60 units, b62e167e
+hash t=15 62 units, 3d4885df
+hash t=20 62 units, 62362192
+hash t=25 62 units, f695210e
+hash t=30 62 units, 70afaa61
+hash t=35 64 units, c8a4a45f
+hash t=40 64 units, 9e92b4f3
+hash t=45 70 units, bd1be0ff
+hash t=50 106 units, fa715b18
+hash t=55 106 units, 3eb0b4ff
+hash t=60 106 units, 25d1553c
+hash t=65 106 units, 40d1784b
+hash t=70 103 units, ce5bc405
+hash t=75 96 units, 98cf86a8
+hash t=80 96 units, d5592cb9
+hash t=85 128 units, 72c8fcda
+hash t=90 122 units, 452ff61d
+hash t=95 122 units, 7c69fded
+hash t=100 121 units, 55b0444b
+hash t=105 113 units, 9cc56e4a
+hash t=110 102 units, 2a11fef4
+hash t=115 99 units, 070188b1
+hash t=120 127 units, 4bd874b1
+hash t=125 125 units, 9bf9035d
+FIELD_TRIP t=92.5 team=0 reason=pilots_down dur=33.0 result=docked hull=fighter resupplies=0
+hash t=130 118 units, 326baf06
+hash t=135 117 units, ea1c0cc9
+hash t=140 111 units, 31590b76
+hash t=145 100 units, 8e460d56
+hash t=150 97 units, 16dbffec
+hash t=155 126 units, 5b7ba861
+hash t=160 122 units, 6178186f
+hash t=165 121 units, 99081251
+hash t=170 117 units, 57768600
+hash t=175 113 units, 368f91a6
+hash t=180 115 units, 18202fad
+hash t=185 112 units, 8063abe7
+hash t=190 140 units, fc21522c
+hash t=195 133 units, 248b4f87
+hash t=200 127 units, 6204da93
+hash t=205 120 units, 16419c85
+hash t=210 115 units, 5e387520
+hash t=215 110 units, 796b2a37
+hash t=220 109 units, 9d19d63e
+hash t=225 138 units, 5dac5d43
+hash t=230 131 units, 247e953f
+hash t=235 127 units, 72db6902
+YARD t=235 team=0 buys Fighter x3 (450): the fleet is 0 of 4 wanted by 3:55, the treasury 856, 406 to spare, the income 24 a second
+hash t=240 119 units, 95b35104
+hash t=245 120 units, b6800260
+hash t=250 118 units, 7e250486
+hash t=255 114 units, 8a152e26
+YARD t=256 team=0 repeats Fighter x3 (450): Fighter squadrons are on repeat while the fleet is below its target
+hash t=260 147 units, ac6b2930
+hash t=265 138 units, b4e50e52
+hash t=270 137 units, 1a68db92
+hash t=275 136 units, 4b509320
+hash t=280 134 units, 4f106dc1
+hash t=285 130 units, 5b45e990
+hash t=290 128 units, 711eebfe
+hash t=295 154 units, 014489ee
+YARD t=299 team=0 holds Corvette Facility (900): the treasury 253 and the income 21 a second do not pay it within 20 seconds, so the next item may start
+hash t=300 149 units, 6ec5b4ea
+YARD t=303 team=1 buys Fighter x3 (450): the fleet is 0 of 5 wanted by 5:03, the treasury 598, 148 to spare, the income 34 a second
+hash t=305 141 units, fcb2f04a
+YARD t=310 team=1 buys Fighter x3 (450): the fleet is 3 of 5 wanted by 5:10, the treasury 599, 149 to spare, the income 41 a second
+hash t=310 135 units, d6a54f87
+hash t=315 133 units, 4b7831e4
+hash t=320 127 units, a2c79137
+hash t=325 136 units, 4b2225d4
+hash t=330 159 units, eeb487f2
+FIELD_TRIP t=295.5 team=0 reason=pilots_down dur=35.0 result=docked hull=fighter resupplies=0
+hash t=335 154 units, d4e776b2
+hash t=340 151 units, c5aee2bd
+hash t=345 145 units, 6c5100cb
+hash t=350 143 units, 8cbbb6a9
+hash t=355 138 units, d08ffb7c
+hash t=360 139 units, 24cde1db
+hash t=365 165 units, 9c7d59ac
+hash t=370 155 units, 72bcfadd
+YARD t=373 team=0 goes on with Corvette Facility (900): the treasury 170 pays it now or nothing else waits
+hash t=375 149 units, 72ee6cf0
+hash t=380 141 units, 0388ab27
+hash t=385 139 units, cacb3060
+hash t=390 138 units, e4947827
+hash t=395 139 units, 7c95abac
+hash t=400 163 units, af06d9b8
+hash t=405 153 units, 62923863
+hash t=410 149 units, 87e24bda
+hash t=415 149 units, 61f9109d
+hash t=420 150 units, 5c647b66
+FIELD_TRIP t=406.5 team=0 reason=pilots_down dur=18.0 result=destroyed hull=fighter resupplies=0
+hash t=425 148 units, 9225a4f1
+hash t=430 143 units, 5d462039
+YARD t=433 team=1 buys Lance Fighter x3 (900): the fleet is 6 of 7 wanted by 7:13, the treasury 1226, 1226 to spare, the income 48 a second
+FIELD_TRIP t=391.0 team=1 reason=pilots_down dur=44.0 result=docked hull=fighter resupplies=0
+hash t=435 160 units, 9b507378
+hash t=440 156 units, 5ce62ec1
+hash t=445 149 units, f18951c3
+hash t=450 150 units, ec4a7a75
+FIELD_TRIP t=444.5 team=0 reason=pilots_down dur=7.0 result=destroyed hull=fighter resupplies=0
+hash t=455 151 units, 3a1e0bbd
+hash t=460 148 units, 11f201e7
+hash t=465 145 units, 384a709e
+hash t=470 163 units, a68a0476
+hash t=475 154 units, ee528cdf
+hash t=480 155 units, 089da1d1
+hash t=485 153 units, 04481182
+hash t=490 149 units, 43eb07f6
+hash t=495 147 units, b82faf49
+hash t=500 141 units, 0f91eae7
+FIELD_TRIP t=467.5 team=0 reason=pilots_down dur=33.0 result=docked hull=fighter resupplies=1
+hash t=505 154 units, 95655c9b
+hash t=510 145 units, cb844bc2
+hash t=515 141 units, 078e78ae
+hash t=520 143 units, 356484d9
+hash t=525 141 units, 9dda9ab1
+hash t=530 142 units, 93da7c11
+hash t=535 142 units, 2af53405
+hash t=540 160 units, 433dd1ae
+hash t=545 158 units, e69e867b
+YARD t=549 team=1 buys Logistics Corvette x1 (500): the fleet is 9 of 10 wanted by 9:09, the treasury 504, 229 to spare, the income 40 a second
+hash t=550 151 units, 4d6637f7
+FIELD_TRIP t=508.0 team=1 reason=pilots_down dur=44.0 result=docked hull=fighter resupplies=0
+YARD t=554 team=0 holds Frigate Chassis (900): the treasury 488 and the income 18 a second do not pay it within 20 seconds, so the next item may start
+hash t=555 146 units, 6dfa7edf
+YARD t=555 team=0 goes on with Frigate Chassis (900): the treasury 291 pays it now or nothing else waits
+hash t=560 145 units, 27134559
+hash t=565 143 units, deb5d27d
+hash t=570 145 units, 61125d8d
+hash t=575 167 units, bad91f22
+hash t=580 158 units, b3087a99
+hash t=585 154 units, 519fb853
+hash t=590 148 units, 48604812
+hash t=595 146 units, 70b67026
+FIELD_TRIP t=516.5 team=0 reason=pilots_down dur=83.0 result=docked hull=fighter resupplies=0
+hash t=600 144 units, f4ec0cd4
+WARN pacing: no fight of 10 or more ships in the first 10:00 (biggest: 8 ships at 8:33)
+hash t=605 142 units, c779c919
+hash t=610 161 units, 085a7659
+hash t=615 153 units, d7acb25b
+hash t=620 152 units, 9f25c9e0
+hash t=625 155 units, 66e2d8ae
+hash t=630 150 units, 49faf9f8
+hash t=635 150 units, 2c35915b
+hash t=640 148 units, 0b4c406e
+hash t=645 159 units, df65a959
+hash t=650 157 units, 85c7c95d
+FIELD_TRIP t=601.0 team=1 reason=pilots_down dur=53.0 result=docked hull=flak resupplies=0
+hash t=655 153 units, 3b950168
+hash t=660 149 units, 99a13293
+hash t=665 150 units, 5e1b44ec
+hash t=670 146 units, aebf35cc
+hash t=675 146 units, cbe3578a
+hash t=680 161 units, ffe9e37c
+hash t=685 157 units, dca22ad8
+hash t=690 149 units, 97f18a60
+hash t=695 148 units, 7dd58d97
+hash t=700 150 units, 855a5bff
+hash t=705 149 units, a86c1385
+hash t=710 147 units, 53472abe
+hash t=715 165 units, e2c0fc5c
+hash t=720 155 units, 46ecb3fd
+hash t=725 153 units, ef9133b4
+hash t=730 151 units, 3463f093
+FIELD_TRIP t=698.0 team=1 reason=pilots_down dur=33.0 result=docked hull=flak resupplies=0
+hash t=735 149 units, ee906414
+hash t=740 147 units, d62fe43b
+hash t=745 148 units, fe5b7225
+hash t=750 167 units, da8ea5ed
+YARD t=753 team=1 buys Ion Frigate x1 (1250): the fleet is 10 of 13 wanted by 12:33, the treasury 1991, 1991 to spare, the income 56 a second
+hash t=755 159 units, 2027b42b
+hash t=760 155 units, a79c3527
+hash t=765 150 units, 90621f94
+YARD t=768 team=1 buys Fighter x3 (450): the fleet is 11 of 14 wanted by 12:48, the treasury 1146, 1146 to spare, the income 56 a second
+hash t=770 145 units, 93a304e3
+hash t=775 147 units, 810b3e85
+hash t=780 149 units, b23f3299
+hash t=785 161 units, ab92741a
+hash t=790 164 units, fd4eb381
+hash t=795 163 units, a35b66b3
+hash t=800 158 units, 85722253
+hash t=805 159 units, e67b08b8
+hash t=810 155 units, 8ddb65d7
+hash t=815 158 units, 076ea905
+hash t=820 174 units, 4ff0a0ad
+hash t=825 167 units, 30d536d1
+hash t=830 164 units, c1479852
+hash t=835 162 units, 93588c1c
+FIELD_TRIP t=817.5 team=0 reason=pilots_down dur=18.0 result=destroyed hull=fighter resupplies=0
+YARD t=838 team=0 buys Fighter x3 (450): the fleet is 0 of 14 wanted by 13:58, the treasury 1000, 300 to spare, the income 27 a second
+hash t=840 159 units, 2bc8e553
+t=14:00  sim 230.6 ms/sim-s  worst tick 12.6 ms  units=159 ships=23 minions=51 drones=27 projectiles=24 fps=219
+  Halcyon tr=555 ore=26099 fac=4 tech=9 turrets=5 killed_turrets=1 K/D=4/47 avg_cr=1081 ms=35% sh=0% flying={ "fighter": 2, "lance": 2, "bomber": 1 }
+  Cinder tr=585 ore=32399 fac=8 tech=20 turrets=8 killed_turrets=7 K/D=9/27 avg_cr=1767 ms=100% sh=100% flying={ "lance": 5, "fighter": 9, "logistics": 1, "flak": 2, "ion": 1 }
+hash t=845 158 units, 9e190925
+hash t=850 161 units, aee4ce65
+hash t=855 181 units, 8017f189
+hash t=860 175 units, 37f6acad
+FIELD_TRIP t=838.0 team=1 reason=pilots_down dur=23.0 result=docked hull=flak resupplies=0
+hash t=865 166 units, 43ce0dba
+hash t=870 163 units, 8d3f822d
+hash t=875 159 units, 5aa3c009
+hash t=880 154 units, 95e8a0dc
+hash t=885 156 units, e27500bd
+hash t=890 179 units, 9be633e2
+YARD t=893 team=0 repeats Fighter x3 (450): Fighter squadrons are on repeat while the fleet is below its target
+hash t=895 179 units, 4c7d2d8c
+hash t=900 170 units, 3c8afac8
+DET_HASH END t=900 170 units, 3c8afac8
