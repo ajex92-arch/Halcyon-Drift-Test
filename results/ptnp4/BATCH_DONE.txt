@@ -1,0 +1,12 @@
+batch: ptnp4
+run: 42403783585
+finished: 2026-11-07T18:57:22Z
+runs: 1
+jobs: 1
+expected: 3
+present: 3
+missing: 0
+failed_jobs: 0
+filled_by_collect: 0
+matches_nonzero_exit: 0
+run_jobs_result: success
