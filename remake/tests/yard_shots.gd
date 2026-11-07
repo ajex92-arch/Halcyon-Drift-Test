@@ -2,7 +2,7 @@ extends Node
 ## WHAT THIS IS: the pictures of the yard, and the tour of its tab, run with a window and a human
 ## Admiral. It saves: the Yard tab with a mixed list (a building row with its percent, a row
 ## "waiting: ore (needs N)", a row waiting for an unlock, an item on hold, locked hulls "needs X");
-## the tab with the fleet full ("Fleet full" in the danger colour with the triangle); a refused order's
+## the tab with the fleet full at the fleet limit ("Fleet full" in the danger colour with the triangle); a refused order's
 ## answer under the fleet line and its toast; three Fighters in the middle of their slide out of the bow;
 ## a Destroyer's warp streak crossing the map and the ship just arrived beside the mothership; and
 ## a fleet holding its rally.
@@ -112,6 +112,14 @@ func _bought(team: int, hull: String = "") -> Array:
 	return out
 
 
+## Fill both teams' fleets to the fleet limit: FleetFill's mix (18 ships a team) again and again until
+## no hull of the mix fits any more, so a picture of a full fleet holds whatever the limit is.
+func _fill_to_limit() -> void:
+	var rounds := 0
+	while FleetFill.apply(world) > 0 and rounds < RtsHulls.CAP_IN_FORCE:
+		rounds += 1
+
+
 ## The whole tour.
 func _tour() -> void:
 	var hud := get_tree().root.find_child("Hud", true, false) as Hud
@@ -134,25 +142,24 @@ func _tour() -> void:
 	await _frames(3)
 	building["done"] = 600
 	prod.hold(str(held["id"]), true)
-	hud._toggle_board()
-	hud.board._set_tab("Fleet")
+	hud.command_view.card.set_page("build")
+	hud.command_view.prod.set_folded(false)
 	await _frames(20)
-	await _shot("mixed_list", "Yard tab: the buy grid, locked hulls say what they need")
-	var scroll := hud.board.get_node("Col/Scroll") as ScrollContainer
-	scroll.scroll_vertical = 100000
+	await _shot("mixed_list", "Command card (Build) and the production panel: locked hulls say what they need")
+	hud.command_view.prod._scroll = 100000
 	await _frames(10)
-	await _shot("mixed_list_rows", "Yard tab, scrolled down: a building row, rows waiting for ore and for an unlock, an item on hold")
-	scroll.scroll_vertical = 0
+	await _shot("mixed_list_rows", "Production panel, scrolled down: a building row, rows waiting for ore and for an unlock, an item on hold")
+	hud.command_view.prod._scroll = 0
 	# Scene 2: the fleet full.
-	FleetFill.apply(world)
+	_fill_to_limit()
 	prod.add_ship("fighter", 3)
 	await _frames(20)
-	await _shot("fleet_full", "Yard: the fleet at 18/18 (Fleet full in the danger colour with the triangle)")
+	var limit := prod.capacity.limit()
+	await _shot("fleet_full", "Yard: the fleet at %d/%d (Fleet full in the danger colour with the triangle)" % [prod.capacity.used(), limit])
 	# Scene 3: a refused order's answer and its toast.
-	(hud.board._cards["yard_buy:bomber"] as Button).pressed.emit()
+	CardActions.run(hud.command_view.card, "build", "bomber")
 	await _frames(20)
-	await _shot("refused", "Yard: a refused order (a locked hull): the answer, in the danger colour with the triangle")
-	hud._toggle_board()
+	await _shot("refused", "Command card: a refused order (a locked hull): the answer, in the danger colour with the triangle")
 	await _frames(5)
 	# Scene 4: three Fighters in the middle of their slide out of the bow.
 	prod.items.clear()
@@ -193,13 +200,13 @@ func _tour() -> void:
 	await _shot("warp_arrived", "the Destroyer just arrived beside the mothership (the ring is the landing)")
 	Game.unlock_everything = false
 	ts.admiral = "human"
-	# Scene 6: a fleet of 18 holding its place (the enemy's is hidden by the fog of war, so the picture shows our own; both teams' bought ships fly the same stand-in brain).
-	FleetFill.apply(world)
+	# Scene 6: a full fleet holding its place (the enemy's is hidden by the fog of war, so the picture shows our own; both teams' bought ships fly the same stand-in brain).
+	_fill_to_limit()
 	await _frames(600)
 	var ours := _bought(team)
 	_look(_centre(ours) if not ours.is_empty() else ms.global_position, 3000.0)
 	print("yard_shots: our team has %d bought ships" % ours.size())
 	await _frames(2)
-	await _shot("fleet_holding", "a fleet of 18 holding its rally ahead of the mothership")
+	await _shot("fleet_holding", "a fleet of %d holding its rally ahead of the mothership" % ours.size())
 	print("yard_shots: done %d pictures" % taken)
 	get_tree().quit()

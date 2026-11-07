@@ -14,7 +14,8 @@ extends PanelContainer
 ## `max_height` is smaller (a short window): then the table scrolls inside
 ## the box. Twice a second while it is on screen,
 ## _refresh() rewrites the headings (team kills, turrets destroyed,
-## mothership hull) and one row per pilot, best first (kills count 3,
+## mothership hull, and for the enemy team in a match with a human seat the level it
+## is played at: "Hard: earns 125%", from Difficulty) and one row per pilot, best first (kills count 3,
 ## assists 1). Rows are added or removed so each grid always has exactly
 ## one per pilot; a new cell is as wide as the title at the top of its
 ## column. An enemy's ship is shown only while our team can see it ("?"
@@ -98,11 +99,15 @@ func _refresh() -> void:
 	if world == null or _grids.is_empty():
 		return
 	var vt := world.viewer_team
+	# The enemy team's heading ends with the level ("  ·  Hard: earns 125%") in a match
+	# with a human seat (Difficulty.tag_mult() is -1 when the match names no level).
+	var enemy_mult := Difficulty.tag_mult(world)
 	for t in 2:
 		# Step 1: the heading.
 		var ts := world.teams[t]
 		var ms := world.mothership(t)
-		UiKit.set_text(_heads[t], "%s  ·  %d kills  ·  %d turrets destroyed  ·  mothership %d%%%s" % [Rules.TEAM_DISPLAY[t], ts.kills, ts.turrets_destroyed, int(ms.hull_frac() * 100.0), _feature_notes(t)])
+		var level := "  ·  " + Difficulty.heading_tag(enemy_mult) if enemy_mult >= 0.0 and t == Rules.enemy_of(world.human_team) else ""
+		UiKit.set_text(_heads[t], "%s  ·  %d kills  ·  %d turrets destroyed  ·  mothership %d%%%s%s" % [Rules.TEAM_DISPLAY[t], ts.kills, ts.turrets_destroyed, int(ms.hull_frac() * 100.0), _feature_notes(t), level])
 		# Step 2: this team's pilots, best score first. The crew of a bought
 		# ship is not a pilot and gets no line.
 		var rows: Array = []

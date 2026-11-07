@@ -55,7 +55,10 @@ extends Node
 ## WorldSetup reads `difficulty` and `human_team` when it builds a match; UnlockAll
 ## is the one place that reads `unlock_everything`, FogOff the one that reads `fog_off`;
 ## and FeatureRegistry reads
-## preset_error, difficulty_error and team_error; NoteWriter reads `preset`.
+## preset_error, difficulty_error and team_error; NoteWriter reads `preset`. ReplayOptions
+## fills the options from the first line of a --replay log (while this file reads the command
+## line), main.gd sets `match_seed`, and MatchRecorder, OrderLog and BuildId read the recording
+## options (--record, --recordings-dir, --build ...).
 ##
 ## The options (who reads them in brackets):
 ##   --role=pilot|admiral|spectator   the human's seat. Without --auto (and
@@ -291,10 +294,14 @@ extends Node
 ##                                    the game every 300 ticks. Without a name:
 ##                                    user://orders_<seed>.log. The web build
 ##                                    writes none. (OrderLog)
-##   --replay=<file>                  play the human's orders of a match log
-##                                    back (the same seed and options) and
-##                                    compare the fingerprints: prints "replay:
-##                                    ok" or "replay: MISMATCH". (OrderQueue)
+##   --replay=<file>                  play a recorded match back: the human's
+##                                    orders, flight controls and hangar commands
+##                                    from the match log, with the settings the
+##                                    log's first line names (seed, seat, team,
+##                                    rules; ReplayOptions) unless an option here
+##                                    says otherwise, and compare the fingerprints:
+##                                    prints "replay: ok" or "replay: MISMATCH".
+##                                    Headless or in a window. (OrderQueue)
 ##   --admiral-replay=<file>          play the computer Admirals' orders of a
 ##                                    match log back instead of letting them
 ##                                    think (use --no-admiral-field and the same
@@ -303,10 +310,28 @@ extends Node
 ##                                    after each hash line: orders carried
 ##                                    out, orders waiting, events, speed.
 ##                                    (det_hash)
-##   --build=<text>                   a label for the build, written at the end
-##                                    of the match log's first line when given.
-##                                    The game has no version number of its own.
-##                                    (OrderLog)
+##   --build=<text>                   a label for the build, written in the match
+##                                    log's first line (build=). Without it the
+##                                    build names itself: build_id.txt (the Windows
+##                                    export writes it), the stamp of a version
+##                                    controlled export, else "unknown". (BuildId)
+##   --record / --no-record           the match recorder: --record records this
+##                                    match (the match log with the human's flight
+##                                    controls and hangar commands, its stats and its
+##                                    match series) even in a test run; --no-record
+##                                    records nothing. Without either a match a person
+##                                    plays from the start screen is recorded, and no
+##                                    test run is. The web build writes none.
+##                                    (MatchRecorder)
+##   --recordings-dir=<folder>        where the recorder puts its files. Without it:
+##                                    user://recordings. Tests use it so they never
+##                                    write among the player's real recordings.
+##   --record-name=<name>             the recorder's file name without the extension
+##                                    (the files are <name>.log, <name>.stats.json and
+##                                    <name>.series.json). Without it: match_ and the
+##                                    date and time, then the seed. (MatchRecorder)
+##   --replay-until=<time>            with --replay: stop there, at that match time in
+##                                    seconds or m:ss, and say so. (OrderQueue)
 ##
 ## The controls are defined in code (GameInputMap), not in project.godot,
 ## so they are easy to read and tests can press them by name.
@@ -322,6 +347,10 @@ var restart_role := ""
 ## The command-line options: name (without the "--") -> value. "--seed=7"
 ## gives "seed" -> "7" (always text); a bare "--auto" gives "auto" -> true.
 var options := {}
+## The seed the running match was built with: the --seed option, or a number picked at the match's start
+## when none was given (main.gd picks it so that the match recording can name it and a replay can play
+## the same match). -1 until main.gd's start() sets it.
+var match_seed := -1
 ## The rule variants for this match: variant name -> chosen value (text).
 ## Starts as a copy of Rules.VARIANT_DEFAULTS; the preset (--preset, or
 ## CouncilPresets.STANDARD) and then --variant change entries.
@@ -479,6 +508,10 @@ func _parse_options() -> void:
 			options[body] = true
 		else:
 			options[body.substr(0, eq)] = body.substr(eq + 1)
+	# Step 1a: --replay=<file> brings the settings its log was made with (the seed, the seat, the
+	# team, the rules, the test switches) for every option the command line did not give.
+	var typed_rules := options.has("variant") or options.has("preset")
+	var replay_variants := ReplayOptions.fill(options)
 	# Step 1b: --sim-only (a bare switch; "--sim-only=0" or "=false" turns it
 	# off again) is read here once, into the plain variable `sim_only`, so
 	# the many places that check it need no lookup in `options`.
@@ -541,6 +574,10 @@ func _parse_options() -> void:
 	# --preset (the standard rules when none is named), then each "name:value"
 	# pair of --variant (see _build_variants()). The preset is named in the log.
 	_build_variants(str(options.get("preset", "")))
+	# A replay plays the rules its log was made with, to the last key, unless the command line
+	# named other rules.
+	if not replay_variants.is_empty() and not typed_rules:
+		variants = replay_variants
 	if preset != "":
 		var pairs := CouncilPresets.variant_string(preset)
 		print("preset: %s = %s" % [preset, pairs if pairs != "" else "(every variant at its default)"])
@@ -649,6 +686,13 @@ func use_remembered_team() -> void:
 	var side := Rules.team_from_name(str(cfg.get_value("game", "team", "")))
 	if side >= 0:
 		human_team = side
+
+
+## The test switches that only change what the human sees, as the match log's header writes them
+## ("fog:0" or "fog:1"): a replay with another value still plays the same match, so the header
+## check leaves this word out. It lives here, with the switch, so that no other script names it.
+func screen_switches() -> String:
+	return "fog:%d" % int(fog_off)
 
 
 ## The player picked team `side` (Rules.HALCYON or Rules.CINDER) on the start screen:

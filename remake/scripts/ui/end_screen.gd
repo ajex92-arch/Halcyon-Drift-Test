@@ -7,7 +7,8 @@ extends Control
 ## HOW IT WORKS: the layout is the scene scenes/ui/end_screen.tscn: a dark
 ## Cover over the whole window (it blocks clicks to the game) and, in the
 ## middle (Center), a Card (the "EndLook" box) holding one column: Col >
-## Title, Reason, Teams (Halcyon and Cinder, each: Name, Kills, Turrets,
+## Title, Reason, Difficulty (the level the match was played at, hidden when the
+## match names none), Teams (Halcyon and Cinder, each: Name, Kills, Turrets,
 ## Ore, Research, Hull), TopHeading, Buttons (NewMatch, Quit). setup() is
 ## called before the screen joins the scene, so _ready() can fill it all
 ## in at once. If we watch as a team the title is "Victory" (amber) or
@@ -24,6 +25,8 @@ extends Control
 var world: World
 ## The winning team (0 Aurelian, 1 Vhorr; -1 until set).
 var winner := -1
+## The match series for the graph (MatchSeries), or null for no graph. Nothing draws it yet.
+var series: MatchSeries = null
 ## Why the match ended, as a sentence from the game.
 var reason := ""
 ## The card's column (the top pilot lines are added to it).
@@ -32,11 +35,15 @@ var reason := ""
 @onready var _teams: Array[VBoxContainer] = [$Center/Card/Col/Teams/Halcyon, $Center/Card/Col/Teams/Cinder]
 
 
-## Remember the world, the winning team `win` and the reason `why`.
-func setup(w: World, win: int, why: String) -> void:
+## Remember the world, the winning team `win` and the reason `why`, and the match series
+## (MatchSeries) for the graph, or null for none. The series gets its last sample at once.
+func setup(w: World, win: int, why: String, match_series: MatchSeries = null) -> void:
 	world = w
 	winner = win
 	reason = why
+	series = match_series
+	if series != null:
+		series.final_sample()
 
 
 ## Called once when the node joins the scene: darken the cover, connect
@@ -65,6 +72,12 @@ func _ready() -> void:
 	$Center/Card/Col/Title.text = title
 	$Center/Card/Col/Title.add_theme_color_override("font_color", tint)
 	$Center/Card/Col/Reason.text = "%s  Match time %s." % [Rules.display_label(reason), Util.clock(world.time)]
+	# Step 2b: the difficulty line under the reason, for a match with a human seat
+	# (Difficulty.tag_mult() is -1 when the match names no level).
+	var enemy_mult := Difficulty.tag_mult(world)
+	$Center/Card/Col/Difficulty.visible = enemy_mult >= 0.0
+	if enemy_mult >= 0.0:
+		$Center/Card/Col/Difficulty.text = Difficulty.result_line(enemy_mult)
 	# Step 3: one column of totals per team.
 	for t in 2:
 		_fill_team_totals(t)

@@ -9,6 +9,8 @@ extends Node2D
 ## and `dt` is its length in seconds. Every tick runs the systems in the
 ## same fixed order (DESIGN.md B4). The order matters: changing it would
 ## change how a match plays out.
+##   0. A replay's recorded hangar commands (OrderQueue.run_commands), between
+##      two ticks; without a replay nothing happens.
 ##   1. The match clock, the directors (minion waves, jungle respawns) and
 ##      each team's own timers.
 ##   1a. Orders due this tick are carried out (OrderQueue.run_due), then the
@@ -103,9 +105,10 @@ var board_open := false
 ## the wheel never moves the ship.
 var wheel_hold := false
 ## True while the pointer is on a HUD control that takes clicks (the ship readout, the button block, a kit gear slot, the
-## wing strip) and the player is not firing. The human's aim and face points then keep the values they had
-## (PlayerController), so a click on a button never turns the ship toward the HUD; the hull turns back toward the
-## pointer when it leaves. The HUD sets it every frame (Hud._process), so it cannot stay on. A fire started in the
+## wing strip) and the player is not firing. The human's aim and face points then keep the direction and distance
+## from the ship that they had (PlayerController: an offset, not a world point, so a ship that flies on is not pulled
+## round toward a spot left behind), so a click on a button never turns the ship toward the HUD; the hull turns back
+## toward the pointer when it leaves. The HUD sets it every frame (Hud._process), so it cannot stay on. A fire started in the
 ## world (mouse_fire) keeps the aim following the pointer across a control.
 var ui_hold := false
 ## How fast the world runs (normal, slowed, or faster) and which physics frames
@@ -226,6 +229,9 @@ var camera: CameraRig
 var mouse_fire := false
 ## True while the right mouse button is held down over the game (special).
 var mouse_special := false
+## Test hook: when it holds a Vector2, mouse_world() answers that point instead of the real mouse
+## (tests/record_drive.gd plays a scripted human with it). Null (always, in play) = the real mouse.
+var test_mouse: Variant = null
 
 # --- profiling ----------------------------------------------------------------------------
 
@@ -522,8 +528,11 @@ func on_research_done(team: int, id: String) -> void:
 	WorldResearch.on_research_done(self, team, id)
 
 
-## Where the mouse pointer is, in world units (for aiming and the camera).
+## Where the mouse pointer is, in world units (for aiming and the camera). A test that plays the
+## human sets `test_mouse` to put the pointer where it wants.
 func mouse_world() -> Vector2:
+	if test_mouse != null:
+		return test_mouse as Vector2
 	return get_global_mouse_position()
 
 
@@ -546,6 +555,9 @@ func _physics_process(dt: float) -> void:
 	ticked = speed.step()
 	if not ticked:
 		return
+	# A replay runs the human's recorded hangar commands now, between two ticks, where the human
+	# gave them (the clock has not moved yet). Without a replay this does nothing.
+	orders.run_commands()
 	var t0 := Time.get_ticks_usec()
 	# Step 1: the clock, the directors and each team's timers.
 	time += dt

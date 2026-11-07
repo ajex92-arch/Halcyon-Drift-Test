@@ -1,7 +1,9 @@
 class_name HudTopBar
 extends PanelContainer
 ## WHAT THIS IS: the strip at the top centre of the HUD: the match clock,
-## when the next minion wave launches, the test tags (UNLOCKED, shown while the
+## when the next minion wave launches, the difficulty tag (the level the match is
+## played at and what it gives the enemy, "Hard · enemy earns 125%", for a match with a
+## human seat; see Difficulty), the test tags (UNLOCKED, shown while the
 ## human buys for nothing, see UnlockAll; FOG OFF, shown while the No fog test option
 ## is on (see FogOff); SPEED 0.75x / 0.5x / 1.5x / 2x, shown while
 ## the world is not at normal speed, see WorldSpeed, and "(limited)" after it when the
@@ -12,9 +14,11 @@ extends PanelContainer
 ## HOW IT WORKS: the layout is the scene scenes/ui/hud_top_bar.tscn: a
 ## see-through dark panel (the "TopBarLook" look) 6 pixels below the top
 ## edge, centred, holding one row: Halcyon's column (Name, Hull bar,
-## Turrets), the Middle column (Clock, Wave) and Cinder's column. Cinder's
+## Turrets), the Middle column (Clock, Wave, DiffTag, Tags) and Cinder's column. Cinder's
 ## side is a mirror image: its text is right-aligned and its bar fills from
-## the right. The mouse passes through it to the game. _ready() colours
+## the right. The mouse passes through it to the game (the difficulty tag takes
+## the pointer only to show its tooltip, with the pass filter, so clicks under it
+## still reach the map). _ready() colours
 ## each team's name and bar; refresh() rewrites the text 10 times a second.
 ## Enemy turrets are only counted once our team has seen them (at once with No fog on, see FogOff).
 ##
@@ -26,7 +30,10 @@ extends PanelContainer
 @onready var _clock: Label = $Row/Middle/Clock
 ## "Next minion wave 0:21".
 @onready var _wave: Label = $Row/Middle/Wave
-## The test tags under the wave line ("UNLOCKED", "FOG OFF"); hidden while there are none.
+## The difficulty tag under the wave line ("Hard · enemy earns 125%"); hidden in a match
+## with no human seat. Pointing at it shows the full sentence.
+@onready var _diff: Label = $Row/Middle/DiffTag
+## The test tags under the difficulty tag ("UNLOCKED", "FOG OFF"); hidden while there are none.
 @onready var _tags: Label = $Row/Middle/Tags
 ## Each team's mothership hull bar (index = team: 0 Aurelian, 1 Vhorr).
 @onready var _ms_bars: Array[ProgressBar] = [$Row/Halcyon/Hull, $Row/Cinder/Hull]
@@ -50,6 +57,14 @@ func refresh(world: World) -> void:
 	# Step 1: the clock and the wave timer (the free waves never stop).
 	UiKit.set_text(_clock, Util.clock(world.time))
 	UiKit.set_text(_wave, "Next minion wave %s" % Util.clock(maxf(0.0, world.minion_director.next_wave - world.time)))
+	# Step 1a: the difficulty tag, from the number the enemy team really earns by
+	# (Difficulty.tag_mult(), -1 when the match names no level: no human seat, or
+	# humans on both teams); its hover is the full sentence.
+	var enemy_mult := Difficulty.tag_mult(world)
+	_diff.visible = enemy_mult >= 0.0
+	if enemy_mult >= 0.0:
+		UiKit.set_text(_diff, Difficulty.short_tag_for(enemy_mult))
+		_diff.tooltip_text = Difficulty.blurb_for(enemy_mult)
 	# Step 1b: the test tags: UNLOCKED while the human's purchases are free
 	# (UnlockAll), FOG OFF while the No fog option shows everything (FogOff; the spectator
 	# has no fog, so no tag), SPEED 0.75x / 0.5x / 1.5x / 2x while the world is not at normal

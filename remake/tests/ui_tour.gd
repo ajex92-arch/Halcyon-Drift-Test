@@ -465,10 +465,8 @@ func _admiral_steps() -> Array:
 		[3.0, func() -> void: await _shot("a03_board_build")],
 		[3.5, func() -> void: hud.board._set_tab("Mothership")],
 		[4.0, func() -> void: await _shot("a04_board_mothership")],
-		[4.5, func() -> void: hud.board._set_tab("Fleet")],
-		[5.0, func() -> void: await _shot("a05_board_fleet")],
-		# The command orders that feature modules add (none in today's game):
-		# press each button and look at the map tool.
+		# The command orders that feature modules add (none in today's game) are entries of the command card's Orders
+		# More list: press each and look at the map tool.
 		[5.2, func() -> void: await _tour_orders()],
 		[5.5, func() -> void: hud.board._set_tab("Pilots")],
 		[6.0, func() -> void:
@@ -544,7 +542,7 @@ func _my_side(p: Vector2) -> Vector2:
 
 ## The admiral tour's order step: for each command order that a feature
 ## module added (CommandOrders; there are none unless --variant switches one
-## on), press its button on the Fleet tab. An order that needs a spot arms
+## on), press its entry in the command card's Orders More list. An order that needs a spot arms
 ## its map tool: take a picture of the tool, then click a spot near our
 ## mothership (the order may be refused there, which is printed). Prints one
 ## "ui_tour: order <id> ..." line per order, puts the tool away and reopens
@@ -555,9 +553,16 @@ func _tour_orders() -> void:
 		return
 	world.teams[world.human_team].treasury = 20000.0
 	var spot := _my_side(world.mothership(Rules.HALCYON).global_position + Vector2(2500, 0))
+	hud._close_others(null)
+	var card := hud.command_view.card
 	for id in orders:
-		hud.board._refresh()
-		var btn: Button = hud.board._cards.get("order:" + str(id))
+		card.set_page("orders")
+		card.toggle_list("more")
+		var btn: Button = null
+		var ids := card._list_ids()
+		for i in ids.size():
+			if str(ids[i]) == "feat:" + str(id):
+				btn = card._entries[i]
 		if btn == null:
 			print("ui_tour: order %s has NO BUTTON" % id)
 			continue
@@ -573,7 +578,7 @@ func _tour_orders() -> void:
 			hud.overlay.disarm()
 		else:
 			print("ui_tour: order %s given from its button" % id)
-		if not hud.board.visible:
-			hud._toggle_board()
-		hud.board._set_tab("Fleet")
+		card.close_list()
+	if not hud.board.visible:
+		hud._toggle_board()
 	await _shot("a05c_orders_done")

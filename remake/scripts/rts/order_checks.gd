@@ -27,7 +27,10 @@ static func at_once(w: World, q: OrderQueue, o: Dictionary) -> String:
 		return OrderKinds.TEXT_UNKNOWN
 	if not q.has_applier(kind) or str(o.get("mode", "replace")) != "replace":
 		return OrderKinds.TEXT_UNBUILT
-	if q.replaying and kind != OrderKinds.GAME_SPEED:
+	# A replay of the human plays the human's orders from the log: a screen's order is refused. The
+	# computer Admirals and pilots go on thinking for themselves (they do the same as in the recorded
+	# match), so their orders pass.
+	if q.replaying and kind != OrderKinds.GAME_SPEED and bool(o.get("human", false)):
 		return OrderKinds.TEXT_REPLAY
 	if not OrderKinds.may_send(kind, int(o["seat"]), _squad_of(w, o)):
 		return OrderKinds.TEXT_SEAT

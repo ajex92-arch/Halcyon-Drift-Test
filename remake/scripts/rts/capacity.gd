@@ -14,7 +14,7 @@ extends RefCounted
 ## its reserved place.
 ##
 ## WHO USES IT: Production (it asks room_for() before a build starts and calls
-## reserve() and release()), the Yard tab (the "Fleet 12/18" line), the computer
+## reserve() and release()), the Yard tab (the "Fleet 12/63" line), the computer
 ## Admiral (its fill schedule) and the tests.
 
 ## The world (it holds the squad records).

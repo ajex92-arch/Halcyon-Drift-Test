@@ -21,7 +21,7 @@ extends VBoxContainer
 ## our mothership's systems are failing, then a message from a feature
 ## module (FeatureRegistry.banner_for(): a lane breach, a last stand, a
 ## surrender vote ...). If none is true, the banner is empty. The title's colour shows the mood: ice (white) for information,
-## amber for a map tool, cinder (red) for danger, veil (teal) for a jump.
+## amber for a map tool, the danger colour WITH the danger triangle above the title (a DangerMark) for danger, veil (teal) for a jump.
 ##
 ## WHO USES IT: the HUD's scene (scenes/ui/hud.tscn) holds it. Hud.setup()
 ## gives it the HUD and Hud._refresh() calls refresh(). It reads the Hud
@@ -34,6 +34,8 @@ var hud: Hud
 @onready var _title: Label = $Title
 ## The smaller line under it (15 px text).
 @onready var _sub: Label = $Sub
+## The danger triangle above the title, shown while the message is in the danger colour.
+var _mark: DangerMark
 
 
 ## Godot calls this when the banner joins the HUD: give both lines a dark
@@ -42,6 +44,11 @@ func _ready() -> void:
 	for l: Label in [_title, _sub]:
 		l.add_theme_color_override("font_outline_color", Palette.VOID)
 		l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_mark = DangerMark.new(18.0)
+	_mark.visible = false
+	_mark.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	add_child(_mark)
+	move_child(_mark, 0)
 
 
 ## Pick the most important message right now and show it (see HOW IT
@@ -80,7 +87,7 @@ func refresh() -> void:
 		# Buyback (BuybackFeature): the hangar's button can buy the respawn.
 		if BuybackFeature.current() != null:
 			sub += "  Buyback: " + BuybackFeature.button_text(h)
-		col = Palette.CINDER
+		col = Palette.DANGER
 	# Spooling: a hyperspace launch out to one of our repair bays.
 	elif h != null and h.state == "spooling":
 		title = "Hyperspace jump in %ds" % int(ceil(h.respawn_t))
@@ -94,21 +101,24 @@ func refresh() -> void:
 	elif h != null and h.ship != null and is_instance_valid(h.ship) and _turret_on(h.ship):
 		title = "An enemy turret is targeting you"
 		sub = "Back off, or fight it with your minions beside you."
-		col = Palette.CINDER
+		col = Palette.DANGER
 	# Our mothership's emergency "systems failure" (only the small line).
 	elif ts != null and world.mothership(h.team).failure_t > 0.0:
 		sub = "Our mothership's systems are failing: no launches or respawns there for %ds." % int(ceil(world.mothership(h.team).failure_t))
-		col = Palette.CINDER
+		col = Palette.DANGER
 	# A feature module's message (title, sub line, tone), last in line. Its
 	# text may name a team by its internal label (Rules.TEAM_NAMES), so it
 	# goes through Rules.display_label() to show the player-facing name.
 	elif not fb.is_empty():
 		title = Rules.display_label(str(fb[0]))
 		sub = Rules.display_label(str(fb[1]))
-		col = {"amber": Palette.AMBER, "cinder": Palette.CINDER, "veil": Palette.VEIL}.get(str(fb[2]), Palette.ICE)
+		col = {"amber": Palette.AMBER, "cinder": Palette.DANGER, "veil": Palette.VEIL}.get(str(fb[2]), Palette.ICE)
 	UiKit.set_text(_title, title)
 	UiKit.set_text(_sub, sub)
 	_title.add_theme_color_override("font_color", col)
+	var danger := col == Palette.DANGER and (title != "" or sub != "")
+	if _mark.visible != danger:
+		_mark.visible = danger
 	var room := hud.layout.banner_width()
 	_fit(_title, room)
 	_fit(_sub, room)

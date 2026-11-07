@@ -58,7 +58,7 @@ const SET_RALLY := "SET_RALLY"  # set a rally point
 ## "unbuilt" until its stage registers a handler.
 const ATTACK_MOVE := "ATTACK_MOVE"  # later
 const PATROL := "PATROL"  # later
-const STOP := "STOP"  # later
+const STOP := "STOP"  # a bought squadron stops where it is (the stand-in's Stop); the rest is later
 const DEFEND := "DEFEND"  # later
 const PUSH_LANE := "PUSH_LANE"  # later
 const RETREAT := "RETREAT"  # later
@@ -79,6 +79,10 @@ const ALL := [
 ]
 ## The squad orders.
 const SQUADRON_KINDS := [ESCORT, ATTACK, HOLD, MOVE, GUARD, SET_FORMATION, SET_STANCE]
+## The orders a BOUGHT squadron (the Admiral's, made by the yard) takes. Every other kind sent to one is refused
+## "Comes with a later stage". The command card lights a cell only when its kind is in this list; a later stage
+## (RT12) widens it.
+const BOUGHT_KINDS := [MOVE, HOLD, STOP]
 ## The ship yard's orders.
 const PRODUCTION_KINDS := [PRODUCE, CANCEL, MOVE_ITEM, HOLD_ITEM, SET_REPEAT, SET_RALLY]
 ## The kinds that AdmiralCommand carries out (the queue calls its functions).
@@ -153,7 +157,7 @@ const APPLIES := {
 	SIEGE: "same", GAME_SPEED: "once", PAUSE: "later",
 	ESCORT: "next", ATTACK: "next", HOLD: "next", MOVE: "next", GUARD: "next", SET_FORMATION: "next", SET_STANCE: "next",
 	PRODUCE: "next", CANCEL: "next", MOVE_ITEM: "next", HOLD_ITEM: "next", SET_REPEAT: "next", SET_RALLY: "next",
-	ATTACK_MOVE: "later", PATROL: "later", STOP: "later", DEFEND: "later", PUSH_LANE: "later", RETREAT: "later",
+	ATTACK_MOVE: "later", PATROL: "later", STOP: "next", DEFEND: "later", PUSH_LANE: "later", RETREAT: "later",
 	MERGE: "later", PING: "later", REQUEST: "later", ANSWER: "later", DEPUTY: "later", SET_POSTURE: "later",
 }
 ## The word Events.admiral_result carries for each kind ("none": no toast). The

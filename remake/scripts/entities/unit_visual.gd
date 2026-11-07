@@ -22,6 +22,9 @@ extends Node2D
 ##     a repair bay and a mothership keep their bodies on a kept picture too (the tower faded
 ##     while it is built, the mothership's alien gun dots with it); their guns' heads, bars,
 ##     rings, lines and texts change by the frame and are drawn on this node's own picture.
+##     A Scum den ship and a Scum Fighter keep their bodies the same way (ScumPaint): the Carrier on three
+##     pictures in drawing order (body, engine glows by the frame, outlines), the others on one; the glow,
+##     the flame, the gun sockets, the guns' heads and the bar are drawn by the frame on this node's own picture.
 ##     A unit the fog hides, or one far from the camera's view (ViewCull), is not brought up to date until it shows or comes near again.
 ##   - Lines are multiplied by `px` (world units per screen pixel) so they
 ##     keep the same thickness on screen at any zoom, and small units are
@@ -85,6 +88,17 @@ var _kicks := GunKick.new()
 var _spin: Node2D
 ## True for a minion (it has kept pictures and no picture of its own).
 var _is_minion := false
+## True for a Scum ship (a den ship or a Fighter): its body is a kept picture; its engine glow, gun
+## sockets, guns' heads and bar are drawn by the frame on this node's own picture.
+var _is_scum := false
+## A Scum Carrier's engine glows (a Node2D on _spin, redrawn every frame, between _body and _edge; null
+## for every other unit).
+var _glow: Node2D
+## A Scum Carrier's outlines (a kept picture on _spin, over _glow; null for every other unit).
+var _edge: DrawCache
+## True once _glow has been drawn at least once (with the test switch DrawParts.redraw off it is
+## asked for no more pictures after that).
+var _glow_drawn := false
 ## The kept picture of a body (a minion's, or a tower's, repair bay's or mothership's;
 ## a child of _spin).
 var _body: DrawCache
@@ -110,10 +124,11 @@ func _ready() -> void:
 		z_index = -1
 	# A minion is drawn on kept pictures (see DrawCache), drawn again only when something
 	# they show changes: its body on a node that turns with it, its hull bar upright. A tower,
-	# a repair bay and a mothership keep their bodies the same way (their guns' heads, bars,
-	# rings and lines change by the frame and stay on this node's own picture).
-	if unit is Minion or unit is Turret or unit is RepairBay or unit is Mothership:
+	# a repair bay, a mothership and a Scum ship keep their bodies the same way (their guns' heads, bars,
+	# rings and lines, and a Scum ship's engine glow, change by the frame and stay on this node's own picture).
+	if unit is Minion or unit is Turret or unit is RepairBay or unit is Mothership or unit is Derelict or unit is SnubFighter:
 		_is_minion = unit is Minion
+		_is_scum = unit is Derelict or unit is SnubFighter
 		_spin = Node2D.new()
 		_spin.name = "Spin"
 		_spin.show_behind_parent = true
@@ -140,6 +155,9 @@ func _process(_dt: float) -> void:
 	if _body != null:
 		# Nobody sees a unit the fog hides, so it is brought up to date when it shows again.
 		if not is_visible_in_tree():
+			return
+		# A Scum ship far from the camera's view is brought up to date on the first frame it comes near.
+		if _is_scum and not ViewCull.near(get_viewport(), unit.global_position, _cull_margin()):
 			return
 		_update_body()
 		if _is_minion:
@@ -182,6 +200,9 @@ func _zoom() -> float:
 func _update_body() -> void:
 	_spin.rotation = unit.rotation
 	var z := _zoom()
+	if _is_scum:
+		_update_scum(z)
+		return
 	var bits := (1 if unit.flash > 0.0 else 0) | (2 if CinderPaint.alien(unit.team) else 0) | (4 if DrawCache.is_close(z) else 0) | (DrawParts.version << 28)
 	if _pulses:
 		bits |= CinderPaint.pulse_step(0.0 if unit is Mothership else _phase()) << 8
@@ -196,6 +217,60 @@ func _update_body() -> void:
 	if DrawParts.bars and 1.0 / maxf(0.02, z) < 3.0 and unit.hull < unit.hull_max:
 		bar = 1 + int(unit.hull_frac() * 64.0)
 	_gauge.want(mtype, DrawCache.STATE_BASE, bar | (DrawParts.version << 28), 0.0, z)
+
+
+## Tell a Scum ship's kept pictures what it looks like now (once a frame). The body depends on the hit
+## flash (a Raider's and a Fighter's outline), whether the zoom is a close one (their smooth outlines), the
+## camera zoom (in steps of 2%), the test switches of DrawParts, and for a Raider on how far its far
+## look has slid (ScumPaint.far_look(), the picture's changing number). A Carrier's outlines are a
+## second kept picture, and its engine glows a third picture that is asked for every frame.
+func _update_scum(z: float) -> void:
+	var bits := (1 if unit.flash > 0.0 else 0) | (4 if DrawCache.is_close(z) else 0) | (DrawParts.version << 28)
+	if unit is Derelict:
+		var d := unit as Derelict
+		if d.ctype == "carrier":
+			if _edge == null:
+				_make_carrier_layers()
+			# The Carrier's body shows no hit and no smooth line: only the zoom and the test switches.
+			_body.want(_body_id(), DrawCache.STATE_BASE, DrawParts.version << 28, 0.0, z)
+			_edge.want("scum_carrier_edge", DrawCache.STATE_BASE, bits, 0.0, z)
+			if DrawParts.redraw or not _glow_drawn:
+				_glow.queue_redraw()
+			return
+		_body.want(_body_id(), DrawCache.STATE_BASE, bits, ScumPaint.far_look(self, d.radius, 1.0 / maxf(0.02, z)), z)
+		return
+	_body.want(_body_id(), DrawCache.STATE_BASE, bits, 0.0, z)
+
+
+## Make a Scum Carrier's other two pictures, on _spin after its body: the engine glows, then the
+## outlines over them (the design draws them in that order). A Derelict does not know which camp type it
+## is until it has been set up, which is after this painter is made, so this runs on the first update.
+func _make_carrier_layers() -> void:
+	_glow = Node2D.new()
+	_glow.name = "Glow"
+	_glow.draw.connect(_draw_glow_layer)
+	_spin.add_child(_glow)
+	_edge = DrawCache.new()
+	_edge.name = "Edge"
+	_edge.draw.connect(_draw_edge_layer)
+	_spin.add_child(_edge)
+
+
+## Draw a Scum Carrier's engine glows (the `draw` signal of _glow): the ship pointing along +x.
+func _draw_glow_layer() -> void:
+	if unit == null or not unit.alive:
+		return
+	_glow_drawn = true
+	ScumPaint.draw_carrier_glow(_glow, unit as Derelict, _phase())
+
+
+## Draw a Scum Carrier's outlines (the `draw` signal of _edge): the ship pointing along +x.
+func _draw_edge_layer() -> void:
+	if unit == null or not unit.alive:
+		return
+	var z := _zoom()
+	_edge.drawn_at(z)
+	ScumPaint.draw_carrier_edge(_edge, unit as Derelict, 1.0 / maxf(0.02, z), _flash())
 
 
 ## Draw a minion's body on its kept picture (the `draw` signal of _body): the unit
@@ -221,6 +296,14 @@ func _draw_body_layer() -> void:
 		_draw_turret_body(_body, px, col)
 	elif unit is RepairBay:
 		_draw_bay_body(_body, px, col)
+	elif unit is Derelict:
+		var d := unit as Derelict
+		if d.ctype == "carrier":
+			ScumPaint.draw_carrier_body(_body, d, px)
+		else:
+			ScumPaint.draw_raider_body(_body, d, px, _flash(), _body.detail)
+	elif unit is SnubFighter:
+		ScumPaint.draw_fighter_body(_body, px, _flash())
 	else:
 		_draw_mothership_body(_body, px, col)
 
@@ -230,6 +313,8 @@ func _draw_body_layer() -> void:
 func _body_id() -> String:
 	if unit is Minion:
 		return (unit as Minion).mtype
+	if _is_scum:
+		return ScumPaint.body_id(unit)
 	var dress := "|vhorr" if unit.team == Rules.CINDER else ""
 	if unit is Turret:
 		return ("torp_tower" if (unit as Turret).ttype == "torp" else "pd_tower") + dress
@@ -353,8 +438,9 @@ func _draw() -> void:
 		Unit.K_MONSTER:
 			_draw_derelict(px)
 		Unit.K_SNUB:
-			# A Scum Fighter: an engine bell with a needle welded to its front.
-			ScumPaint.draw_fighter(self, unit as SnubFighter, px, _flash())
+			# A Scum Fighter: an engine bell with a needle welded to its front (the body is on the
+			# kept picture; its engine glow flickers by the frame).
+			ScumPaint.draw_fighter_glow(self, unit as SnubFighter, px)
 		Unit.K_MOTHERSHIP:
 			_draw_mothership(px, col)
 
@@ -550,13 +636,14 @@ func _draw_bay(px: float, col: Color) -> void:
 
 
 ## A Scum den ship (a "derelict" camp in the code): the Scum Raider, or the Scum Carrier for the
-## Carrier camp (ScumPaint draws the hull, with a dark socket under each gun), the head of each of
+## Carrier camp (the hull is on the kept pictures, _draw_body_layer(); ScumPaint draws what changes by
+## the frame here: a Raider's engine glow and flame, and a dark socket under each gun), the head of each of
 ## its guns on top (TurretPaint, in the Scum style: jury-rigged, and it kicks back when it fires),
 ## and a hull bar once damaged.
 func _draw_derelict(px: float) -> void:
 	var d := unit as Derelict
 	var s := d.radius
-	ScumPaint.draw_den_ship(self, d, px, _flash(), _phase())
+	ScumPaint.draw_den_live(self, d, _phase())
 	TurretPaint.draw_unit_mounts(self, d.mounts, d.team, s * ScumPaint.HEAD_FRACTION, px, d.rotation, 1.0, _look_kicks(d.mounts))
 	if d.hull < d.hull_max:
 		_bar(s + 8.0 * px, s * 2.0, d.hull_frac(), Palette.SCUM_EDGE, px)

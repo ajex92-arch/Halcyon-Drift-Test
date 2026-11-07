@@ -11,12 +11,14 @@ extends Node
 ##      either starts the match at once (test runs, runs without a window,
 ##      and the pause menu's Restart, which names the seat in
 ##      Game.restart_role) or shows the start screen and waits for a choice.
-##   2. start(role) builds the World for that seat, adds the HUD (the
-##      panels drawn over the game) and the sound player when there is a
-##      window (neither with --sim-only, the speed mode of windowless test
+##   2. start(role) picks the match's seed (Game.match_seed), builds the World
+##      for that seat, adds the match series (MatchSeries) and the match
+##      recorder (MatchRecorder: it records a match a person plays), adds the
+##      HUD (the panels drawn over the game) and the sound player when there
+##      is a window (neither with --sim-only, the speed mode of windowless test
 ##      runs: see Game), loads a test script when --test asks for one, adds
 ##      the stats recorder when --record-stats asks for it, and prints one
-##      "match:" line about the map.
+##      "match:" line about the map and the "build:" line.
 ##   3. Every physics tick, the report part (MainReport) adds up how long
 ##      the simulation took, and prints a report each minute of match time.
 ##   4. When the match ends (Events.match_over) or the --max-minutes limit
@@ -39,6 +41,11 @@ extends Node
 ##                                             how each pilot fought, written
 ##                                             to a file (it only observes)
 ##   stats_pilot_record.gd (StatsPilotRecord)  its page for one pilot
+##   match_series.gd       (MatchSeries)       the team value, hull and kills
+##                                             every ten seconds, for the end
+##                                             screen's graph (it only observes)
+##   rts/match_recorder.gd (MatchRecorder)     keeps a match's recording together
+##                                             (the match log, stats and series)
 ##
 ## Words used here: a "tick" is one small step of game time; the game
 ## normally takes 60 of them per second. "Headless" means running with no
@@ -76,6 +83,12 @@ var reports := MainReport.new()
 ## The stats recorder, made by start() only when --record-stats is given
 ## (null otherwise): it writes how each pilot fought to a file.
 var stats: StatsRecorder = null
+## The match recorder (MatchRecorder), made by start() for every match; it records only a match a
+## person plays or one started with --record.
+var recorder: MatchRecorder = null
+## The match series (MatchSeries), made by start() for every match: team value, mothership hull
+## and the kills, every ten seconds of match time. The HUD hands it to the end screen.
+var series: MatchSeries = null
 
 
 ## Godot calls this once when the game starts. Make the screen layer, apply
@@ -159,6 +172,15 @@ func start(role: String) -> void:
 		return
 	if start_screen != null and is_instance_valid(start_screen):
 		start_screen.queue_free()
+	# Step 1b: the match's seed. --seed=N names it; without one a number is picked now, so that the
+	# match recording can say which it was and a replay can play the same match. The shared random
+	# sequence starts from it here, just before the match is built, whatever drew random numbers
+	# before (the start screen).
+	if Game.opt("seed") != null:
+		Game.match_seed = int(Game.opt("seed"))
+	else:
+		Game.match_seed = randi() & 0x7fffffff
+	seed(Game.match_seed)
 	# Step 2: make the World from its scene and set it up for this seat.
 	# --profile makes the World time each part of every tick.
 	world = load(WORLD_SCENE).instantiate()
@@ -167,6 +189,15 @@ func start(role: String) -> void:
 	world.setup(role)
 	# Step 3: hear about the end of the match (to print the last report).
 	Events.match_over.connect(_on_match_over)
+	# Step 3b: the match recorder (MatchRecorder), added right after the World so that it works
+	# after the World's tick. It records a match a person plays, or any match with --record, and
+	# otherwise does nothing.
+	series = MatchSeries.new()
+	add_child(series)
+	series.setup(world)
+	recorder = MatchRecorder.new()
+	add_child(recorder)
+	recorder.setup(world, series)
 	# Step 4: the HUD is only built when there is a window to show it,
 	# unless a test asks for it with --force-hud (headless UI checks:
 	# tests/ui_tour.gd). The sound player is only made with a real window.
@@ -178,7 +209,7 @@ func start(role: String) -> void:
 	elif ResourceLoader.exists(HUD_SCENE) and (not headless or Game.opt("force-hud", false)):
 		var hud: Node = load(HUD_SCENE).instantiate()
 		ui_layer.add_child(hud)
-		hud.call("setup", world)
+		hud.call("setup", world, series)
 		if not headless:
 			var sfx := Sfx.new()
 			add_child(sfx)
@@ -208,13 +239,15 @@ func start(role: String) -> void:
 	# pilot record too) buys a Fighter and launches at once, unless a --bot
 	# test script is flying the human itself. A spectator has no ship.
 	if Game.opt("auto", false) and world.human != null and not Game.opt("bot"):
-		world.human.buy_hull("fighter", world.teams[world.human.team])
-		world.launch(world.human)
+		HumanCmd.run(world, "buy_hull", ["fighter"])
+		HumanCmd.run(world, "launch")
 	# Step 7: one line about the match: the seat, the rule variants, and how
 	# many rocks, ore nodes, monster camps and route-map points there are.
 	# (A per-team option adds ` team_variants=...`, so a log shows which team held what.)
 	var team_part := (" team_variants=%s" % [Game.team_variants]) if Game.has_team_variants() else ""
 	print("match: role=%s variants=%s rocks=%d nodes=%d camps=%d route_nodes=%d%s" % [role, Game.variants, world.asteroids.pos.size(), world.nodes.size(), world.map.camps.size(), world.map.route.node_count(), team_part])
+	# The build that is running (BuildId): the match log's first line names it too.
+	print("build: %s" % BuildId.get_id())
 
 
 ## Godot calls this every physics tick (normally 60 times a second). Count

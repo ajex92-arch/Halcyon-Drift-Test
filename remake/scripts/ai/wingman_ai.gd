@@ -34,6 +34,20 @@ const ORBIT_FLIP_TICKS := 150
 const ORBIT_SPREAD := 37
 ## Boost only with at least this fraction of the battery.
 const BOOST_ENERGY := 0.5
+## The longest straight line to the place that is checked for rocks (world units). A wingman farther away than this is
+## treated as having a rock in the way, so it flies the route.
+const DIRECT_MAX := 14000.0
+## While a wingman flies a route it keeps one route goal and takes the place as the new goal only when the place has moved this
+## far from it (a goal that moves with the leader makes the route finder plan a new route every second).
+const ROUTE_GOAL_STEP := 2500.0
+## ... or when the wingman is this close to the route goal.
+const ROUTE_GOAL_NEAR := 1000.0
+## How many of a new route's first points are looked at for one that lies behind the wingman (see _plan_route).
+const ROUTE_SKIP_LOOK := 6
+## A new route starts at a point that lies within this many radians of the way the wingman is going (see _plan_route).
+const ROUTE_START_TURN := 1.0
+## A route's point this close to the wingman counts as reached (PilotFlight.travel() reaches a waypoint within 350, less in the jungle).
+const ROUTE_REACH := 350.0
 
 ## This wingman's record in World.squads (null until it starts).
 var rec: Squad = null
@@ -57,8 +71,10 @@ var hold_at := Vector2.ZERO
 var hold_heading := 0.0
 ## The guard pocket's half-angle for the ward's hull (degrees).
 var cone := 70.0
-## True when a rock lies across the straight line to the place (checked at each think).
+## True when a rock lies across the straight line to the place (checked at each think; a place farther than DIRECT_MAX counts as blocked).
 var rock_between := false
+## The point the route is flown to while a route is flown (see ROUTE_GOAL_STEP), or INF when no route is being flown.
+var route_goal := Vector2.INF
 ## A list the spatial hash fills (kept so no list is made each time).
 var scratch: Array = []
 ## The tick of the standing order, the fire stance and the formation at the last think (a change makes the
@@ -82,6 +98,7 @@ func _init(w: World, p: PilotProfile) -> void:
 ## spatial hash still holds ships that have since been freed. The first update, inside a tick, thinks.
 func start(ship: Ship) -> void:
 	_reset_after_launch()
+	route_goal = Vector2.INF
 	rec = Squads.record_of(world, profile)
 	ship.controls.assist = true
 	seen_order_tick = -2
@@ -166,7 +183,7 @@ func _think(ship: Ship) -> void:
 	lock_target = t
 	goal = _slot(ship)
 	var d := ship.global_position.distance_to(goal)
-	rock_between = d <= SquadEngine.TRAVEL_FAR and not w.asteroids.segment_hit(ship.global_position, goal, ship.radius + 8.0).is_empty()
+	rock_between = d > DIRECT_MAX or not w.asteroids.segment_hit(ship.global_position, goal, ship.radius + 8.0).is_empty()
 	rec.engine["in_slot"] = SquadEngine.in_slot(d)
 	rec.engine["catching"] = SquadEngine.catching_up(d, spacing_s)
 	if t != null:
@@ -388,6 +405,10 @@ func _steer(ship: Ship) -> void:
 	if mode != "home" and rec != null and (not _alive(leader) or (mode == "guard" and not _alive(ward))):
 		_think(ship)
 	if mode == "home" or rec == null:
+		# The flight home plans its route here (the same start rule as the flight to the place), so that travel() finds a route
+		# for its goal already and keeps it.
+		if mode == "home" and goal != Vector2.INF and (ship.global_position.distance_to(goal) > 2500.0 or not world.map.in_open_lane(ship.global_position)):
+			_plan_route(ship, goal)
 		combat.steer(ship)
 		return
 	var c := ship.controls
@@ -422,10 +443,18 @@ func _fly_to(ship: Ship, slot: Vector2) -> void:
 	var c := ship.controls
 	var p := ship.global_position
 	var d := p.distance_to(slot)
-	if SquadEngine.use_travel(d, rock_between):
-		flight.travel(ship, slot, SquadEngine.IN_SLOT)
+	if rock_between:
+		if route_goal == Vector2.INF or slot.distance_to(route_goal) > ROUTE_GOAL_STEP or p.distance_to(route_goal) < ROUTE_GOAL_NEAR:
+			route_goal = slot
+		_plan_route(ship, route_goal)
+		flight.travel(ship, route_goal, SquadEngine.IN_SLOT)
 		c.aim_point = c.face_point
 		return
+	route_goal = Vector2.INF
+	# No route is flown now: forget the last one, so a later route is not joined to a stale waypoint (see _plan_route).
+	if path_goal != Vector2.INF:
+		path = PackedVector2Array()
+		path_goal = Vector2.INF
 	var vel := _place_velocity()
 	var wanted := SquadEngine.wanted_velocity(vel, slot, p, ship.f_max, jungle)
 	var sticks := SquadEngine.stick_values(wanted, ship.velocity, ship.rotation)
@@ -445,6 +474,46 @@ func _fly_to(ship: Ship, slot: Vector2) -> void:
 	c.boost = boost_ok and not jungle and ship.can_boost and ship.energy.fraction() > BOOST_ENERGY
 	flight.avoid_rocks(ship)
 
+
+## Plan the route to a goal the way PilotFlight.travel() would (when none is held or the goal is over 600 from the held route's goal), but start it
+## without a turn: the route finder starts at the point of its graph nearest the ship, which can lie behind it, and a Bomber (1.15 radians a second)
+## lost most of its speed turning back to it. A route being flown is continued through the waypoint the ship is heading for; a first route starts at
+## the first of its first ROUTE_SKIP_LOOK points that is within ROUTE_START_TURN of the way the ship is going and has a clear line (else at the first
+## point). travel() then finds a route that fits the goal and keeps it. The flight home plans its route through here too.
+func _plan_route(ship: Ship, to: Vector2) -> void:
+	if path_goal != Vector2.INF and path_goal.distance_to(to) <= 600.0 and not path.is_empty():
+		return
+	var p := ship.global_position
+	# A route being flown goes on through the waypoint the ship is heading for (when that waypoint is nearer the new goal than the
+	# ship is and the line to it is clear): the new route is planned from there, so the ship does not turn back to the route
+	# finder's nearest point (the measured turns of 1.3 to 2.5 radians at each new route of a Bomber 6,000 behind its pilot).
+	if path_goal != Vector2.INF and path_goal.distance_to(to) <= 2.0 * ROUTE_GOAL_STEP and not path.is_empty() and path_i < path.size() - 1:
+		var wp := path[path_i]
+		if wp.distance_to(to) < p.distance_to(to) and world.asteroids.segment_hit(p, wp, ship.radius + 8.0).is_empty():
+			var rest := JungleBigFeature.plan_route(world.map.route, ship, wp, to)
+			if not rest.is_empty():
+				var joined := PackedVector2Array([wp])
+				joined.append_array(rest)
+				path = joined
+				path_goal = to
+				path_i = 0
+				return
+	path = JungleBigFeature.plan_route(world.map.route, ship, p, to)
+	path_goal = to
+	path_i = 0
+	# A new route starts at the first of its first points that is within ROUTE_START_TURN of the way the ship is going (its
+	# velocity, or its nose when nearly still) and has a clear line; when none is, at the first point (a flight home from
+	# straight away from home is a real U-turn).
+	# (Points within ROUTE_REACH of the ship count as reached: travel() skips them at once.)
+	var heading := ship.velocity.angle() if ship.velocity.length() > 60.0 else ship.rotation
+	var first := 0
+	while first < path.size() - 1 and p.distance_to(path[first]) < ROUTE_REACH:
+		first += 1
+	path_i = first
+	for k in range(first, mini(path.size(), first + ROUTE_SKIP_LOOK)):
+		if absf(Util.ang_diff(heading, (path[k] - p).angle())) < ROUTE_START_TURN and (k == first or world.asteroids.segment_hit(p, path[k], ship.radius + 8.0).is_empty()):
+			path_i = k
+			return
 
 ## The heading (radians) the wing faces: the hold heading in a hold, the ward's in a guard, else the leader's.
 func _place_heading() -> float:

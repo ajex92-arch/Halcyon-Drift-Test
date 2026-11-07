@@ -43,11 +43,23 @@ const ROLE_LABELS := {"follow": "Form on me", "defend": "Cover me"}
 
 # --- registering ------------------------------------------------------------------------------
 
-## Hand the checker and the handler of the seven squad kinds to world `w`'s order queue.
+## Hand the checker and the handler of the seven squad kinds, and of STOP (a bought squadron's order), to world
+## `w`'s order queue.
 static func register(w: World) -> void:
-	for kind: String in OrderKinds.SQUADRON_KINDS:
+	var kinds: Array = OrderKinds.SQUADRON_KINDS.duplicate()
+	kinds.append(OrderKinds.STOP)
+	for kind: String in kinds:
 		w.orders.checkers[kind] = func(o: Dictionary) -> String: return check(w, o)
 		w.orders.handlers[kind] = func(o: Dictionary) -> String: return handle(w, o)
+
+
+## Is `rec` a bought squadron's record (a squadron of small ships or one big ship the yard made, flown by the
+## stand-in brain), as opposed to a pilot's wingman?
+static func is_bought(rec: Variant) -> bool:
+	if rec == null or not (rec is Squad):
+		return false
+	var s := rec as Squad
+	return s.kind == "squadron" or s.kind == "ship"
 
 
 # --- the checks ---------------------------------------------------------------------------------
@@ -74,7 +86,12 @@ static func check(w: World, o: Dictionary) -> String:
 	var first: Variant = w.squads.get(int(subjects[0]))
 	if first == null:
 		return OrderKinds.TEXT_GONE_SQUAD
-	# Only a pilot's wing has a brain in part 1; the Admiral's squadrons come later.
+	# A bought squadron (the Admiral's) takes Move, Hold and Stop only (OrderKinds.BOUGHT_KINDS).
+	if is_bought(first):
+		return check_bought(w, o)
+	if kind == OrderKinds.STOP:
+		return OrderKinds.TEXT_UNBUILT
+	# Otherwise only a pilot's wing has a brain; the other squadron orders come with a later stage.
 	var lead := wing_of(w, o)
 	if lead == null:
 		return OrderKinds.TEXT_UNBUILT
@@ -103,6 +120,47 @@ static func check(w: World, o: Dictionary) -> String:
 	return ""
 
 
+## The rules for an order to bought squadrons (every record the order names is checked, not only the first): only
+## OrderKinds.BOUGHT_KINDS are carried out (every other kind is "Comes with a later stage"); each record must be a
+## bought squadron of the order's own team that still has a ship alive; Move and Hold take a point, Stop none.
+## Returns "" or the refusal text.
+static func check_bought(w: World, o: Dictionary) -> String:
+	var kind := str(o.get("kind", ""))
+	if not OrderKinds.BOUGHT_KINDS.has(kind):
+		return OrderKinds.TEXT_UNBUILT
+	var team := int(o.get("team", -1))
+	for sid in o.get("subjects", []):
+		var rec: Squad = w.squads.get(int(sid))
+		if rec == null or rec.member_uids.is_empty():
+			return OrderKinds.TEXT_GONE_SQUAD
+		if not is_bought(rec):
+			return OrderKinds.TEXT_VALUE
+		if rec.team != team:
+			return OrderKinds.TEXT_SEAT
+	var target_kind := str(o.get("target_kind", "none"))
+	if kind == OrderKinds.STOP:
+		if target_kind != "none":
+			return OrderKinds.TEXT_VALUE
+	elif target_kind != "point":
+		return OrderKinds.TEXT_VALUE
+	return ""
+
+
+## Carry out a Move, Hold or Stop for every bought squadron the order names: each record's standing order is
+## written (the shape of a wing's, with no settings), and its move stance is hold (0) for Hold, manoeuvre (1)
+## otherwise. The stand-in brain (Standin.hold_point_of) reads the point; a repeat is not looked for.
+static func _handle_bought(w: World, o: Dictionary) -> String:
+	var kind := str(o["kind"])
+	var apply_tick := int(o["apply_tick"])
+	for sid in o["subjects"]:
+		var rec: Squad = w.squads.get(int(sid))
+		if rec == null:
+			return OrderKinds.TEXT_GONE_SQUAD
+		rec.order = {"kind": kind, "target_kind": str(o["target_kind"]), "target": o["target"], "tick": apply_tick, "settings": (o["settings"] as Dictionary).duplicate()}
+		rec.move_stance = 0 if kind == OrderKinds.HOLD else 1
+	return ""
+
+
 ## The distance from the leader to unit `u` for the 3,200 rule: from the unit's hull for a
 ## mothership, else between the centres.
 static func _reach(leader: Ship, u: Unit) -> float:
@@ -127,6 +185,9 @@ static func is_ward(u: Unit, team: int) -> bool:
 ## Returns "" or the refusal text; a repeat of the wing's last order within 30 ticks is refused
 ## "Same order again" (code duplicate), which is logged and never shown.
 static func handle(w: World, o: Dictionary) -> String:
+	var subjects: Array = o.get("subjects", [])
+	if not subjects.is_empty() and is_bought(w.squads.get(int(subjects[0]))):
+		return _handle_bought(w, o)
 	var lead := wing_of(w, o)
 	if lead == null:
 		return OrderKinds.TEXT_GONE_SQUAD

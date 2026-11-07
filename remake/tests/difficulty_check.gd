@@ -29,20 +29,39 @@ extends Node
 ## data folder (a scratch one: start the game with the environment variable
 ## APPDATA pointing at an empty folder whose name holds the text); with any other
 ## folder this part only reports a failure and writes nothing.
+## It also checks the difficulty tag (T-124). Always: the words of each level (the
+## top bar's short tag, the scoreboard heading's end and the end screen's line, written
+## out here again), the Custom reading of a number that is none of the five, and the
+## How to play entry. With --force-hud, on the screens of the match it built: the top
+## bar's tag (its words, its hover sentence, its place under the wave line and above the
+## test tags, size 12, grey, the pass filter), the scoreboard's enemy heading and the end
+## screen's line all name the level of the ENEMY TEAM's income_mult, also after
+## Game.difficulty is set to another level (what a loaded saved game meets; saved games,
+## T-113, are not in the base this was written on), and all go away with a second human
+## (OrderQueue.human_seats_override = 2); with no human seat none of them names a level.
+## In a window (not headless), --shots=<folder> also saves two pictures of the tag's hover
+## sentence there (hover.png, hover_card.png) once the checks are done.
 ##
 ## HOW TO RUN IT ("godot" is the Godot console program, started from the folder
 ## that holds remake/):
 ##   godot --headless --path remake --fixed-fps 60 -- --auto --role=pilot --difficulty=hard --test=difficulty_check
 ##   godot --headless --path remake --fixed-fps 60 -- --auto --all-ai --difficulty=extreme --test=difficulty_check
+##   godot --headless --path remake --fixed-fps 60 -- --auto --role=admiral --bot=input --force-hud --team=vhorr --difficulty=hard --test=difficulty_check
 ## The first has a human pilot (so the enemy team is scaled), the second has no
-## human (so nothing is scaled). Try every level, with --role=pilot and
-## --role=admiral, and with --all-ai.
+## human (so nothing is scaled), the third also reads the tag on the screens. Try
+## every level, with --role=pilot and --role=admiral, and with --all-ai.
 ##
 ## WHO USES IT: main.gd loads it for --test=difficulty_check. It changes the
 ## credits of the match it builds, so it is only for this check.
 
 ## The enemy income multiplier of each level, as the check expects it.
 const EXPECTED := {"easy": 0.75, "medium": 1.0, "hard": 1.25, "very_hard": 1.5, "extreme": 2.0}
+## The top bar's tag of each level, written out here again (not copied from Difficulty).
+const TAGS := {"easy": "Easy · enemy earns 75%", "medium": "Medium · normal income", "hard": "Hard · enemy earns 125%", "very_hard": "Very hard · enemy earns 150%", "extreme": "Extreme · enemy earns 200%"}
+## What the scoreboard's enemy heading ends with, after "  ·  ".
+const HEADS := {"easy": "Easy: earns 75%", "medium": "Medium: normal income", "hard": "Hard: earns 125%", "very_hard": "Very hard: earns 150%", "extreme": "Extreme: earns 200%"}
+## The end screen's difficulty line.
+const LINES := {"easy": "Difficulty: Easy. The enemy earned 75% of its normal income.", "medium": "Difficulty: Medium. The enemy earned its normal income.", "hard": "Difficulty: Hard. The enemy earned 125% of its normal income.", "very_hard": "Difficulty: Very hard. The enemy earned 150% of its normal income.", "extreme": "Difficulty: Extreme. The enemy earned 200% of its normal income."}
 ## The credits paid through each gate.
 const AMOUNT := 100.0
 ## The ore of the test delivery (1 ore is worth 1 credit).
@@ -72,10 +91,16 @@ func setup(w: World) -> void:
 		var mult := enemy_mult if (human_team >= 0 and t != human_team) else 1.0
 		_check_team(t, mult)
 	_check_not_income()
+	_check_tag_texts()
+	if Game.opt("force-hud", false):
+		_check_screens()
 	var marker := str(Game.opt("settings-check", ""))
 	if marker != "":
 		_check_settings(marker)
 	print("difficulty_check: %d failures" % fails)
+	var shots := str(Game.opt("shots", ""))
+	if shots != "" and DisplayServer.get_name() != "headless":
+		await _hover_shots(shots)
 	get_tree().quit()
 
 
@@ -157,6 +182,148 @@ func _check_team(t: int, mult: float) -> void:
 		var p: PilotProfile = pilots[i]
 		worst = maxf(worst, absf(p.credits - float(each[i]) - (rate + p.gear_stats().g("income")) * mult))
 	_check(tag + " trickle, one second, every pilot", worst <= TOLERANCE, "largest error %.12f" % worst)
+
+
+## The texts of the difficulty tag (T-124), with no screen: every level's short tag,
+## scoreboard heading end and end screen line are the words written out above, a
+## multiplier that is none of the five reads Custom, and the How to play entry
+## "Difficulty" lists the five levels (made from Difficulty's data).
+func _check_tag_texts() -> void:
+	for level: String in EXPECTED:
+		var mult: float = EXPECTED[level]
+		var tag := "tag text, " + level
+		_check(tag + ": short_tag(level) and short_tag_for(multiplier) read '%s'" % TAGS[level], Difficulty.short_tag(level) == TAGS[level] and Difficulty.short_tag_for(mult) == TAGS[level], "'%s' / '%s'" % [Difficulty.short_tag(level), Difficulty.short_tag_for(mult)])
+		_check(tag + ": the scoreboard heading ends '%s'" % HEADS[level], Difficulty.heading_tag(mult) == HEADS[level], Difficulty.heading_tag(mult))
+		_check(tag + ": the end screen line reads '%s'" % LINES[level], Difficulty.result_line(mult) == LINES[level], Difficulty.result_line(mult))
+		_check(tag + ": the multiplier finds its level and the hover sentence is blurb()", Difficulty.level_of(mult) == level and Difficulty.blurb_for(mult) == Difficulty.blurb(level), "level_of %s" % Difficulty.level_of(mult))
+	_check("tag text: a multiplier that is none of the five reads Custom", Difficulty.level_of(1.4) == "" and Difficulty.short_tag_for(1.4) == "Custom · enemy earns 140%" and Difficulty.heading_tag(1.4) == "Custom: earns 140%" and Difficulty.result_line(1.4) == "Difficulty: Custom. The enemy earned 140% of its normal income." and Difficulty.blurb_for(1.4).begins_with("Custom: the enemy earns 140%"), Difficulty.short_tag_for(1.4))
+	var help := Difficulty.help_text()
+	var listed := true
+	for part in ["Easy 75%", "Medium 100%", "Hard 125%", "Very hard 150%", "Extreme 200%", "Only the enemy's income changes"]:
+		listed = listed and help.contains(part)
+	_check("tag text: help_text() lists the five levels and says only the enemy's income changes", listed, help)
+	var panel := (load("res://scenes/ui/help_panel.tscn") as PackedScene).instantiate() as HelpPanel
+	add_child(panel)
+	var entry := ""
+	for row in panel._body.get_children():
+		if row.get_child_count() == 2 and (row.get_child(0) as Label).text == "Difficulty":
+			entry = (row.get_child(1) as Label).text
+	_check("How to play: the match page has the Difficulty entry, made from Difficulty's data", entry == help, entry)
+	panel.free()
+
+
+## The difficulty tag on the screens (needs --force-hud), for the level this run built
+## the match with. With a human seat: the top bar's tag, its hover sentence and place,
+## the scoreboard's enemy heading and the end screen's line all say the level the
+## ENEMY TEAM's income_mult names, also when the picker (Game.difficulty) now holds
+## another level (what a loaded saved game meets; saved games, T-113, are not in this
+## base), and all hide when two humans sit in the match. With no human seat nothing
+## names a level.
+func _check_screens() -> void:
+	var hud := get_tree().root.find_child("Hud", true, false) as Hud
+	if hud == null:
+		_check("the HUD exists for the tag check", false, "no Hud node (use --force-hud)")
+		return
+	var level := Game.difficulty
+	var seat := world.human != null and world.human_role != "spectator"
+	var enemy := Rules.enemy_of(world.human_team)
+	var middle := hud.top_bar.get_node("Row/Middle")
+	var diff: Label = middle.get_node("DiffTag")
+	var tag := "%s %s:" % [world.human_role, level]
+	# Step 1: with the picker on the level of the match, then on another level.
+	var other := "easy" if level != "easy" else "extreme"
+	for picker: String in [level, other]:
+		Game.difficulty = picker
+		hud.top_bar.refresh(world)
+		var sb := (load("res://scenes/ui/scoreboard.tscn") as PackedScene).instantiate() as Scoreboard
+		add_child(sb)
+		sb.setup(world)
+		var es := _end_screen()
+		var line: Label = es.get_node("Center/Card/Col/Difficulty")
+		var where := "picker on %s" % picker
+		if seat:
+			_near("%s the enemy team's income_mult is the level's number (%s)" % [tag, where], world.teams[enemy].income_mult, float(EXPECTED[level]))
+			_check("%s the top bar's tag reads '%s' (%s)" % [tag, TAGS[level], where], diff.visible and diff.text == TAGS[level], "visible %s, '%s'" % [str(diff.visible), diff.text])
+			_check("%s the tag's hover is blurb(): %s" % [tag, where], diff.tooltip_text == Difficulty.blurb(level) and diff.tooltip_text.begins_with(String(Difficulty.LABELS[level]) + ":"), diff.tooltip_text)
+			_check("%s the enemy team's heading ends '  ·  %s' and the other team's has none (%s)" % [tag, HEADS[level], where], sb._heads[enemy].text.ends_with("  ·  " + HEADS[level]) and not sb._heads[world.human_team].text.contains(": earns") and not sb._heads[world.human_team].text.contains("normal income"), "'%s' / '%s'" % [sb._heads[enemy].text, sb._heads[world.human_team].text])
+			_check("%s the end screen's line reads '%s' (%s)" % [tag, LINES[level], where], line.visible and line.text == LINES[level], "visible %s, '%s'" % [str(line.visible), line.text])
+		else:
+			_check("%s no human seat: no tag, no heading level, no end screen line (%s)" % [tag, where], not diff.visible and not sb._heads[0].text.contains(": earns") and not sb._heads[1].text.contains(": earns") and not sb._heads[0].text.contains("normal income") and not sb._heads[1].text.contains("normal income") and not line.visible, "tag visible %s '%s', line visible %s" % [str(diff.visible), diff.text, str(line.visible)])
+		sb.free()
+		es.free()
+	Game.difficulty = level
+	# Step 2: the tag's place and looks (a human seat): under the wave line and above the test tags, size 12, grey, and it takes the pointer with the pass filter.
+	if seat:
+		var wave: Label = middle.get_node("Wave")
+		var tags: Label = middle.get_node("Tags")
+		_check("%s the tag sits between the wave line and the test tags" % tag, diff.get_index() == wave.get_index() + 1 and tags.get_index() == diff.get_index() + 1, "index %d, wave %d, tags %d" % [diff.get_index(), wave.get_index(), tags.get_index()])
+		_check("%s the tag is size 12, grey (MIST) and takes the pointer with the pass filter" % tag, diff.get_theme_font_size("font_size") == 12 and diff.get_theme_color("font_color") == Palette.MIST and diff.mouse_filter == Control.MOUSE_FILTER_PASS and hud.top_bar.mouse_filter == Control.MOUSE_FILTER_IGNORE, "size %d, colour %s, filter %d" % [diff.get_theme_font_size("font_size"), str(diff.get_theme_color("font_color")), diff.mouse_filter])
+		# Step 3: humans on both teams (an online match): nothing names a level.
+		world.orders.human_seats_override = 2
+		hud.top_bar.refresh(world)
+		var sb2 := (load("res://scenes/ui/scoreboard.tscn") as PackedScene).instantiate() as Scoreboard
+		add_child(sb2)
+		sb2.setup(world)
+		var es2 := _end_screen()
+		_check("%s humans on both teams: no tag, no heading level, no end screen line" % tag, not diff.visible and not sb2._heads[enemy].text.contains(": earns") and not sb2._heads[enemy].text.contains("normal income") and not (es2.get_node("Center/Card/Col/Difficulty") as Label).visible, "tag visible %s" % str(diff.visible))
+		sb2.free()
+		es2.free()
+		world.orders.human_seats_override = -1
+		hud.top_bar.refresh(world)
+		# Step 4: the bar is one line taller with the tag; the kill feed starts under it in a window 1280 wide, where
+		# the two share ground, and keeps its own place in one 1920 wide, where they do not (HudLayout._place_feed()).
+		var feed_tops := {}
+		for win: Vector2 in [Vector2(1280.0, 720.0), Vector2(1920.0, 1080.0)]:
+			hud.layout._place_top_bar(win)
+			hud.layout._place_feed(win)
+			feed_tops[int(win.x)] = hud.feed.offset_top
+		var bar_bottom: float = hud.top_bar.offset_top + hud.top_bar.get_combined_minimum_size().y
+		_check("%s the kill feed starts under the top bar at 1280 wide (%d, the bar ends at %d) and at %d at 1920 wide (%d)" % [tag, int(feed_tops[1280]), int(bar_bottom), int(HudLayout.FEED_TOP), int(feed_tops[1920])], float(feed_tops[1280]) >= bar_bottom and is_equal_approx(float(feed_tops[1920]), HudLayout.FEED_TOP))
+		hud.layout.apply()
+
+
+## Only in a window, with --shots=<folder>: the pictures of the tag's hover sentence, in the
+## folder. The pointer is moved over the tag (hover.png: the window as the engine's tooltip
+## draws it, if it shows in a parked window) and a stand-in card with the same words in the
+## same tooltip look is put under the tag (hover_card.png), so the sentence is seen either way.
+func _hover_shots(dir: String) -> void:
+	var hud := get_tree().root.find_child("Hud", true, false) as Hud
+	if hud == null:
+		return
+	DirAccess.make_dir_recursive_absolute(dir)
+	var diff: Label = hud.top_bar.get_node("Row/Middle/DiffTag")
+	await get_tree().create_timer(1.5).timeout
+	var at := diff.get_global_rect().get_center()
+	var ev := InputEventMouseMotion.new()
+	ev.position = at
+	ev.global_position = at
+	Input.parse_input_event(ev)
+	await get_tree().create_timer(1.5).timeout
+	await _save_shot(dir.path_join("hover.png"))
+	var card := PanelContainer.new()
+	card.theme_type_variation = &"TooltipPanel"
+	card.add_child(UiKit.label(diff.tooltip_text, 13, Palette.ICE, true))
+	card.custom_minimum_size = Vector2(330.0, 0.0)
+	hud.add_child(card)
+	card.position = Vector2(diff.get_global_rect().position.x, diff.get_global_rect().end.y + 26.0)
+	await get_tree().create_timer(0.3).timeout
+	await _save_shot(dir.path_join("hover_card.png"))
+
+
+## Save the window's picture as `path` (after the frame is drawn).
+func _save_shot(path: String) -> void:
+	await RenderingServer.frame_post_draw
+	get_viewport().get_texture().get_image().save_png(path)
+	print("shot ", path)
+
+
+## An end screen for the running match, added to the check's own node so its
+## _ready() fills it in (the winner does not matter here).
+func _end_screen() -> EndScreen:
+	var es := (load("res://scenes/ui/end_screen.tscn") as PackedScene).instantiate() as EndScreen
+	es.setup(world, 0, "The check ended the match.")
+	add_child(es)
+	return es
 
 
 ## Make a start screen as a new run would: the setting is open again, then the

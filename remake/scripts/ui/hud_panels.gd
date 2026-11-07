@@ -43,6 +43,9 @@ const BOARD_SCENE := preload("res://scenes/ui/admiral_board.tscn")
 const SCORE_SCENE := preload("res://scenes/ui/scoreboard.tscn")
 ## The help pages' scene.
 const HELP_SCENE := preload("res://scenes/ui/help_panel.tscn")
+## The command pause (RT4): true while P, or the strip's pause button, holds the match with no pause menu. The command view stays alive
+## (selection, card, panel, map clicks, the camera); orders given wait in the queue and run on the first tick after the pause ends.
+var command_paused := false
 ## The Controls page's scene (scenes/ui/controls_page.tscn).
 const CONTROLS_SCENE := preload("res://scenes/ui/controls_page.tscn")
 ## The pause menu's scene.
@@ -183,6 +186,15 @@ func toggle_board() -> void:
 		hud.layout.apply()
 
 
+## Open the Admiral board on tab `tab` ("Research", "Build", "Mothership", "Fleet" or "Pilots"), making it first if needed
+## (the command card sends the player here for the facts it has no cell for). A board that is open already just
+## changes tab.
+func open_board_at(tab: String) -> void:
+	if hud.board == null or not hud.board.visible:
+		toggle_board()
+	hud.board._set_tab(tab)
+
+
 ## Show (`on` = true) or hide the scoreboard, making it first if needed.
 ## It sits in the middle of the room the panels have (see relayout()), sized
 ## to its contents, but never taller than that room (a taller table scrolls
@@ -225,10 +237,49 @@ func toggle_help() -> void:
 		panel_closed()
 
 
+## The command pause: in the command view P (and the strip's pause button) holds the match WITHOUT the pause menu, and the
+## strip's clock reads PAUSED with Resume; the second press resumes. Orders given meanwhile are queued by the order queue
+## and run on the first tick after resume (the map draws them as dotted lines "on resume"). While flying, in the pause menu,
+## or with no command view, P keeps today's pause menu (toggle_pause_menu). The mouse buttons are read again on resume,
+## as the pause menu does, because a button let go while paused never reached the World.
+func toggle_command_pause() -> void:
+	var view := hud.command_view
+	if view == null or not view.is_showing() or view.flying() or hud._pause_menu_active():
+		toggle_pause_menu()
+		return
+	if command_paused:
+		end_command_pause()
+		return
+	command_paused = true
+	hud.get_tree().paused = true
+	view.strip.paused = true
+	view.refresh()
+
+
+## End the command pause (a no-op when it is not on): the match runs again, the strip reads its clock.
+func end_command_pause() -> void:
+	if not command_paused:
+		return
+	command_paused = false
+	hud.get_tree().paused = false
+	var w := hud.world
+	if w != null:
+		w.mouse_fire = Input.is_mouse_button_pressed(MOUSE_BUTTON_LEFT)
+		w.mouse_special = Input.is_mouse_button_pressed(MOUSE_BUTTON_RIGHT)
+	if hud.command_view != null:
+		hud.command_view.strip.paused = false
+		hud.command_view.refresh()
+
+
 ## Open the pause menu (making it first if needed): the game pauses and the
 ## other panels close. If the menu is holding the game paused already (its card
 ## showing, or hidden behind the help pages), end the pause instead.
 func toggle_pause_menu() -> void:
+	# Step 0: the pause menu takes the pause over from the command pause (its own resume gives the match back).
+	if command_paused:
+		command_paused = false
+		if hud.command_view != null:
+			hud.command_view.strip.paused = false
 	# Step 1: first time only: make the menu, hidden, on top of the HUD.
 	if hud.pause_menu == null:
 		hud.pause_menu = PAUSE_SCENE.instantiate()

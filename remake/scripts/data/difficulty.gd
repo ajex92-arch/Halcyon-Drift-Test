@@ -31,9 +31,16 @@ extends RefCounted
 ## insurance, the refund of an expired admiral order, and money moved between the
 ## pilots of one team.
 ##
+## The screens that say which level a match is played at take every word from here:
+## tag_mult() reads the number the match really uses (the enemy team's
+## TeamState.income_mult, not Game.difficulty) and the *_tag, blurb_for(),
+## result_line() and help_text() functions turn it into text. A number that is none
+## of the five reads "Custom".
+##
 ## WHO USES IT: Game (the setting, the launch option, the remembered pick),
 ## WorldSetup (makes the multipliers), the start screen (the picker and its
-## texts), tests/difficulty_check.gd and tests/difficulty_probe.gd.
+## texts), the top bar, the scoreboard, the end screen and the help panel (the
+## difficulty tag), tests/difficulty_check.gd and tests/difficulty_probe.gd.
 
 ## The id of the Easy level (the id is what --difficulty and the settings file say).
 const EASY := "easy"
@@ -67,6 +74,9 @@ const INCOME := {EASY: EASY_INCOME, MEDIUM: MEDIUM_INCOME, HARD: HARD_INCOME, VE
 const LABELS := {EASY: "Easy", MEDIUM: "Medium", HARD: "Hard", VERY_HARD: "Very hard", EXTREME: "Extreme"}
 ## The sentence the start screen ends every level's description with.
 const SCOPE_NOTE := "This changes the enemy's income in single player only."
+## The name of an enemy multiplier that is none of the five (a tuned value): the
+## tags then read "Custom · enemy earns 140%".
+const CUSTOM_LABEL := "Custom"
 
 
 ## Is `id` one of the levels (a key of INCOME)?
@@ -92,6 +102,93 @@ static func team_income_mult(human_team: int, team: int) -> float:
 ## The start screen's description of level `level`: what the enemy earns, then
 ## SCOPE_NOTE.
 static func blurb(level: String) -> String:
-	var pct := roundi(income_mult(level) * 100.0)
+	return _blurb(String(LABELS.get(level, level)), income_mult(level))
+
+
+## The whole percent of multiplier `mult` (1.25 -> 125).
+static func percent(mult: float) -> int:
+	return roundi(mult * 100.0)
+
+
+## The id of the level whose multiplier is `mult` ("" when `mult` is none of the
+## five: a tuned value that is not in INCOME).
+static func level_of(mult: float) -> String:
+	for id: String in ORDER:
+		if is_equal_approx(income_mult(id), mult):
+			return id
+	return ""
+
+
+## The name for players of the level whose multiplier is `mult`: its LABELS entry,
+## or CUSTOM_LABEL when `mult` is none of the five.
+static func name_of(mult: float) -> String:
+	var id := level_of(mult)
+	return String(LABELS[id]) if id != "" else CUSTOM_LABEL
+
+
+## The enemy income multiplier a match really uses, for the screens that name the
+## level (the top bar's tag, the scoreboard's enemy heading, the end screen's line):
+## the enemy team's TeamState.income_mult, which WorldSetup set from the level the
+## match was built with. It is not Game.difficulty, so a loaded saved game shows its
+## own level even when the start screen holds another. Returns -1.0 when the match
+## names no level: no human seat (a test, a determinism run, a tour, the spectator
+## seat), or humans on both teams (an online match, where both teams earn 1.0).
+static func tag_mult(world: World) -> float:
+	if world == null or world.human == null or world.human_role == "spectator" or world.orders.human_seats() > 1:
+		return -1.0
+	return world.teams[Rules.enemy_of(world.human_team)].income_mult
+
+
+## The top bar's short tag for level `level`: "Hard · enemy earns 125%", or
+## "Medium · normal income" at the normal rate.
+static func short_tag(level: String) -> String:
+	return _short_tag(String(LABELS.get(level, level)), income_mult(level))
+
+
+## The short tag for the enemy multiplier `mult` (a number that is none of the five
+## reads "Custom · enemy earns 140%").
+static func short_tag_for(mult: float) -> String:
+	return _short_tag(name_of(mult), mult)
+
+
+## The sentence the top bar's tag shows when pointed at: blurb() for the multiplier.
+static func blurb_for(mult: float) -> String:
+	return _blurb(name_of(mult), mult)
+
+
+## The end of the scoreboard's enemy heading for multiplier `mult`: "Hard: earns 125%",
+## or "Medium: normal income".
+static func heading_tag(mult: float) -> String:
+	return "%s: %s" % [name_of(mult), "normal income" if percent(mult) == 100 else "earns %d%%" % percent(mult)]
+
+
+## The end screen's line for multiplier `mult`: "Difficulty: Hard. The enemy earned
+## 125% of its normal income."
+static func result_line(mult: float) -> String:
+	var what := "its normal income" if percent(mult) == 100 else "%d%% of its normal income" % percent(mult)
+	return "Difficulty: %s. The enemy earned %s." % [name_of(mult), what]
+
+
+## The How to play entry "Difficulty": the five levels, their multipliers (from
+## INCOME, in the order of the start screen) and the sentence that only the
+## enemy's income changes.
+static func help_text() -> String:
+	var parts := PackedStringArray()
+	for id: String in ORDER:
+		parts.append("%s %d%%" % [String(LABELS[id]), percent(income_mult(id))])
+	return "Single player only. The level picked on the start screen changes how much the enemy team earns, as a share of its normal income: %s. Only the enemy's income changes: your own team earns the normal income, and prices, rules and how the computer plays stay the same. The level shows in the top bar under the next-wave line (point at it for the full sentence), on the scoreboard and on the end screen." % ", ".join(parts)
+
+
+## `label` and the enemy multiplier `mult` as the top bar's short tag.
+static func _short_tag(label: String, mult: float) -> String:
+	if percent(mult) == 100:
+		return "%s · normal income" % label
+	return "%s · enemy earns %d%%" % [label, percent(mult)]
+
+
+## The description of the level called `label` that earns `mult`: what the enemy
+## earns, then SCOPE_NOTE.
+static func _blurb(label: String, mult: float) -> String:
+	var pct := percent(mult)
 	var what := "the enemy earns its normal income, as in the standard game." if pct == 100 else "the enemy earns %d%% of its normal income." % pct
-	return "%s: %s %s" % [String(LABELS.get(level, level)), what, SCOPE_NOTE]
+	return "%s: %s %s" % [label, what, SCOPE_NOTE]

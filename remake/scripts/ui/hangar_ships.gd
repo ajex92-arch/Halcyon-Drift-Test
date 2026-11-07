@@ -89,7 +89,7 @@ static func refresh_card(h: Hangar, c: CardButton, id: String, shop: bool, ts: T
 static func buy(h: Hangar, id: String) -> void:
 	if not h.can_shop():
 		return
-	var err := h.profile.buy_hull(id, h.world.teams[h.profile.team])
+	var err := HumanCmd.run(h.world, "buy_hull", [id])
 	if err != "":
 		Events.toast.emit(err)
 	else:

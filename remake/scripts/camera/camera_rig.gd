@@ -389,8 +389,13 @@ func _free_pan(dt: float, view: Vector2) -> void:
 	var flying := followed() != null and not get_tree().paused and not BoardHold.holding(world)
 	var dir := Vector2.ZERO
 	if not flying:
-		dir.x = Input.get_action_strength("strafe_right") - Input.get_action_strength("strafe_left")
-		dir.y = Input.get_action_strength("thrust_back") - Input.get_action_strength("thrust_forward")
+		if KeyMap.preset_choice("home_layout") == "A":
+			# Home layout A (the classic grid): W A S D are card keys, so the camera moves on the arrow keys.
+			dir.x = _home_key("camera_right") - _home_key("camera_left")
+			dir.y = _home_key("camera_down") - _home_key("camera_up")
+		else:
+			dir.x = Input.get_action_strength("strafe_right") - Input.get_action_strength("strafe_left")
+			dir.y = Input.get_action_strength("thrust_back") - Input.get_action_strength("thrust_forward")
 	# Step 2: the screen edges; they win over the keys on their own axis.
 	var mp := get_viewport().get_mouse_position()
 	var vs := get_viewport_rect().size
@@ -407,6 +412,17 @@ func _free_pan(dt: float, view: Vector2) -> void:
 	# (0..MapLayout.W across, 0..MapLayout.H down).
 	_free_pos += dir * view.x * 0.8 * dt
 	_free_pos = Vector2(clampf(_free_pos.x, 0.0, MapLayout.W), clampf(_free_pos.y, 0.0, MapLayout.H))
+
+
+## 1.0 while a key of the home-mode camera row `id` ("camera_up", "camera_down", "camera_left" or "camera_right") is
+## held down, else 0.0. The row's keys come from the key map (layout A gives them the arrow keys); a key is read by
+## its place on the keyboard, so a card key that shares a letter never moves the camera under another layout.
+func _home_key(id: String) -> float:
+	for k in KeyMap.effective_keys("home", id):
+		var p := KeyCodes.parse(String(k))
+		if bool(p["ok"]) and not bool(p["mouse"]) and Input.is_physical_key_pressed(int(p["code"]) as Key):
+			return 1.0
+	return 0.0
 
 
 ## Is the mouse pointer `mp` (screen pixels) inside the game's screen of size

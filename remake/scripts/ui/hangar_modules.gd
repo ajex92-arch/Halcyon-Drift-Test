@@ -113,9 +113,9 @@ static func toggle(h: Hangar, id: String) -> void:
 	var m := h.mode()
 	var err := ""
 	if m == "bay":
-		err = h.world.swap_module_in_bay(h.profile, id)
+		err = HumanCmd.run(h.world, "swap_module", [id])
 	elif m == "dock" or m == "dead":
-		err = h.profile.toggle_module(id)
+		err = HumanCmd.run(h.world, "toggle_module", [id])
 	else:
 		err = "Dock, or fly inside a repair bay's range, to change modules"
 	if err != "":

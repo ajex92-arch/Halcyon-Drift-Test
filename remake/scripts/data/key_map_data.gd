@@ -65,7 +65,7 @@ const MODE_LABELS := {
 
 ## The stages whose rows work now (only these become InputMap actions). A later
 ## stage appends its name here, which is the one edit that makes its rows live.
-const LIVE_STAGES := ["today", "RT2", "wingmen"]
+const LIVE_STAGES := ["today", "RT2", "wingmen", "RT4"]
 
 ## What the "comes with" column says for a row that is not live yet, by stage.
 const COMES_WITH := {
@@ -101,14 +101,14 @@ const ROWS := [
 	{"id": "center_on_ship", "mode": "shared", "label": "Centre the camera on your ship", "keys": "Space", "route": "Centre button (click again to let go)", "since": "today", "group": "Camera"},
 	{"id": "wheel", "mode": "shared", "label": "Order wheel (hold)", "keys": "X|Mouse5", "route": "Wing button", "since": "RT2", "group": "Shared", "note": "Hold: the wing's order wheel; tap: a quick order."},
 	{"id": "all_squadrons", "mode": "shared", "label": "Every squadron", "keys": "M", "route": "Select-all button", "since": "RT4", "group": "Selection"},
-	{"id": "group_1", "mode": "shared", "label": "Group 1 (Ctrl sets, Shift adds)", "keys": "F1", "route": "Group buttons", "since": "RT4", "group": "Selection"},
-	{"id": "group_2", "mode": "shared", "label": "Group 2", "keys": "F2", "route": "Group buttons", "since": "RT4", "group": "Selection"},
-	{"id": "group_3", "mode": "shared", "label": "Group 3", "keys": "F3", "route": "Group buttons", "since": "RT4", "group": "Selection"},
-	{"id": "group_4", "mode": "shared", "label": "Group 4", "keys": "F4", "route": "Group buttons", "since": "RT4", "group": "Selection"},
-	{"id": "group_5", "mode": "shared", "label": "Group 5", "keys": "F5", "route": "Group buttons", "since": "RT4", "group": "Selection"},
-	{"id": "group_6", "mode": "shared", "label": "Group 6", "keys": "F6", "route": "Group buttons", "since": "RT4", "group": "Selection"},
-	{"id": "group_7", "mode": "shared", "label": "Group 7", "keys": "F7", "route": "Group buttons", "since": "RT4", "group": "Selection"},
-	{"id": "group_8", "mode": "shared", "label": "Group 8", "keys": "F8", "route": "Group buttons", "since": "RT4", "group": "Selection"},
+	{"id": "group_1", "mode": "shared", "label": "Group 1 (Ctrl sets, Shift adds)", "keys": "F1", "route": "Group buttons", "since": "RT6", "group": "Selection"},
+	{"id": "group_2", "mode": "shared", "label": "Group 2", "keys": "F2", "route": "Group buttons", "since": "RT6", "group": "Selection"},
+	{"id": "group_3", "mode": "shared", "label": "Group 3", "keys": "F3", "route": "Group buttons", "since": "RT6", "group": "Selection"},
+	{"id": "group_4", "mode": "shared", "label": "Group 4", "keys": "F4", "route": "Group buttons", "since": "RT6", "group": "Selection"},
+	{"id": "group_5", "mode": "shared", "label": "Group 5", "keys": "F5", "route": "Group buttons", "since": "RT6", "group": "Selection"},
+	{"id": "group_6", "mode": "shared", "label": "Group 6", "keys": "F6", "route": "Group buttons", "since": "RT6", "group": "Selection"},
+	{"id": "group_7", "mode": "shared", "label": "Group 7", "keys": "F7", "route": "Group buttons", "since": "RT6", "group": "Selection"},
+	{"id": "group_8", "mode": "shared", "label": "Group 8", "keys": "F8", "route": "Group buttons", "since": "RT6", "group": "Selection"},
 
 	# --- flying: the pilot's keys, exactly as before --------------------------------
 	{"id": "thrust_forward", "mode": "flying", "label": "Thrust forward", "keys": "W", "route": "", "since": "today", "group": "Pilot"},

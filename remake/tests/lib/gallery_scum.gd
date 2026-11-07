@@ -6,7 +6,8 @@ extends RefCounted
 ## Three things:
 ##   - --scum: the pictures of the three ships, close up, at the usual play zoom next to
 ##     one pilot ship of each team for scale, and the Raider turned eight ways at the play
-##     zoom (to judge how well its heading reads), plus one den as it stands on the map.
+##     zoom (to judge how well its heading reads), all three ships turned four ways each (scum_turned),
+##     plus one den as it stands on the map.
 ##   - --scum-fight: plays a real AI match and photographs the first fight at a den (a
 ##     jungler against a den ship), wide and near, at the same instant.
 ##   - --bench --bench-look=scum: the cost of drawing a crowd of Scum ships, far bigger
@@ -33,6 +34,10 @@ const PLAY_VIEW := 6000.0
 const MID_VIEW := 2400.0
 ## The width of the den picture.
 const DEN_VIEW := 1100.0
+## The width of the picture of every ship turned several ways.
+const TURNED_VIEW := 1500.0
+## The angles (radians) the turned ships are set at.
+const TURNED_ANGLES := [0.7, 2.1, -1.2, 3.0]
 ## The width of the near picture of the fight.
 const FIGHT_NEAR_VIEW := 1300.0
 ## The zoom of the close-up of each kind of den ship (screen pixels per world unit), by
@@ -63,7 +68,7 @@ func _init(g: Node) -> void:
 # --- the pictures ------------------------------------------------------------------------------
 
 ## Take the pictures: scum_raider_close, scum_carrier_close, scum_fighter_close, scum_play,
-## scum_heading_play, scum_heading_mid and scum_den.
+## scum_heading_play, scum_heading_mid, scum_turned and scum_den.
 func pictures() -> void:
 	_hide_everything()
 	var home: Vector2 = gallery.home
@@ -104,6 +109,25 @@ func pictures() -> void:
 		await _snap(str(pair[1]), "Scum Raider turned eight ways (%d world units across)" % int(view))
 		for i in range(1, 8):
 			(spots[i] as Node2D).visible = false
+	# All three ships turned four ways each, at a view where the Carrier's glows and outlines and the
+	# Fighter's glow show: the picture to compare a version of the painter with an older one when the
+	# ships' bodies are kept pictures that turn with them.
+	gallery.aim_camera(home, size.x / TURNED_VIEW)
+	var turned: Array = []
+	for i in TURNED_ANGLES.size():
+		var x := (float(i) - 1.5) * TURNED_VIEW * 0.22
+		var tc := _make("carrier", home)
+		tc.rotation = float(TURNED_ANGLES[i])
+		tc.global_position = home + Vector2(x, -TURNED_VIEW * 0.16)
+		var tr := _make("gunship", home)
+		tr.rotation = float(TURNED_ANGLES[(i + 1) % TURNED_ANGLES.size()])
+		tr.global_position = home + Vector2(x, 0.0)
+		var tf := _make_fighter(tc, home)
+		tf.rotation = float(TURNED_ANGLES[(i + 2) % TURNED_ANGLES.size()])
+		tf.global_position = home + Vector2(x, TURNED_VIEW * 0.16)
+		turned.append_array([tc, tr, tf])
+	_only_all(turned)
+	await _snap("scum_turned", "Scum Carrier, Raider and Fighter turned four ways (%d world units across)" % int(TURNED_VIEW))
 	# One den as it stands on the map: asteroids back on, the camera on the first camp.
 	gallery.world.get_node("Asteroids").visible = true
 	var camp: Dictionary = gallery.world.map.camps[0]

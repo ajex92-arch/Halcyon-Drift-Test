@@ -71,7 +71,9 @@ extends Control
 ## A15 shows the layout.
 ## Mouse-only play (T-114): the buttons, the readout and a kit gear slot call router.click(), which does
 ## what the key does. Every frame _process() also sets World.ui_hold: true while the pointer is on one of
-## them and the player is not firing, which keeps the ship's aim still (_pointer_on_buttons()).
+## them and the player is not firing, which keeps the ship's aim still (_pointer_on_buttons()). The hold also starts a
+## fraction of a second BEFORE the pointer arrives at the ship readout (_pointer_nears_readout(): the pointer's smoothed
+## velocity carries it onto the readout within AIM_HOLD_LEAD_S), so the hull does not turn toward the readout on the way.
 ##
 ## WHO USES IT: main.gd loads scenes/ui/hud.tscn and calls setup(world).
 ## tests/ui_tour.gd finds the "Hud" node and uses hud.hangar, hud.board,
@@ -85,6 +87,14 @@ const END_SCENE := preload("res://scenes/ui/end_screen.tscn")
 const OVERLAY_SCENE := preload("res://scenes/ui/command_overlay.tscn")
 ## The note box (F9).
 const NOTE_SCENE := preload("res://scenes/ui/note_box.tscn")
+## The aim hold starts this many seconds before the pointer reaches the ship readout, when it is heading straight for it
+## (the shield-aim-hold change; 0 gives the old behaviour: the hold starts when the pointer is on the readout).
+const AIM_HOLD_LEAD_S := 0.4
+## The slowest pointer speed (pixels a second) that counts as heading for the readout: a slower pointer is resting or
+## drifting, and its aim is not held before it is on the readout.
+const AIM_HOLD_MIN_SPEED := 90.0
+## How long (seconds) the pointer's velocity is smoothed over, so one jittery frame does not start or stop the hold.
+const AIM_VEL_SMOOTH_S := 0.05
 
 ## The pop-up text shown when one of the human Admiral's orders worked,
 ## keyed by the order's name (as sent in Events.admiral_result). Orders not
@@ -117,6 +127,9 @@ var controls: ControlsPage = null
 var pause_menu: PauseMenu = null
 ## The end-of-match screen. Made when the match ends; null until then.
 var end_screen: EndScreen = null
+## The match series (MatchSeries) that main.gd made for this match, or null: the end screen gets it
+## for its graph.
+var series: MatchSeries = null
 ## The note box (F9). Made the first time the key is pressed; null until then.
 var note_box: NoteBox = null
 
@@ -146,9 +159,23 @@ var seat_bar: SeatBar
 var wing_wheel: WingWheel
 ## The marks the wing puts on the map (a child of the World, like the overlay).
 var wing_marks: WingMarks
+## The Admiral's command view (the strip, the card, the selection and production panels); shows for the human
+## Admiral only (made in code by setup()).
+var command_view: CommandView
 
 ## Seconds until the next full refresh (counts down from 0.1).
 var _t := 0.0
+## Where the pointer was at the last frame (window pixels).
+var _ptr_last := Vector2.ZERO
+## True once the pointer has been seen at a frame (the first frame has no velocity yet).
+var _ptr_seen := false
+## The pointer's velocity (pixels a second), smoothed over AIM_VEL_SMOOTH_S.
+var _ptr_vel := Vector2.ZERO
+## The pointer's place from the last mouse-motion event the HUD saw (the viewport's own mouse position does not follow
+## the events a test pushes).
+var _ptr_event := Vector2.ZERO
+## True once the HUD has seen a mouse-motion event.
+var _ptr_event_seen := false
 
 
 ## Called once when the node joins the scene: give the HUD (and every
@@ -156,18 +183,21 @@ var _t := 0.0
 ## from this theme.
 func _ready() -> void:
 	theme = UiKit.make_theme()
+	RtsTheme.extend(theme)
 
 
 ## Wire the HUD to world `w` and start listening to game news. main.gd
 ## calls this once, right after adding the HUD to the screen.
-func setup(w: World) -> void:
+func setup(w: World, match_series: MatchSeries = null) -> void:
 	world = w
+	series = match_series
 	# Step 0: the highlight colour is the human's team's (a spectator's World
 	# says Aurelian). The panels made from here on take it from UiKit, and the
 	# theme made in _ready() is made again if it had another team's.
 	if UiKit.accent_team != w.human_team:
 		UiKit.set_accent_team(w.human_team)
 		theme = UiKit.make_theme()
+		RtsTheme.extend(theme)
 	# Step 1: the Admiral's map-tool layer lives in the game world.
 	overlay = OVERLAY_SCENE.instantiate()
 	world.add_child(overlay)
@@ -192,6 +222,10 @@ func setup(w: World) -> void:
 	seat_bar = SeatBar.new()
 	add_child(seat_bar)
 	seat_bar.setup(self)
+	# The Admiral's command view sits over the map under the order wheel (made for every seat; it shows for the Admiral only).
+	command_view = CommandView.new()
+	add_child(command_view)
+	command_view.setup(self)
 	wing_wheel = WingWheel.new()
 	add_child(wing_wheel)
 	wing_wheel.setup(self)
@@ -426,13 +460,14 @@ func _on_admiral_result(team: int, action: String, ok: bool, message: String) ->
 ## would be drawn over the end screen's text).
 func _on_match_over(winner: int, reason: String) -> void:
 	get_tree().paused = false
+	panels.command_paused = false
 	if pause_menu != null:
 		pause_menu.end_session()
 	_close_others(null)
 	overlay.disarm()
 	toast_box.visible = false
 	end_screen = END_SCENE.instantiate()
-	end_screen.setup(world, winner, reason)
+	end_screen.setup(world, winner, reason, series)
 	add_child(end_screen)
 
 
@@ -445,7 +480,8 @@ func _process(dt: float) -> void:
 		return
 	toast_box.tick(dt)
 	router.wing_tick()
-	world.ui_hold = _pointer_on_buttons() and not world.mouse_fire
+	_track_pointer(dt)
+	world.ui_hold = (_pointer_on_buttons() or _pointer_nears_readout()) and not world.mouse_fire
 	_t -= dt
 	if _t <= 0.0:
 		_t = 0.1
@@ -460,6 +496,52 @@ func _pointer_on_buttons() -> bool:
 		return false
 	return over == status or status.is_ancestor_of(over) or seat_bar.is_ancestor_of(over) or over == seat_bar \
 			or slots.is_ancestor_of(over)
+
+
+## Note where the pointer is from every mouse-motion event.
+func _input(event: InputEvent) -> void:
+	if event is InputEventMouseMotion:
+		_ptr_event = (event as InputEventMouseMotion).position
+		_ptr_event_seen = true
+
+
+## Keep the pointer's smoothed velocity up to date (every frame, so it is right on the frame the pointer nears the readout).
+func _track_pointer(dt: float) -> void:
+	var p := _ptr_event if _ptr_event_seen else get_viewport().get_mouse_position()
+	if _ptr_seen and dt > 0.0:
+		_ptr_vel = _ptr_vel.lerp((p - _ptr_last) / dt, 1.0 - exp(-dt / AIM_VEL_SMOOTH_S))
+	_ptr_seen = true
+	_ptr_last = p
+
+
+## Is the pointer outside the ship readout but heading straight for it and about to arrive: moving at AIM_HOLD_MIN_SPEED or
+## more, on a straight line that enters the readout within AIM_HOLD_LEAD_S seconds? Then World.ui_hold is on already, so the
+## aim keeps the direction it has and the hull does not turn toward the readout on the way down to it. A pointer that sweeps
+## past, stops short or turns away is not heading for it, and its aim is the mouse as ever.
+func _pointer_nears_readout() -> bool:
+	if status == null or not status.is_visible_in_tree() or _ptr_vel.length() < AIM_HOLD_MIN_SPEED:
+		return false
+	var r := status.get_global_rect()
+	var p := _ptr_last
+	if r.has_point(p):
+		return false
+	# The straight line p + v * t against the readout's box (slabs): the time it first enters, or never.
+	var t_in := 0.0
+	var t_out := INF
+	for axis in 2:
+		var o := p.x if axis == 0 else p.y
+		var d := _ptr_vel.x if axis == 0 else _ptr_vel.y
+		var lo := r.position.x if axis == 0 else r.position.y
+		var hi := r.end.x if axis == 0 else r.end.y
+		if absf(d) < 0.001:
+			if o < lo or o > hi:
+				return false
+			continue
+		var t1 := (lo - o) / d
+		var t2 := (hi - o) / d
+		t_in = maxf(t_in, minf(t1, t2))
+		t_out = minf(t_out, maxf(t1, t2))
+	return t_in <= t_out and t_in <= AIM_HOLD_LEAD_S
 
 
 ## Update every widget's text from the game state. Old feed lines fade out

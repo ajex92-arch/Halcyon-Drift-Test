@@ -25,7 +25,7 @@ extends RefCounted
 ## of three counts 3, a big ship 1). A place is taken when a build starts and given
 ## back when the ship dies or a started build is cancelled. This is the one home of
 ## the limit; it changes only in a commit of its own.
-const CAP_IN_FORCE := 18
+const CAP_IN_FORCE := 63
 
 # --- prices ----------------------------------------------------------------------------
 
@@ -131,7 +131,7 @@ const SQUADRONS_PER_CORVETTE := 3
 const SQUADRONS_PER_FRIGATE := 2  # one frigate per this many squadrons
 const SPECIAL_ONE_IN := 3  # one squadron in this many is a special squadron
 ## The most capital ships (alive, building and waiting) the computer keeps, as a percent of the
-## fleet limit (34 of 18 is 6).
+## fleet limit, rounded down (34 percent of a limit of 63 is 21).
 const CAPITAL_MAX_PERCENT := 34
 
 

@@ -7,11 +7,12 @@ extends RefCounted
 ## It paints, in this order:
 ##   1. for everyone on a team: the rally waypoint (a ring, a cross and
 ##      "Rally point (Ns)" with the seconds it has left);
+##   (in the command pause the human's waiting Move and Hold orders are drawn as dotted lines tagged "on resume")
 ##   2. for the Admiral only: our repair bays' healing range, a ring
-##      around each selected minion, and the box being dragged;
+##      around each selected squadron, the mothership's ring, a dashed hover ring and the box being dragged;
 ##   3. while a tool is armed: a preview at the mouse, a ring as big as
 ##      what the tool covers, green (repair colour) where it is allowed
-##      and red where it isn't, with the reason or the instruction.
+##      and in the danger colour with the danger triangle where it isn't, with the reason or the instruction.
 ## Everything is drawn in world positions. To keep lines and text the same
 ## size on screen whatever the camera zoom, sizes are multiplied by `px`:
 ## how many world units one screen pixel covers right now (1 / zoom).
@@ -61,21 +62,72 @@ static func _draw_waypoint(ov: CommandOverlay, vt: int, px: float) -> void:
 
 
 ## The Admiral's marks: our live repair bays' healing range (so the
-## Admiral can plan where ships get healed), a ring around each selected
-## minion, and the box-select rectangle while dragging.
+## Admiral can plan where ships get healed), a thin ice ring around each
+## selected squadron (and our mothership), a dashed ring on the squadron
+## under the pointer, and the dashed selection box while dragging.
 static func _draw_admiral_marks(ov: CommandOverlay, px: float) -> void:
 	var world := ov.world
 	for b: RepairBay in world.bays:
 		if b.team == ov.team and b.alive:
 			ov.draw_arc(b.global_position, float(Structures.REPAIR_BAY["range"]), 0.0, TAU, 48, Palette.with_alpha(Palette.REPAIR, 0.25), 1.5 * px, true)
-	# Selected minions (this also tidies the selection list).
-	for m in ov._live_selection():
-		ov.draw_arc(m.global_position, m.radius + 14.0, 0.0, TAU, 12, Palette.ICE, 1.5 * px, true)
-	# The drag box: a faint fill and an outline.
+	# Selected squadrons: one ring each around all its ships.
+	for id in ov.sel_squads:
+		_ring(ov, world.squads.get(id), px, false)
+	if ov.sel_base:
+		var ms := world.mothership(ov.team)
+		if ms != null and is_instance_valid(ms):
+			ov.draw_arc(ms.global_position, float(Structures.MOTHERSHIP["length"]) * 0.5 + 24.0 * px, 0.0, TAU, 48, Palette.ICE, 1.5 * px, true)
+	if ov.hover_squad >= 0 and not ov.sel_squads.has(ov.hover_squad):
+		_ring(ov, world.squads.get(ov.hover_squad), px, true)
+	# Orders given in the command pause wait in the queue (they run on the first tick after the pause): a dotted line from each
+	# squadron to its point, tagged "on resume".
+	if ov.get_tree().paused:
+		_draw_pending(ov, px)
+	# The drag box: a faint fill and a dashed outline.
 	if ov._drag_from != Vector2.INF:
 		var r := Rect2(ov._drag_from, Vector2.ZERO).expand(ov._drag_to)
 		ov.draw_rect(r, Palette.with_alpha(Palette.ICE, 0.08))
-		ov.draw_rect(r, Palette.ICE, false, 1.5 * px)
+		var corners := [r.position, Vector2(r.end.x, r.position.y), r.end, Vector2(r.position.x, r.end.y)]
+		for i in 4:
+			ov.draw_dashed_line(corners[i], corners[(i + 1) % 4], Palette.ICE, 1.5 * px, 8.0 * px)
+
+
+## The human's Move and Hold orders of our team that wait in the order queue (an order given in the command pause is stamped
+## for the next tick): a dotted line from each squadron's centre to the point, and "on resume" there.
+static func _draw_pending(ov: CommandOverlay, px: float) -> void:
+	var world := ov.world
+	for o: Dictionary in world.orders.queue:
+		if not bool(o.get("human", false)) or int(o["team"]) != ov.team or int(o["apply_tick"]) <= world.tick_count:
+			continue
+		if str(o["kind"]) != OrderKinds.MOVE and str(o["kind"]) != OrderKinds.HOLD:
+			continue
+		var to: Variant = o["target"]
+		if not (to is Vector2i or to is Vector2):
+			continue
+		var point := Vector2(to)
+		for sid in o["subjects"]:
+			var rec: Squad = world.squads.get(int(sid))
+			if rec != null:
+				ov.draw_dashed_line(RtsSelect.centre_of(world, rec), point, Palette.with_alpha(Palette.ICE, 0.8), 1.5 * px, 3.0 * px)
+		ov.draw_circle(point, 4.0 * px, Palette.ICE)
+		_label(ov, point + Vector2(0.0, -14.0 * px), "on resume", Palette.ICE, px)
+
+
+## A ring around squad record `rec` (a Squad or null): about all its ships, 10 screen pixels clear of the farthest
+## hull. `dashed` draws it as short arcs with gaps (the hover look); else one thin ice line.
+static func _ring(ov: CommandOverlay, rec: Variant, px: float, dashed: bool) -> void:
+	if rec == null:
+		return
+	var squad := rec as Squad
+	var c := RtsSelect.centre_of(ov.world, squad)
+	var rad := RtsSelect.reach_of(ov.world, squad, c) + 10.0 * px
+	if not dashed:
+		ov.draw_arc(c, rad, 0.0, TAU, 40, Palette.ICE, 1.5 * px, true)
+		return
+	var steps := 12
+	for i in steps:
+		var a0 := TAU * float(i) / float(steps)
+		ov.draw_arc(c, rad, a0, a0 + TAU / float(steps) * 0.55, 6, Palette.with_alpha(Palette.ICE, 0.8), 1.5 * px, true)
 
 
 ## The armed tool's preview at the mouse: a ring as big as the area the
@@ -85,7 +137,7 @@ static func _draw_tool_preview(ov: CommandOverlay, px: float) -> void:
 	var world := ov.world
 	var p := ov.get_global_mouse_position()
 	var b := ov.blocker_at(p)
-	var col := Palette.REPAIR if b == "" else Palette.CINDER
+	var col := Palette.REPAIR if b == "" else Palette.DANGER
 	# The ring's size: a bay's healing range, a ward's sight (40% more
 	# with the ward upgrade), the waypoint's area, or half the mothership.
 	var rad := 300.0
@@ -103,7 +155,13 @@ static func _draw_tool_preview(ov: CommandOverlay, px: float) -> void:
 			rad = CommandOrders.radius(world, ov.tool)
 	ov.draw_arc(p, rad, 0.0, TAU, 64, Palette.with_alpha(col, 0.8), 2.0 * px, true)
 	ov.draw_circle(p, 6.0 * px, col)
-	_label(ov, p + Vector2(0, 26.0 * px), b if b != "" else ov.tool_text(), col, px)
+	# A refused spot also carries the danger triangle (colour is never the only sign); a verb prints its name first.
+	var words := b if b != "" else ov.tool_text()
+	if ov.verb_label() != "":
+		words = "%s: %s" % [ov.verb_label(), words]
+	if b != "":
+		Glyphs.danger(ov, p + Vector2(0, -22.0 * px), Glyphs.SIDE * px)
+	_label(ov, p + Vector2(0, 26.0 * px), words, col, px)
 
 
 ## Draw text `t` centred on world point `p`, in colour `col` with a dark
