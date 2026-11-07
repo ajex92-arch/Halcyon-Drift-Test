@@ -1,0 +1,7 @@
+# cloud results of batch ptnp4: the files this batch leaves in this folder
+# runs: 1
+# jobs: 1
+# files: 3
+pt_seed7.txt
+pt_seed7_err.txt
+runner_pt_0.txt
