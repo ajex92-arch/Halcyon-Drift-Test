@@ -1,1 +1,1 @@
-{"id": "pubt2", "runs": [{"tag":"det_n900w","test":"det_hash","seeds":[7],"extra":"--secs=900","per_job":1,"timeout_min":60,"project":"remake","os":"windows-latest"},{"tag":"det_l300w","test":"det_hash","seeds":[7],"extra":"--late --secs=300","per_job":1,"timeout_min":60,"project":"remake","os":"windows-latest"}], "projects_hash": {"remake": "9f8a0266e3acc52c"}}
+{"id": "ptnp4", "runs": [{"tag":"pt","test":"det_hash","seeds":[7],"extra":"--secs=10","per_job":1,"timeout_min":10,"project":"remake"}], "projects_hash": {"remake": "9f8a0266e3acc52c"}}
