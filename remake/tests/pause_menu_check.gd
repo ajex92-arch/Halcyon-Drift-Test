@@ -123,15 +123,22 @@ func _run() -> void:
 	var t1 := world.time
 	await _frames(MOVING_FRAMES)
 	_expect(world.time > t1, "the match clock moves again after the resume (%.3f -> %.3f)" % [t1, world.time])
-	# Step 3: P opens and P resumes.
-	_key(KEY_P)
+	# Step 3: P opens and P resumes. (The docked Admiral's P is the command pause: no menu, the command view stays alive; it is checked here and the menu is opened by its Menu route.)
+	if world.human_role == "admiral" and hud.command_view != null and hud.command_view.is_showing():
+		_key(KEY_P)
+		await _frames(2)
+		_expect(get_tree().paused and hud.panels.command_paused and (hud.pause_menu == null or not hud.pause_menu.visible), "the docked Admiral's P holds the match with no pause menu (command pause)")
+		_key(KEY_P)
+		await _frames(2)
+		_expect(not get_tree().paused and not hud.panels.command_paused, "P again ends the command pause")
+	_p_open()
 	await _frames(2)
 	_expect(_menu_open(), "P opens the pause menu")
 	_key(KEY_P)
 	await _frames(2)
 	_expect(_menu_closed(), "P over the menu resumes")
 	# Step 4: H over the menu shows the help pages; the game stays paused.
-	_key(KEY_P)
+	_p_open()
 	await _frames(2)
 	_key(KEY_H)
 	await _frames(2)
@@ -155,7 +162,7 @@ func _run() -> void:
 	await _frames(2)
 	_expect(_menu_closed() and not hud.help.visible, "P from the help pages resumes at once")
 	# Step 5: a question is a view of the menu.
-	_key(KEY_P)
+	_p_open()
 	await _frames(2)
 	hud.pause_menu.ask(PauseMenu.VIEW_RESTART)
 	await _frames(2)
@@ -196,7 +203,7 @@ func _run() -> void:
 	await _frames(2)
 	_expect(_menu_closed(), "the Resume button resumes")
 	# Step 7b: Look around hides the card and keeps the game paused; the camera and the minimap then answer the mouse.
-	_key(KEY_P)
+	_p_open()
 	await _frames(2)
 	var zoom0 := world.camera.target_zoom
 	_turn(Vector2(640.0, 360.0), MOUSE_BUTTON_WHEEL_DOWN)
@@ -254,7 +261,7 @@ func _run() -> void:
 		await _frames(2)
 		_expect(hud.overlay.tool == "" and _menu_closed(), "Esc puts an armed map tool away and opens no menu")
 	# Step 9: the match ending lifts the pause (also while looking around).
-	_key(KEY_P)
+	_p_open()
 	await _frames(2)
 	_button("Look around").pressed.emit()
 	await _frames(2)
@@ -351,6 +358,14 @@ func _button(text: String) -> Button:
 		if (b as Button).text == text:
 			return b as Button
 	return null
+
+
+## Open the pause menu the way P does, except for the docked Admiral, whose P is the command pause (RT4): they open it by the Menu button's route.
+func _p_open() -> void:
+	if world.human_role == "admiral" and hud.command_view != null and hud.command_view.is_showing():
+		hud._toggle_pause_menu()
+	else:
+		_key(KEY_P)
 
 
 ## Press and let go of keyboard key `code` (a place on the keyboard, such as

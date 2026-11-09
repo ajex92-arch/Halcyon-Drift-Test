@@ -59,6 +59,11 @@ func add_line(text: String, col: Color) -> void:
 	l.add_theme_color_override("font_outline_color", Palette.VOID)
 	l.add_theme_constant_override("outline_size", 4)
 	l.set_meta("born", Time.get_ticks_msec())
+	# News that is bad for us is in the danger colour and always carries the danger triangle (colour is never the only sign).
+	if col == Palette.DANGER:
+		var m := DangerMark.new(12.0)
+		m.position = Vector2(0.0, 1.0)
+		l.add_child(m)
 	add_child(l)
 	while get_child_count() > MAX_LINES:
 		var old := get_child(0)
@@ -104,13 +109,13 @@ func _vt() -> int:
 
 
 ## The colour for news that is good for `team`: amber if that is our
-## team, cinder (red) if not, whichever team the human plays (amber means good
+## team, the danger colour (with the triangle, see add_line) if not, whichever team the human plays (amber means good
 ## news here, it is not the interface's highlight colour). A spectator sees
 ## team colours instead.
 func _good_bad(team: int) -> Color:
 	if _vt() < 0:
 		return Palette.team(team)
-	return Palette.AMBER if team == _vt() else Palette.CINDER
+	return Palette.AMBER if team == _vt() else Palette.DANGER
 
 
 ## A plain feed message (Events.feed). `tone` is "good", "bad" or "info";

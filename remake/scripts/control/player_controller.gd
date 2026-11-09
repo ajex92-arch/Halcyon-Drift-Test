@@ -8,7 +8,8 @@ extends RefCounted
 ## ship asks update() to read the keys and mouse and write them into
 ## ship.controls. The controls:
 ##   Mouse: aim. The hull turns toward the mouse, and big ships' turrets
-##     track it.
+##     track it (not while the pointer is on a HUD control, or about to arrive at the ship readout, or the
+##     order wheel is open: the aim then keeps its direction and distance from the ship).
 ##   Hold Ctrl: lock the hull's heading (for example to keep your strongest
 ##     shield facing a threat) while the turrets keep tracking the mouse.
 ##   W / S: thrust forward / brake and reverse.
@@ -25,6 +26,9 @@ extends RefCounted
 ## An Admiral who flies with the Admiral board open does not steer: at the end
 ## of update() BoardHold switches the engines off, holds the heading and
 ## brakes before a rock, a turret, a derelict or a mothership.
+## The match recorder: when a match log is open, update() ends by writing down the controls the ship
+## will use this tick (a `c` line, only when they changed). In a replay of a recorded match the same
+## function puts the recorded controls into the ship instead of reading the keys and the mouse.
 ## The key names ("thrust_forward" and so on) are set up in Game
 ## (scripts/autoload/game.gd, _define_actions).
 ##
@@ -48,6 +52,12 @@ var _right_was := false
 ## True while the right mouse button is held down after a click that cancelled a
 ## torpedo run: such a click is not read as the special.
 var _right_cancel := false
+## True while the aim hold in update() is on (the order wheel is open, or the pointer is on a HUD control and the player is not firing).
+var _holding := false
+## The held aim point as an offset from the ship (world units), while _holding.
+var _hold_aim := Vector2.ZERO
+## The held face point as an offset from the ship (world units), while _holding.
+var _hold_face := Vector2.ZERO
 
 
 ## World makes this and passes itself in.
@@ -58,6 +68,11 @@ func _init(w: World) -> void:
 ## Read the keyboard and mouse and fill in `ship`'s controls for this tick.
 ## `_dt` (seconds since the last tick) isn't needed here.
 func update(ship: Ship, _dt: float) -> void:
+	# A replay of a recorded match flies the ship from the recording: the controls the player's
+	# ship used on this tick go in as they were, and no key or mouse is read.
+	if world.orders.replay_controls(ship):
+		world.orders.record_controls(ship)
+		return
 	var c := ship.controls
 	# Steps 1-2: engines. Each key gives 0..1, so forward is +1 (W), -1 (S)
 	# or 0, and strafe is +1 (A, left), -1 (D, right) or 0.
@@ -87,15 +102,26 @@ func update(ship: Ship, _dt: float) -> void:
 	# Step 5: aim at the mouse. With Ctrl held, the hull keeps facing the way
 	# it points now (a spot 600 units straight ahead); otherwise it turns to
 	# face the mouse too.
-	# While the order wheel is open, or the pointer is on a HUD button and not firing (world.ui_hold), the aim and
-	# the face point stay where they were. (ui_hold is set by the HUD each frame, after the tick, so the hold starts
-	# one tick after the pointer enters a control and ends within one tick of it leaving.)
+	# While the order wheel is open, or the pointer is on a HUD button, or about to arrive at the ship readout (the HUD's
+	# _pointer_nears_readout()), and not firing (world.ui_hold), the aim and
+	# the face point keep the direction and distance from the ship that they had (not the world point: the ship flies on,
+	# and a world point held still would pull the hull round toward it as the ship passes, whatever key is down).
+	# (ui_hold is set by the HUD each frame, after the tick, so the hold starts one tick after the pointer enters a
+	# control or is on course for the readout, and ends within one tick of the pointer leaving.)
 	if not world.wheel_hold and not world.ui_hold:
+		_holding = false
 		c.aim_point = world.mouse_world()
 		if Input.is_physical_key_pressed(KEY_CTRL):
 			c.face_point = ship.global_position + Vector2.from_angle(ship.rotation) * 600.0
 		else:
 			c.face_point = c.aim_point
+	else:
+		if not _holding:
+			_holding = true
+			_hold_aim = c.aim_point - ship.global_position
+			_hold_face = c.face_point - ship.global_position
+		c.aim_point = ship.global_position + _hold_aim
+		c.face_point = ship.global_position + _hold_face
 	# Step 6: shield focus (arrow keys). Pressing the side already focused
 	# asks for balanced shields instead.
 	var focus_keys := [["shield_front", Rules.FOCUS_FRONT], ["shield_rear", Rules.FOCUS_REAR],
@@ -125,3 +151,7 @@ func update(ship: Ship, _dt: float) -> void:
 	c.assist = ship.assist
 	# Step 11: an Admiral flying with the board open coasts (BoardHold).
 	BoardHold.hold(world, ship)
+	# Step 12: the match log (if one is open) writes down the controls as the ship will use them
+	# this tick, when they differ from the last line (OrderQueue.record_controls). Nothing here
+	# changes the controls or the match.
+	world.orders.record_controls(ship)

@@ -1,1 +1,1 @@
-{"id": "ptnp4", "runs": [{"tag":"pt","test":"det_hash","seeds":[7],"extra":"--secs=10","per_job":1,"timeout_min":10,"project":"remake"}], "projects_hash": {"remake": "9f8a0266e3acc52c"}}
+{"id": "ptnp4", "runs": [{"tag":"pt","test":"det_hash","seeds":[7],"extra":"--secs=10","per_job":1,"timeout_min":10,"project":"remake"}], "projects_hash": {"remake": "d8979f5d13b7396e"}}

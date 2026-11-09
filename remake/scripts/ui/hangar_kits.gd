@@ -44,7 +44,7 @@ static func buy(h: Hangar) -> void:
 	if not h.can_shop_goods():
 		Events.toast.emit("Repair kits are bought at the mothership.")
 		return
-	var err := h.profile.buy_kit()
+	var err := HumanCmd.run(h.world, "buy_kit")
 	if err != "":
 		Events.toast.emit(err)
 	else:

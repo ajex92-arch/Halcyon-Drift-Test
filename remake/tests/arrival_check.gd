@@ -20,6 +20,8 @@ extends Node
 ##     until the first tick it can launch.
 ##   - Stand-in: the brain's skill and hold point, "just launched" every tick, a retreat turned
 ##     back into the lane job, no dock.
+##   - Bought orders: the Admiral's Move, Hold and Stop for a bought squadron go through the order queue,
+##     every named squadron is checked and written, the stand-in holds the point, and Attack is refused.
 ##   - Fleet limit: reserved at the start, the living ships count, a dead ship gives its place
 ##     back, a repeat stops at the limit and at the list depth.
 ##
@@ -62,6 +64,7 @@ func _physics_process(_dt: float) -> void:
 	_warp_cases()
 	_outage_cases()
 	_stand_in_cases()
+	_bought_order_cases()
 	_limit_cases()
 	_reset(0.0)
 	print("arrival_check: %d failures (%d checks)" % [fails, checks])
@@ -360,6 +363,68 @@ func _stand_in_cases() -> void:
 	_reset(0.0)
 
 
+## The Admiral's Move, Hold and Stop for bought squadrons (RT4 step H): they go through the order queue, every
+## subject is checked and written, the stand-in's hold point follows, and every other verb is "Comes with a later stage".
+func _bought_order_cases() -> void:
+	_reset(0.0)
+	var p := _prod()
+	var it := p.spawn_now("fighter", 1)
+	var sq: Squad = world.squads.get(int(it["squad"])) as Squad
+	var ship := _ships_of(sq)[0] as Ship
+	var ai := ship.controller as PilotAI
+	var q := world.orders
+	var seat := Rules.ADMIRAL_SEAT
+	var spot := Vector2i(900, -400)
+	var r := q.submit(Order.make(OrderKinds.MOVE, 0, seat, true, {}, [sq.id], "point", spot))
+	_check("bought orders: Move is accepted at once", r == "", r)
+	world.tick_count += 1
+	q.run_due()
+	_check("bought orders: Move writes the squadron's order and the manoeuvre stance", str(sq.order.get("kind", "")) == OrderKinds.MOVE and sq.order.get("target") == spot and sq.move_stance == 1)
+	Standin._think(world, ship, ai)
+	_check("bought orders: the stand-in holds at the Move point", ai.hold_point.distance_to(Vector2(spot)) < 0.01)
+	r = q.submit(Order.make(OrderKinds.HOLD, 0, seat, true, {}, [sq.id], "point", Vector2i(10, 20)))
+	_check("bought orders: Hold is accepted", r == "", r)
+	world.tick_count += 1
+	q.run_due()
+	_check("bought orders: Hold writes the hold stance (0) and the point", str(sq.order.get("kind", "")) == OrderKinds.HOLD and sq.move_stance == 0)
+	r = q.submit(Order.make(OrderKinds.HOLD, 0, seat, true, {}, [sq.id], "point", Vector2i(10, 20)))
+	world.tick_count += 1
+	q.run_due()
+	_check("bought orders: a repeated Hold is not refused as a repeat (no duplicate window for a bought squadron)", r == "" and str(sq.order.get("kind", "")) == OrderKinds.HOLD)
+	r = q.submit(Order.make(OrderKinds.STOP, 0, seat, true, {}, [sq.id], "none", 0))
+	_check("bought orders: Stop is accepted", r == "", r)
+	world.tick_count += 1
+	q.run_due()
+	ship.global_position = Vector2(77, 88)
+	Standin._think(world, ship, ai)
+	_check("bought orders: Stop holds where the ship is", str(sq.order.get("kind", "")) == OrderKinds.STOP and ai.hold_point.distance_to(Vector2(77, 88)) < 0.01)
+	r = q.submit(Order.make(OrderKinds.ATTACK, 0, seat, true, {}, [sq.id], "unit", ship.uid))
+	_check("bought orders: Attack is refused 'Comes with a later stage'", r == OrderKinds.TEXT_UNBUILT, r)
+	r = q.submit(Order.make(OrderKinds.MOVE, 0, seat, true, {}, [sq.id], "unit", ship.uid))
+	_check("bought orders: Move to a unit is refused for a bought squadron", r == OrderKinds.TEXT_VALUE, r)
+	r = q.submit(Order.make(OrderKinds.MOVE, 1, seat, true, {}, [sq.id], "point", spot))
+	_check("bought orders: the other team's order for our squadron is refused", r == OrderKinds.TEXT_SEAT, r)
+	r = q.submit(Order.make(OrderKinds.STOP, 0, 3, true, {}, [sq.id], "none", 0))
+	_check("bought orders: a pilot may not send Stop", r == OrderKinds.TEXT_SEAT, r)
+	# Every subject is checked and written, not only the first.
+	var it2 := p.spawn_now("fighter", 1)
+	var sq2: Squad = world.squads.get(int(it2["squad"])) as Squad
+	var foreign := Squad.new()
+	foreign.id = 99999
+	foreign.team = 1
+	foreign.kind = "squadron"
+	foreign.member_uids.append(ship.uid)
+	world.squads[foreign.id] = foreign
+	r = q.submit(Order.make(OrderKinds.MOVE, 0, seat, true, {}, [sq.id, foreign.id], "point", spot))
+	_check("bought orders: a second subject of the other team refuses the whole order", r == OrderKinds.TEXT_SEAT, r)
+	world.squads.erase(foreign.id)
+	r = q.submit(Order.make(OrderKinds.HOLD, 0, seat, true, {}, [sq.id, sq2.id], "point", Vector2i(5, 6)))
+	world.tick_count += 1
+	q.run_due()
+	_check("bought orders: every named squadron gets the order", r == "" and str(sq.order.get("kind", "")) == OrderKinds.HOLD and str(sq2.order.get("kind", "")) == OrderKinds.HOLD and sq2.move_stance == 0)
+	_reset(0.0)
+
+
 ## The fleet limit: reserved at the start, given back, and the repeat.
 func _limit_cases() -> void:
 	_reset(50000.0)
@@ -393,7 +458,7 @@ func _limit_cases() -> void:
 	p.set_repeat("fighter", true)
 	var r := p.add_ship("fighter", 3)
 	var rounds := 0
-	while rounds < 12:
+	while rounds < RtsHulls.CAP_IN_FORCE:  # a round buys at least one squadron of three, so this is far more rounds than the limit needs
 		_run(1)
 		for it: Dictionary in p.items:
 			if it["running"]:

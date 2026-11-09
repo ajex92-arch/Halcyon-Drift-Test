@@ -98,6 +98,10 @@ static func build(b: AdmiralBoard) -> void:
 static func _post_row(b: AdmiralBoard, lane: String, w: float) -> void:
 	var row := UiKit.hbox(8)
 	b._content.add_child(row)
+	var pmark := DangerMark.new(12.0)
+	pmark.visible = false
+	row.add_child(pmark)
+	b._cards["pmark:" + lane] = pmark
 	var pl := UiKit.label("", 13, Palette.ICE)
 	pl.custom_minimum_size = Vector2(minf(520.0, w - 380.0), 0)
 	row.add_child(pl)
@@ -124,6 +128,10 @@ static func _node_row(b: AdmiralBoard, n: ResourceNode, w: float) -> void:
 	b._content.add_child(row)
 	# Step 1: the status line: 520 pixels wide, less on a narrow board so
 	# the buttons keep 380.
+	var nmark := DangerMark.new(12.0)
+	nmark.visible = false
+	row.add_child(nmark)
+	b._cards["nmark:" + n.node_id] = nmark
 	var nl := UiKit.label("", 13, Palette.ICE)
 	nl.custom_minimum_size = Vector2(minf(520.0, w - 380.0), 0)
 	row.add_child(nl)
@@ -198,7 +206,7 @@ static func refresh(b: AdmiralBoard) -> void:
 
 ## Node `node_id`'s line `l`: name, who holds it ("ours", "ENEMY",
 ## "unclaimed"), turrets out of its slots (the bigger of the two teams'
-## counts) and the share of its ore left. Red (Palette.CINDER) when the
+## counts) and the share of its ore left. The danger colour with its triangle when the
 ## enemy holds it.
 static func _refresh_node_line(b: AdmiralBoard, node_id: String, l: Label) -> void:
 	var n := b.world.node_by_id(node_id)
@@ -216,12 +224,14 @@ static func _refresh_node_line(b: AdmiralBoard, node_id: String, l: Label) -> vo
 	var word := SiteMarks.word(SiteMarks.view(b.world, n, b.team))
 	if word != "":
 		l.text += "  ·  " + word
-	l.add_theme_color_override("font_color", Palette.CINDER if holder >= 0 and holder != b.team else Palette.ICE)
+	var enemy := holder >= 0 and holder != b.team
+	l.add_theme_color_override("font_color", Palette.DANGER if enemy else Palette.ICE)
+	(b._cards["nmark:" + node_id] as Control).visible = enemy
 
 
 ## Our defense post on `lane`'s line `l`: its lane, and "standing" (with its hull),
 ## the time left before it may be rebuilt, "ready to rebuild" or "being rebuilt"
-## (with the seconds left). Red when it is not standing.
+## (with the seconds left). The danger colour with its triangle when it is not standing.
 static func _refresh_post_line(b: AdmiralBoard, lane: String, l: Label) -> void:
 	var ps := b.world.defense_posts.site_of(b.team, lane)
 	var status := ""
@@ -235,7 +245,9 @@ static func _refresh_post_line(b: AdmiralBoard, lane: String, l: Label) -> void:
 		_:
 			status = "destroyed  ·  ready to rebuild"
 	l.text = "%s defense post  ·  %s" % [str(MapLayout.LANES[lane]["label"]), status]
-	l.add_theme_color_override("font_color", Palette.ICE if ps.state == PostSite.STANDING or ps.state == PostSite.BUILDING else Palette.CINDER)
+	var down := not (ps.state == PostSite.STANDING or ps.state == PostSite.BUILDING)
+	l.add_theme_color_override("font_color", Palette.DANGER if down else Palette.ICE)
+	(b._cards["pmark:" + lane] as Control).visible = down
 
 
 ## The Rebuild button `pb` of our post on `lane`: off, with the reason as its

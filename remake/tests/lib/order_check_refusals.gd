@@ -123,7 +123,7 @@ static func table(t) -> void:
 	expect(t, "a point that is a string", rec(OrderKinds.BAY, 5, true, {}, [], "point", "x"), "value")
 	expect(t, "SET_STANCE with no key", rec(OrderKinds.SET_STANCE, -2, false, {}), "value")
 	expect(t, "PAUSE", rec(OrderKinds.PAUSE, 5, true), "unbuilt")
-	expect(t, "STOP with no handler", rec(OrderKinds.STOP, -2, false), "unbuilt")
+	expect(t, "PATROL with no handler", rec(OrderKinds.PATROL, -2, false), "unbuilt")
 	var appended := rec(OrderKinds.DRONE, 5, true, {"node": ""})
 	appended["mode"] = "append"
 	expect(t, "DRONE in mode append", appended, "unbuilt")

@@ -41,6 +41,11 @@ const NOTES_WHERE := "Notes stay on this computer."
 ## says how to undo it.
 const NOTES_WHERE_BROWSER := "Each note comes to you as two downloads, the note and its picture. The browser may ask once whether this site may download several files: allow it. If you chose Block, the pictures stop arriving; to get them back, allow automatic downloads for this site in the browser's site settings (the padlock or page icon beside the address)."
 
+## The paragraph of the "Difficulty" entry is not written here: its levels and
+## multipliers are Difficulty's data, so _show() puts Difficulty.help_text() in
+## its place (this word marks the entry).
+const DIFFICULTY_FROM_DATA := "(the levels and multipliers: Difficulty.help_text())"
+
 ## The help text: page name -> list of [heading, paragraph] pairs, shown in
 ## this order. (Two paragraphs, "Goal" and "Turrets", read differently while
 ## the damage modifiers are removed: see PAGES_MODIFIERS_REMOVED. The "Notes
@@ -55,6 +60,7 @@ const PAGES := {
 		["Turrets", "Each side starts with three turrets on every lane: an outer, an inner and an inhibitor turret. Its Admiral buys a lost one back after a while and builds more at the jungle's resource nodes. They are tough: alone, pilots deal only 30% damage to a turret, so push with your minion wave and let the minions tank. If you shoot an enemy pilot near an enemy turret, that turret targets you. Beside each lane's inhibitor turret stands that lane's defense post. It has no gun: the lane's waves launch from it, and if it is destroyed that lane sends no new waves until its Admiral rebuilds it, 5 minutes later."],
 		["The jungle", "The Scum are pirates who hide in the asteroid fields between the lanes. They build their ships from the wrecks both fleets leave behind: Scum Raiders, and Scum Carriers that launch Scum Fighters. They attack anyone who comes near their dens, and both sides pay a bounty for every Scum ship destroyed, split by damage with a bonus for the last hit. Heaps of scrap and warning beacons mark a den. A cleared den is rebuilt 1-2 minutes later."],
 		["Credits", "Pilots earn credits from last hits, kills and assists, Scum bounties, destroying turrets and drones, and a share of every ore delivery. Spend them in the hangar on ships, modules, pilot gear and repair kits. The Admiral spends the separate team treasury."],
+		["Difficulty", DIFFICULTY_FROM_DATA],
 		["Respawning", "Destroyed pilots respawn at the mothership after a few seconds (longer as the match goes on). Gear is kept; the ship and its modules are lost. When 2 or more pilots respawn within 30 seconds, the mothership is strained: its guns slow and its shields stop recharging for a while. The Admiral's own ship being shot down does not count."],
 		["Pause (P or Esc)", "P opens the pause menu, and so does Esc when there is no map tool or panel to close. The match waits while it shows. It has Resume, Look around (hides the menu so the mouse can move and zoom the camera; Esc brings the menu back, P resumes), How to play, Controls (the key settings), a row of speed buttons from 0.5x to 2x, Restart match (a new match in the same seat, on the same team and rules), Quit to start (back to the start screen), Full screen and, outside the browser, Quit game. Restart and the two quit buttons ask first. P or Esc resumes."],
 		["Fullscreen", "F11 or Alt+Enter switches between the window and borderless fullscreen. The pause menu has a button for it too."],
@@ -84,7 +90,7 @@ const PAGES := {
 		["Research", "Like Homeworld 2: build mothership modules (Research Module, Corvette / Frigate / Capital Ship Facilities, Platform Control, Sensors, Hyperspace; the Fleet Command Module has no job yet), then research in each module's column. Pilots can only buy ships you have unlocked."],
 		["Map tools", "Repair bays fly to a spot and anchor for good (jungle too). Wards go only where your team can see. The rally waypoint speeds up and shields our ships inside it, and AI pilots gather there. From 20:00, move the mothership."],
 		["Sieges", "Put the rally waypoint near the enemy mothership to order a siege: our AI frigates, capital ships and bombers converge on that lane and attack it. When a group of enemy frigates or capital ships pushes into OUR base, AI pilots come back and fight them on their own."],
-		["The Yard", "The Admiral buys fleet ships on the board's Yard tab. A Fighter, Lance or Bomber squadron is three ships; the larger ships come one at a time. You pay when a build starts; items wait their turn for ore in the order shown, and you can move one up or down, hold it (it keeps its progress) or cancel it (a started build gives everything back). The fleet is limited to 18 ships a team all match. Bought ships go to the rally you pick and fight what comes close; the free minion waves never stop."],
+		["The Yard", "The Admiral buys fleet ships on the board's Yard tab. A Fighter, Lance or Bomber squadron is three ships; the larger ships come one at a time. You pay when a build starts; items wait their turn for ore in the order shown, and you can move one up or down, hold it (it keeps its progress) or cancel it (a started build gives everything back). The fleet is limited to %d ships a team all match. Bought ships go to the rally you pick and fight what comes close; the free minion waves never stop." % RtsHulls.CAP_IN_FORCE],
 		["Flying yourself", "You can launch a ship of your own from the hangar (B) with your personal credits. You can still give orders and look anywhere while flying (C switches the camera between your ship and free; Space centers it on your ship, and holding Space keeps it there), but moving the mothership needs you docked."],
 	],
 }
@@ -156,6 +162,9 @@ func _show(p: String) -> void:
 		var text: String = entry[1]
 		if Rules.damage_modifiers_removed() and PAGES_MODIFIERS_REMOVED.has(entry[0]):
 			text = PAGES_MODIFIERS_REMOVED[entry[0]]
+		# The "Difficulty" paragraph is made from Difficulty's own data.
+		if text == DIFFICULTY_FROM_DATA:
+			text = Difficulty.help_text()
 		# The browser build says where the notes go there (only the "Notes (F9)"
 		# paragraph holds NOTES_WHERE).
 		if OS.has_feature("web"):
@@ -193,9 +202,11 @@ func _show_keys(w: float) -> void:
 		for t: Dictionary in KeyMapText.help_table(m):
 			var texts: Array[String] = [String(t["label"]), String(t["key1"]), String(t["key2"]), _keys_note(t)]
 			for i in 4:
-				var l := UiKit.label(texts[i] if texts[i] != "" or i == 3 else "none", 14, Palette.ICE if i < 3 and texts[i] != "" else Palette.MIST)
+				# The action column wraps, the same for every row (a long action such as "Queue Scout squadron (Shift: to the
+				# cap, Alt: ..." is 352 pixels wide and was cut off at 300: F124); the two key columns are short and clip.
+				var l := UiKit.label(texts[i] if texts[i] != "" or i == 3 else "none", 14, Palette.ICE if i < 3 and texts[i] != "" else Palette.MIST, i == 0)
 				l.custom_minimum_size.x = [300.0, 130.0, 130.0, 0.0][i]
-				l.clip_text = i < 3
+				l.clip_text = i == 1 or i == 2
 				grid.add_child(l)
 
 

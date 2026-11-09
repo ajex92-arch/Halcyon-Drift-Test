@@ -23,11 +23,18 @@ extends RefCounted
 ## OrderLog and ReplayPlayer.
 ## The numbers: INPUT_DELAY is 1 tick. `AI_THROUGH_QUEUE` is the switch that, once on, makes
 ## the computer Admiral's orders queue like a human's; it is off, and a test turns it on.
+## The queue is also the match recorder's door to the log and the replay. The human pilot's
+## flight controls (record_controls) and the commands the human gives on a screen (record_command)
+## are written to the log as `c` and `b` lines. A replay of the human (--replay) puts the recorded
+## controls into the pilot's ship (replay_controls), runs the recorded commands between two ticks
+## (run_commands, through HumanCmd) and stops at --replay-until or at the end of the recording.
 ##
-## WHO USES IT: World keeps one (World.orders) and calls run_due() each tick; WorldSetup makes
+## WHO USES IT: World keeps one (World.orders) and calls run_commands() before and run_due() each tick; WorldSetup makes
 ## it; the Admiral's screens call submit(); AdmiralCommand calls log_and_count(), take_id()
-## and count_submitted(); later stages fill `handlers` and `checkers`; main_report prints
-## counters(); tests/order_check.gd and tests/order_replay.gd check it.
+## and count_submitted(); PlayerController calls record_controls() and replay_controls(); HumanCmd
+## calls record_command(); MatchRecorder calls open_log(); later stages fill `handlers` and
+## `checkers`; main_report prints counters(); tests/order_check.gd, tests/order_replay.gd and
+## tests/record_check.gd check it.
 
 ## Ticks between a screen submitting an order and the game carrying it out.
 const INPUT_DELAY := Order.INPUT_DELAY
@@ -69,6 +76,10 @@ var _counts := {}
 var _started := false
 ## True once close() has run.
 var _closed := false
+## True once the end of the match and the leaving of the world are listened for.
+var _listening := false
+## True once a replay has stopped (at --replay-until or at the end of the recording).
+var _replay_stopped := false
 
 
 ## Remember the world. Teams do not exist yet, so nothing else is touched.
@@ -76,15 +87,13 @@ func _init(w: World) -> void:
 	world = w
 
 
-## Read the launch options --order-log, --replay and --admiral-replay (WorldSetup calls
-## this once the match is built). The header itself waits for the first tick.
+## Read the launch options --order-log, --replay, --replay-until and --admiral-replay (WorldSetup
+## calls this once the match is built). The header itself waits for the first tick.
 func configure() -> void:
 	var out: Variant = Game.opt("order-log")
 	if out != null:
 		var path: String = out if out is String and (out as String) != "" else "user://orders_%s.log" % str(Game.opt("seed", "x"))
-		log = OrderLog.new()
-		if not log.open(path, world):
-			log = null
+		open_log(path)
 	var human_file: Variant = Game.opt("replay")
 	var ai_file: Variant = Game.opt("admiral-replay")
 	if human_file is String or ai_file is String:
@@ -94,9 +103,77 @@ func configure() -> void:
 			replay = player
 			replaying = not as_computer
 			replaying_ai = as_computer
+			var until: Variant = Game.opt("replay-until")
+			if until is String:
+				player.until = ReplayOptions.parse_until(until as String)
+				if player.until < 0.0:
+					print("replay: --replay-until %s is not a time (seconds or m:ss); it is ignored" % str(until))
 	if log != null or replay != null:
-		Events.match_over.connect(_on_match_over)
-		world.tree_exiting.connect(_leave)
+		_listen()
+
+
+## Open the match log at `path` (a path starting "user://" or a full path) and listen for the end
+## of the match. Returns false, and keeps no log, in the web build or when the file cannot be made.
+## The match recorder calls this; configure() calls it for --order-log.
+func open_log(path: String) -> bool:
+	var l := OrderLog.new()
+	if not l.open(path, world):
+		return false
+	log = l
+	_listen()
+	return true
+
+
+## Listen (once) for the end of the match and for the world leaving the tree.
+func _listen() -> void:
+	if _listening:
+		return
+	_listening = true
+	Events.match_over.connect(_on_match_over)
+	world.tree_exiting.connect(_leave)
+
+
+## Has a replay of the human stopped (at --replay-until or at the end of the recording)?
+func replay_stopped() -> bool:
+	return _replay_stopped
+
+
+## Record the flight controls the human pilot's ship uses on this tick (PlayerController calls this
+## at the end of its update). Does nothing when no log is open.
+func record_controls(ship: Ship) -> void:
+	if log != null:
+		log.controls(world.tick_count, ship.profile.slot, ship.controls)
+
+
+## Record a command the human gave on a screen (HumanCmd calls this with its result: "" for
+## success, else the refusal text). Does nothing when no log is open.
+func record_command(kind: String, args: Array, result: String) -> void:
+	if log != null:
+		log.command(world.tick_count, world.human.slot if world.human != null else 0, kind, args, result)
+
+
+## Replay 1: put the recorded flight controls of this tick into `ship` (the human pilot's) in place
+## of the keys and the mouse. Returns false, and changes nothing, when no replay plays the human or
+## the recording has no controls for that seat yet.
+func replay_controls(ship: Ship) -> bool:
+	if not replaying or _replay_stopped:
+		return false
+	var vec := replay.controls_at(world.tick_count, ship.profile.slot)
+	if vec.is_empty():
+		return false
+	HumanLines.apply_controls(vec, ship.controls)
+	ship.assist = ship.controls.assist
+	replay.controls_played += 1
+	return true
+
+
+## Replay 1: run the hangar commands the recording has for this moment (World calls this at the
+## top of a tick, before the clock moves, which is where a screen's command fell when it was given).
+func run_commands() -> void:
+	if not replaying or _replay_stopped:
+		return
+	for cmd: Dictionary in replay.commands_due(world.tick_count):
+		replay.note_command(cmd, HumanCmd.run(world, str(cmd["kind"]), cmd["args"], true))
 
 
 ## Submit a screen's order. Returns "" when it was accepted (queued, or for the game speed
@@ -151,12 +228,39 @@ func run_due() -> void:
 			log.hash_line(tc)
 		if replay != null:
 			replay.compare(tc, OrderLog.fingerprint_pair(world))
+	if replaying and _replay_should_stop(tc):
+		return
 	if replaying:
 		for o: Dictionary in replay.due(tc):
 			count_submitted(o)
 			_insert(o)
 	while not queue.is_empty() and int((queue[0] as Dictionary)["apply_tick"]) <= tc:
 		apply(queue.pop_front())
+
+
+## Replay 1: has the replay reached the match time given by --replay-until, or the end of the
+## recording? If so it stops: it says where, prints its closing lines (close()) and, in a run with no
+## window, ends the program; in a window the game is paused so that the last picture stays. Returns
+## true from then on, so that no order is played any more.
+func _replay_should_stop(tc: int) -> bool:
+	if _replay_stopped:
+		return true
+	var why := ""
+	if replay.until >= 0.0 and world.time >= replay.until:
+		why = "at t=%.2f tick=%d (--replay-until %s)" % [world.time, tc, Util.clock(replay.until)]
+	elif replay.stop_tick > 0 and tc > replay.stop_tick:
+		why = "at the end of the recording (tick %d)" % replay.stop_tick
+	if why == "":
+		return false
+	_replay_stopped = true
+	print("replay: stopped %s" % why)
+	close(world)
+	if DisplayServer.get_name() == "headless":
+		world.get_tree().quit()
+	else:
+		world.get_tree().paused = true
+		Events.toast.emit("Replay stopped %s" % why)
+	return true
 
 
 ## Replay 2: the computer Admirals' logged orders for this tick, in the logged order,

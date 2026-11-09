@@ -161,6 +161,6 @@ func _check_log(q: OrderQueue) -> void:
 		if Order.marker(o) == "h":
 			human_lines += 1
 	_check("every accepted order is in the log, marked h, or still waiting (%d lines + %d waiting)" % [human_lines, q.queue.size()], human_lines + q.queue.size() == _accepted)
-	_check("the log has its header", str(read["header"]).begins_with("log v1 seed="))
+	_check("the log has its header", str(read["header"]).begins_with("log v2 seed="))
 	_check("the log has fingerprint lines (%d)" % (read["hashes"] as Dictionary).size(), (read["hashes"] as Dictionary).size() > 0)
 	_check("the log has its end line", str(read["end"]) != "")

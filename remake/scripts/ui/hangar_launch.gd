@@ -134,7 +134,7 @@ static func launch(h: Hangar) -> bool:
 	var m := h.mode()
 	# Buyback (BuybackFeature): the button of a dead pilot buys the respawn.
 	if m == "dead" and BuybackFeature.current() != null:
-		var err := BuybackFeature.press(h.profile)
+		var err := HumanCmd.run(h.world, "buyback")
 		if err != "":
 			Events.toast.emit(err)
 		else:
@@ -144,11 +144,11 @@ static func launch(h: Hangar) -> bool:
 		return false
 	# Step 1: no ship chosen yet: take the free Scout.
 	if h.profile.hull_id == "":
-		h.profile.buy_hull("scout", h.world.teams[h.profile.team])
+		HumanCmd.run(h.world, "buy_hull", ["scout"])
 	# Step 2: launch, and close the hangar if it worked.
-	var s := h.world.launch(h.profile)
-	if s == null:
-		Events.toast.emit("Can't launch right now.")
+	var launch_err := HumanCmd.run(h.world, "launch")
+	if launch_err != "":
+		Events.toast.emit(launch_err)
 		return false
 	h.closed.emit()
 	return true
@@ -163,8 +163,8 @@ static func launch_at(h: Hangar, bay: RepairBay) -> void:
 	if h.mode() != "dock":
 		return
 	if h.profile.hull_id == "":
-		h.profile.buy_hull("scout", h.world.teams[h.profile.team])
-	var err := h.world.hyperspace_launch(h.profile, bay)
+		HumanCmd.run(h.world, "buy_hull", ["scout"])
+	var err := HumanCmd.run(h.world, "hyperspace", [bay.uid])
 	if err != "":
 		Events.toast.emit(err)
 	else:

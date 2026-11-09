@@ -17,9 +17,12 @@ extends RefCounted
 ## the names they have in the folder) and _hand_to_browser() makes one
 ## download of each. A browser build without the download call keeps the note
 ## and says so in the log. On every other platform nothing is handed over.
-## describe() reads the match and returns plain data: the real date
+## describe() reads the match and returns plain data: the header ("tool", "version" and "build",
+## the name of the game build that wrote the note, from BuildId: a note of an older build has no
+## "build" entry and is read as before), the real date
 ## and time, how far the match had got and at what world speed (slow motion),
-## the seed, the rules played (the preset's name, "pick" for the standard
+## the seed (the one given with --seed, else the one the match picked: a note always
+## names a number that plays the same match again), the rules played (the preset's name, "pick" for the standard
 ## rules, and a label for it), difficulty and test options (Unlock everything and No fog),
 ## what the human plays (seat, ship, place, credits) and the typed text. A text
 ## that starts with an item ID ("T-7: the
@@ -160,12 +163,12 @@ static func describe(world: World, text: String, paused_before: bool, picture_na
 		human["hull_percent"] = int(round(100.0 * ship.hull / maxf(1.0, ship.hull_max)))
 	var window_size := world.get_window().size
 	return {
-		"tool": "note_key", "version": 1,
+		"tool": "note_key", "version": 1, "build": BuildId.get_id(),
 		"text": text, "item": item_id(text),
 		"saved_at": Time.get_datetime_string_from_system(false, true),
 		"match": {"time": snappedf(world.time, 0.1), "clock": Util.clock(world.time), "phase": world.phase, "paused_before": paused_before,
 			"world_speed": world.speed.factor},
-		"setup": {"seed": str(Game.opt("seed", "random")), "preset": Game.preset,
+		"setup": {"seed": _seed_text(), "preset": Game.preset,
 			"rule_set": str(CouncilPresets.LABELS.get(Game.preset, "unknown (--preset was not understood)")),
 			"variants_changed": _changed_variants(), "difficulty": Game.difficulty,
 			"damage_modifiers_removed": Rules.damage_modifiers_removed(),
@@ -175,6 +178,17 @@ static func describe(world: World, text: String, paused_before: bool, picture_na
 		"screenshot": picture_name,
 		"godot": str(Engine.get_version_info()["string"]),
 	}
+
+
+## The seed the note records: the --seed the game was given (as written), else the number the match picked for itself
+## when it started (Game.match_seed, set by main.gd's start()), so a note from a match played from the start screen
+## carries a seed that plays the same match again. "random" only when no match has started (match_seed is -1).
+static func _seed_text() -> String:
+	if Game.opt("seed") != null:
+		return str(Game.opt("seed"))
+	if Game.match_seed >= 0:
+		return str(Game.match_seed)
+	return "random"
 
 
 ## The note as the text of the file: JSON with one top-level entry per line

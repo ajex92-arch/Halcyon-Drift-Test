@@ -83,14 +83,14 @@ static func buy(h: Hangar, id: String) -> void:
 	if h.profile.has_item(id):
 		# With Mk II gear (GearMk2Feature), clicking an owned item upgrades it.
 		if GearMk2Feature.is_on():
-			var up := GearMk2Feature.upgrade(h.profile, GearMk2Feature.slot_of(h.profile, id))
+			var up := HumanCmd.run(h.world, "upgrade_gear", [GearMk2Feature.slot_of(h.profile, id)])
 			if up != "":
 				Events.toast.emit(up)
 			else:
 				Events.cue.emit("buy", Vector2.ZERO)
 			h._refresh()
 		return
-	var err := h.profile.buy_gear(id)
+	var err := HumanCmd.run(h.world, "buy_gear", [id])
 	if err != "":
 		Events.toast.emit(err)
 	else:
@@ -135,5 +135,5 @@ static func sell_slot(h: Hangar, i: int) -> void:
 	if not h.can_shop():
 		Events.toast.emit("Gear is sold at the mothership.")
 		return
-	h.profile.sell_slot(i)
+	HumanCmd.run(h.world, "sell_slot", [i])
 	h._refresh()

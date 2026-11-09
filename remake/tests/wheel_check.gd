@@ -46,7 +46,7 @@ extends Node
 ## PauseMenu.ask() / resume(). The quick checks (run_checks) run it for both roles.
 
 ## The board's tabs and the hangar's tabs, in the order they appear.
-const BOARD_TABS := ["Research", "Build", "Mothership", "Fleet", "Pilots"]
+const BOARD_TABS := ["Research", "Build", "Mothership", "Pilots"]
 ## The hangar's tab names, as its tab buttons show them. _run() visits each
 ## tab in turn and checks the hangar panel on it.
 const HANGAR_TABS := ["Ships", "Modules", "Gear", "Kits"]

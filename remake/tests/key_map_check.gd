@@ -55,7 +55,7 @@ static func _oracle() -> Dictionary:
 static func _new_actions() -> Dictionary:
 	return {
 		"pause": [_k(KEY_P)], "fast_motion": [_k(KEY_QUOTELEFT, "s")], "debug_launch": [_k(KEY_F12, "c")],
-		"wheel": [_k(KEY_X), _m(MOUSE_BUTTON_XBUTTON2)],
+		"wheel": [_k(KEY_X), _m(MOUSE_BUTTON_XBUTTON2)], "all_squadrons": [_k(KEY_M)],
 		"wing_follow": [], "wing_cover": [], "wing_attack": [], "wing_guard": [], "wing_hold": [], "wing_regroup": [],
 		"wing_formation": [], "wing_fire": [],
 	}

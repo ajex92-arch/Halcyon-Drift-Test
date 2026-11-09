@@ -15,7 +15,7 @@ extends Node
 ##      those keys itself, ignores them too while the box is open;
 ##   4. Enter saves: the box closes, the match runs again, and exactly one
 ##      note file exists with the right text, item, seat, ship, place,
-##      credits, match time, seed and rules played (the preset: "pick", the
+##      credits, match time, seed (the --seed given, else the number the match picked: F85) and rules played (the preset: "pick", the
 ##      standard rules, unless --preset names another); with a window the PNG exists and is as
 ##      big as the screen, headless the note says it has no screenshot;
 ##   5. Esc cancels: nothing new is saved and the match runs again;
@@ -25,6 +25,7 @@ extends Node
 ##   9. a fire button the game thinks is held is set back to the mouse's real
 ##      state when the box closes;
 ##  10. F9 also works once the match is over, and the note says so;
+##  11. the note's header names the build that wrote it (F134), and an old note without that entry still reads;
 ##  and NoteWriter.item_id() reads the IDs it should. For the browser build,
 ## whose own path cannot run here, it checks the pieces that can: the call that
 ## hands a file to the browser (JavaScriptBridge.download_buffer) exists in this
@@ -189,7 +190,15 @@ func _run() -> void:
 		_expect(bool(m.get("paused_before", true)) == false, "Enter", "the note says the match was not paused before")
 		_expect(m.has("world_speed") and is_equal_approx(float(m["world_speed"]), world.speed.factor), "Enter", "the note records the world speed (%s)" % str(m.get("world_speed")))
 		var s: Dictionary = note.get("setup", {})
-		_expect(str(s.get("seed")) == str(Game.opt("seed", "random")), "Enter", "the seed is %s" % str(s.get("seed")))
+		# The seed: the --seed the check was given, else the number the match picked at its start (F85: a note of a
+		# match started without --seed used to say "random", which no run can repeat).
+		if Game.opt("seed") != null:
+			_expect(str(s.get("seed")) == str(Game.opt("seed")), "Enter", "the seed is the --seed given (%s)" % str(s.get("seed")))
+		else:
+			_expect(Game.match_seed >= 0 and str(s.get("seed")) == str(Game.match_seed) and str(s.get("seed")).is_valid_int(), "Enter", "a match started with no --seed records the number it picked (%s, the match's is %d)" % [str(s.get("seed")), Game.match_seed])
+		# The build (F134): the header names the build that wrote the note, and an old note without the entry still reads.
+		_expect(str(note.get("tool")) == "note_key" and str(note.get("build", "")) == BuildId.get_id() and BuildId.get_id() != "", "Enter", "the note's header names the build (%s)" % str(note.get("build", "<none>")))
+		_check_old_note()
 		# The note names the rules played: the standard rules ("pick") when the
 		# check was started without --preset, else the preset it was given.
 		var asked := str(Game.opt("preset", ""))
@@ -454,6 +463,25 @@ func _read(fn: String) -> Dictionary:
 	if parsed is Dictionary:
 		return parsed as Dictionary
 	return {}
+
+
+## A note of an older build has no "build" entry (and "version" 1 as ever): the reader this check uses (_read) still gives
+## its other entries and the missing build reads as "". The old note is made here, saved apart from the real ones (its name
+## does not start with "note_", so _notes() and _clear() leave it) and deleted at once.
+func _check_old_note() -> void:
+	var path := dir + "/old_format_check.json"
+	var f := FileAccess.open(path, FileAccess.WRITE)
+	if f == null:
+		_fail("old note", "cannot write %s" % path)
+		return
+	f.store_string("{\n  \"tool\": \"note_key\",\n  \"version\": 1,\n  \"text\": \"T-1: an old note\",\n  \"setup\": {\"seed\": \"random\"}\n}\n")
+	f.close()
+	var parsed: Variant = JSON.parse_string(FileAccess.get_file_as_string(path))
+	var folder := DirAccess.open(dir)
+	if folder != null:
+		folder.remove("old_format_check.json")
+	var ok :=parsed is Dictionary and str((parsed as Dictionary).get("text")) == "T-1: an old note" and str((parsed as Dictionary).get("build", "")) == "" and str(((parsed as Dictionary).get("setup", {}) as Dictionary).get("seed")) == "random"
+	_expect(ok, "old note", "a note with no build entry still reads (its build is empty)")
 
 
 ## Delete the note files (and screenshots) in `folder`, so the check can count.

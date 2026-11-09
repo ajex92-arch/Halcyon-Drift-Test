@@ -22,6 +22,8 @@ extends RefCounted
 ## (Hud.setup(), StartScreen) sets the side first with set_accent_team().
 ## Buttons never take keyboard focus: WASD, Space, Tab and the arrows
 ## belong to the pilot, not to whichever button was clicked last.
+## Tooltips: make_theme() styles the tooltip box and starts fit_tooltips(), which wraps any tooltip
+## wider than TIP_MAX_W so that no tooltip of any screen runs off the window.
 ##
 ## WHO USES IT: the scripts in scripts/ui/: Hud and its widgets, Hangar,
 ## AdmiralBoard, Scoreboard, HelpPanel, PauseMenu, EndScreen, StartScreen,
@@ -44,6 +46,17 @@ const PANEL_LOOKS := [
 	["StartLook", Palette.PANEL, 0.95, 22],   # start screen main card
 	["EndLook", Palette.PANEL, 0.95, 24],     # end screen card
 ]
+
+## The widest a tooltip's words may run (pixels, in the units the game lays out in; a window is never laid out
+## narrower than 1280): longer words wrap at this width (see fit_tooltips()).
+const TIP_MAX_W := 480.0
+## The room (pixels) a tooltip leaves at each side of the window when the window is narrower than TIP_MAX_W allows.
+const TIP_EDGE := 12.0
+## The line breaks of a wrapped tooltip: at the words, the way the label's own smart wrap breaks them.
+const TIP_BREAKS := TextServer.BREAK_MANDATORY | TextServer.BREAK_WORD_BOUND | TextServer.BREAK_ADAPTIVE
+
+## True once fit_tooltips() has started watching for tooltips.
+static var _tips_fit := false
 
 ## The team the interface highlights for (Rules.HALCYON or Rules.CINDER): the
 ## human's team, or Aurelian for a spectator. Change it only with
@@ -113,6 +126,7 @@ static func make_theme() -> Theme:
 	var tip := box(Palette.INK, Palette.LINE, 8)
 	t.set_stylebox("panel", "TooltipPanel", tip)
 	t.set_color("font_color", "TooltipLabel", Palette.ICE)
+	fit_tooltips()
 	# Step 6: named looks ("type variations"). A node in a scene picks one
 	# by name (its theme_type_variation), so the colours stay in Palette.
 	# Text colours: MistText (grey) and AccentText (the highlight colour). Plain
@@ -138,6 +152,48 @@ static func make_theme() -> Theme:
 		t.set_type_variation(look[0], "PanelContainer")
 		t.set_stylebox("panel", look[0], box(Palette.with_alpha(look[1], look[2]), Palette.LINE, look[3]))
 	return t
+
+
+## Make every tooltip in the game wrap to a width that fits the window. Godot shows a tooltip's words on one line
+## whatever their length (its panel is not cut to the window, so a long text ran off the right edge: the start
+## screen's test toggles at 2560x1440, the user's bug of Thu 2026-11-05). Godot builds a tooltip as a PopupPanel
+## that holds one Label, added to the tree when the pointer has rested on a control; this watches for that Label and,
+## when its words are wider than TIP_MAX_W (or than the window allows), turns on its word wrap at that width and
+## gives it the wrapped height, so Godot places the box (below the pointer, or moved to stay inside the window)
+## from the size it will really have. Every tooltip of every screen goes through it, so no screen sets its own.
+## make_theme() calls this; calling it again changes nothing.
+static func fit_tooltips() -> void:
+	if _tips_fit:
+		return
+	var tree := Engine.get_main_loop() as SceneTree
+	if tree == null:
+		return
+	_tips_fit = true
+	tree.node_added.connect(_fit_tooltip)
+
+
+## fit_tooltips() calls this for every node that joins the tree; only a tooltip's Label (the child of a PopupPanel)
+## is touched.
+static func _fit_tooltip(n: Node) -> void:
+	if not (n is Label):
+		return
+	var panel := n.get_parent() as PopupPanel
+	if panel == null:
+		return
+	var lab := n as Label
+	var sides := panel.get_theme_stylebox("panel", "TooltipPanel").get_minimum_size().x
+	var width := minf(TIP_MAX_W, lab.get_tree().root.get_visible_rect().size.x - 2.0 * TIP_EDGE - sides)
+	var font := lab.get_theme_font("font")
+	var font_size := lab.get_theme_font_size("font_size")
+	var para := TextParagraph.new()
+	para.add_string(lab.text, font, font_size)
+	if para.get_size().x <= width:
+		return
+	para.width = width
+	para.break_flags = TIP_BREAKS
+	var lines := para.get_line_count()
+	lab.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	lab.custom_minimum_size = Vector2(width, ceilf(para.get_size().y + float(lab.get_theme_constant("line_spacing")) * float(lines - 1)))
 
 
 ## A box style: fill colour `bg`, a 1-pixel `border`, corners rounded by

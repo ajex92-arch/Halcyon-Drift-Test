@@ -21,7 +21,7 @@ extends Node
 ##   7. the mouse: a left press on the readout and on the block leaves the guns alone; a fire held from the world
 ##      and let go over the block stops; a real click on the energy button changes the routing; the wheel over the
 ##      readout and the block zooms; the block's place, tooltips and lit Dock button;
-##   8. the aim hold: with the pointer on the readout the face point stays put for 30 ticks (it starts one tick
+##   8. the aim hold: with the pointer on the readout the face point keeps its place relative to the ship for 30 ticks (it starts one tick
 ##      late), it follows the pointer within a tick of leaving, and it follows while a fire is held.
 ## It ends with "mouse_route_check: N failures" (0 = all good) and quits. A run over 90 seconds of real time
 ## prints "mouse_route_check: timeout".
@@ -429,13 +429,17 @@ func _aim_hold() -> void:
 	await _motion(on_a)
 	await _ticks(2)
 	var fp_on := ship.controls.face_point
+	# The hold keeps the face point's place relative to the ship (a ship that drifts takes it along), so it is the offset that stays put.
+	var off_on := fp_on - ship.global_position
+	var ship_on := ship.global_position
 	_check(world.ui_hold, "the pointer on the readout switches the hold on (one tick late)")
 	# The pointer stays on the readout; the world moves under it (the camera shifts), so the world point under the
 	# pointer changes by a lot. The held face point does not follow it.
 	var cam_pos := world.camera.global_position
 	world.camera.global_position = cam_pos + Vector2(900.0, 400.0)
 	await _ticks(30)
-	_check(world.ui_hold and ship.controls.face_point.is_equal_approx(fp_on) and not ship.controls.face_point.is_equal_approx(world.mouse_world()), "on the readout the face point stays put for 30 ticks (%s, the pointer is now over %s)" % [ship.controls.face_point, world.mouse_world()])
+	_check(world.ui_hold and (ship.controls.face_point - ship.global_position).distance_to(off_on) < 2.0 and not ship.controls.face_point.is_equal_approx(world.mouse_world()), "on the readout the face point keeps its place relative to the ship for 30 ticks (%s, the pointer is now over %s)" % [ship.controls.face_point, world.mouse_world()])
+	print("mouse_route_check: on the readout the ship moved %s and the face point moved %s" % [ship.global_position - ship_on, ship.controls.face_point - fp_on])
 	print("mouse_route_check: heading on the readout %.3f, face point %s" % [ship.rotation, ship.controls.face_point])
 	await _motion(away)
 	await _ticks(2)

@@ -36,6 +36,11 @@ theme_override_font_sizes/font_size = 44
 layout_mode = 2
 theme_type_variation = &"MistText"
 
+[node name="Difficulty" type="Label" parent="Center/Card/Col"]
+visible = false
+layout_mode = 2
+theme_type_variation = &"MistText"
+
 [node name="Teams" type="HBoxContainer" parent="Center/Card/Col"]
 layout_mode = 2
 mouse_filter = 2

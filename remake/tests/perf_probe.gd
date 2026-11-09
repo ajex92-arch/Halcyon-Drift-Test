@@ -40,9 +40,10 @@ extends Node
 ##   - THE WING HOOK (_fill_wings): with --wingmen on, every pilot keeps the
 ##     full wing: a wingman that was lost is replaced once a second.
 ##   - THE FLEET (_fill_fleet): both teams keep a full fleet of bought ships
-##     (FleetFill: 18 a team, a mix of squadrons, corvettes, frigates and
-##     Destroyers), so the run measures the fleet at the limit. Ships lost in a
-##     fight are bought again at once, once a second.
+##     (FleetFill: a mix of squadrons, corvettes, frigates and Destroyers, 18
+##     ships a call, called again every second until the fleet limit is full),
+##     so the run measures the fleet at the limit. Ships lost in a fight are
+##     bought again at once, once a second.
 ## Both settings are made here, in the test, so the game's own code is not
 ## touched. Without --perf-worst the probe only measures and nothing about
 ## the match changes.

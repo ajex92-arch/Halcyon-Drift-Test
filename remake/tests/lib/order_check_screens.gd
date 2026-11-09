@@ -90,25 +90,28 @@ static func run(t) -> void:
 	(b._cards["tech:repairBays"] as CardButton).pressed.emit()
 	expect(t, "the research card", OrderKinds.RESEARCH, "id", "repairBays", {})
 
-	# The Yard tab: a buy button and the buttons of a list row.
-	b._set_tab("Fleet")
+	# The command card and the production panel (they replaced the Yard tab): a Build cell and the buttons of a list row.
+	hud._close_others(null)
+	var view := hud.command_view
+	view.card.set_page("build")
+	view.refresh()
+	(view.card._grid[view.card._grid_ids.find("fighter")] as Button).pressed.emit()
+	expect(t, "the card's Fighter cell", OrderKinds.PRODUCE, "none", 0, {"hull": "fighter", "count": 3, "repeat": 0, "rally": "mothership"})
+	CardActions.run(view.card, "build", "destroyer")
+	expect(t, "the card's Destroyer entry", OrderKinds.PRODUCE, "none", 0, {"hull": "destroyer", "count": 1, "repeat": 0, "rally": "mothership"})
+	hud._close_others(null)
 	await tree.physics_frame
-	(b._cards["yard_buy:fighter"] as Button).pressed.emit()
-	expect(t, "the Fighter buy button", OrderKinds.PRODUCE, "none", 0, {"hull": "fighter", "count": 3, "repeat": 0, "rally": "mothership"})
-	(b._cards["yard_buy:destroyer"] as Button).pressed.emit()
-	expect(t, "the Destroyer buy button", OrderKinds.PRODUCE, "none", 0, {"hull": "destroyer", "count": 1, "repeat": 0, "rally": "mothership"})
 	await tree.physics_frame
-	await tree.physics_frame
-	var rows: Array = b._cards["yard_rows"]
-	var first: Dictionary = rows[0]
-	var first_id := str((first["row"] as Control).get_meta("item", ""))
-	t.check("(v) a queued ship shows as a row of the Yard tab", (first["row"] as Control).visible and first_id != "")
-	(first["hold"] as Button).pressed.emit()
+	view.prod.refresh()
+	var first_id := str((view.prod._entries[0]["ids"] as Array)[0]) if not view.prod._entries.is_empty() else ""
+	t.check("(v) a queued ship shows as a row of the production panel", view.prod._rows[0].visible and first_id != "")
+	view.prod._hold_row(0)
 	expect(t, "the hold button of a row", OrderKinds.HOLD_ITEM, "item", first_id, {"hold": 1})
-	(first["down"] as Button).pressed.emit()
+	view.prod._move_row(0, 1)
 	expect(t, "the down button of a row", OrderKinds.MOVE_ITEM, "item", first_id, {"dir": 1})
-	(first["cancel"] as Button).pressed.emit()
-	expect(t, "the cancel button of a row", OrderKinds.CANCEL, "item", first_id, {})
+	view.prod._cancel_row(0)
+	view.prod._cancel_row(0)
+	expect(t, "the cancel button of a row (a started item asks once more)", OrderKinds.CANCEL, "item", first_id, {})
 	# The map tools: each is armed and clicked at a point.
 	var ov: CommandOverlay = hud.overlay
 	var p := w.mothership(team).global_position + Vector2(700.4, 301.6)

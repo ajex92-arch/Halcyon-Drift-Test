@@ -31,8 +31,6 @@ extends PanelContainer
 ##                 (AdmiralBoardBuild)
 ##   Mothership  - status, upgrades, moving it (from 20:00).
 ##                 (AdmiralBoardMothership)
-##   Fleet       - called Yard on screen: the rally waypoint, the fleet ships
-##                 and the build list. (AdmiralBoardFleet, AdmiralBoardYardList)
 ##   Pilots      - the scoreboard (scenes/ui/scoreboard.tscn, placed
 ##                 inside the board).
 ## A tab's "cards" (its buttons and labels) depend on the game: which
@@ -77,13 +75,9 @@ var overlay: CommandOverlay
 ## by setup().
 var team := Rules.HALCYON
 ## The tab being shown (one tab button's key, its node name: "Research", "Build",
-## "Mothership", "Fleet" or "Pilots"; the Fleet tab reads "Yard" on screen). The
+## "Mothership" or "Pilots"; the Fleet tab and its Yard went with the command view). The
 ## HUD reads it to rebuild the same tab after a resize.
 var tab := "Research"
-## The Yard tab's choices, which stay while the board is open: "count" (ships in a
-## squadron, 1 to 3), "repeat" (buy again when done) and "rally" ("mothership",
-## "lane" or "point", the picked spot being kept on the command overlay).
-var yard := {"count": 3, "repeat": false, "rally": "mothership"}
 ## key -> CardButton / Label / Button, refreshed at 4 Hz (4 times a
 ## second). Each key starts with what it is, e.g. "fac:<facility id>",
 ## "tech:<tech id>", "node:<node id>", or is a plain name like "drones".
@@ -105,7 +99,7 @@ var _scoreboard: Scoreboard = null
 ## The tab buttons in the Tabs row, in the order they appear. Each one's
 ## node name is its tab key (the Fleet button reads Yard); _set_tab()
 ## colours the selected one in the highlight colour.
-@onready var _tab_buttons: Array[Button] = [$Col/Tabs/Research, $Col/Tabs/Build, $Col/Tabs/Mothership, $Col/Tabs/Fleet, $Col/Tabs/Pilots]
+@onready var _tab_buttons: Array[Button] = [$Col/Tabs/Research, $Col/Tabs/Build, $Col/Tabs/Mothership, $Col/Tabs/Pilots]
 ## The column inside the scroll area that holds the current tab's cards.
 @onready var _content: VBoxContainer = $Col/Scroll/Content
 ## The details line at the bottom: the details of the last card or button
@@ -121,6 +115,10 @@ func _ready() -> void:
 	$Col/Head/Close.pressed.connect(func() -> void: closed.emit())
 	for b in _tab_buttons:
 		b.pressed.connect(_set_tab.bind(String(b.name)))
+		# The command view took the Build, Mothership and Fleet tabs' jobs (the card, the strip, the production panel):
+		# their buttons are hidden, and the tabs stay reachable by name (_set_tab, the card's "open the board at ...").
+		if ["Build", "Mothership"].has(String(b.name)):
+			b.visible = false
 
 
 ## Connect the board to world `w` and map layer `ov`, command the human's team,
@@ -176,8 +174,6 @@ func _set_tab(t: String) -> void:
 			AdmiralBoardBuild.build(self)
 		"Mothership":
 			AdmiralBoardMothership.build(self)
-		"Fleet":
-			AdmiralBoardFleet.build(self)
 		"Pilots":
 			_scoreboard = SCOREBOARD_SCENE.instantiate()
 			_scoreboard.embedded = true
@@ -302,5 +298,4 @@ func _refresh() -> void:
 			AdmiralBoardBuild.refresh(self)
 		"Mothership":
 			AdmiralBoardMothership.refresh(self)
-		"Fleet":
-			AdmiralBoardFleet.refresh(self)
+

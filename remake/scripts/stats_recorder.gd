@@ -94,14 +94,18 @@ var _history: Array = []
 
 
 ## main.gd calls this once, right after the match is built. `file` is the
-## --record-stats value ("" = the default file).
-func setup(w: World, file: String) -> void:
+## --record-stats value ("" = the default file). The match recorder (MatchRecorder) passes
+## `owned` true with the exact file of its recording: the name gets no _2 and the player is not
+## told with a pop-up message (the recording is always on for a match they play).
+func setup(w: World, file: String, owned: bool = false) -> void:
 	world = w
 	_made += 1
 	_number = _made
-	path = path_for_match(file if file != "" else DEFAULT_FILE, _number)
+	path = file if owned else path_for_match(file if file != "" else DEFAULT_FILE, _number)
 	_role = w.human_role
 	_seed = Game.opt("seed")
+	if _seed == null and Game.match_seed >= 0:
+		_seed = Game.match_seed
 	_t = w.time
 	_next_write = (floorf(_t / WRITE_EVERY) + 1.0) * WRITE_EVERY
 	# One page per pilot (the human's too; a bought ship's crew is not a pilot).
@@ -126,7 +130,7 @@ func setup(w: World, file: String) -> void:
 		print("stats: CANNOT WRITE ", shown, " (does its folder exist?); nothing will be recorded")
 	# In a window, say so on screen too: someone who starts the game from the
 	# start screen sees no console. (A toast is a short pop-up message.)
-	if DisplayServer.get_name() != "headless":
+	if DisplayServer.get_name() != "headless" and not owned:
 		if ok:
 			Events.toast.emit("Recording your match stats to %s" % shown)
 		else:

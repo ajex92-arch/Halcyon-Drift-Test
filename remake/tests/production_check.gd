@@ -192,7 +192,7 @@ func _order_cases() -> void:
 	# A full fleet does not hold the turn either, and files cap_full once.
 	_reset(9000.0)
 	var cur: int = world.events_rts.next_index(0)
-	p.capacity.reserve(16)
+	p.capacity.reserve(RtsHulls.CAP_IN_FORCE - 2)  # two places are left: a squadron of three does not fit
 	var big := p.add_ship("fighter", 3)
 	var small := p.add_drone("")
 	_run(3)
@@ -328,9 +328,17 @@ func _computer_cases() -> void:
 	var p := _prod()
 	var ap := AdmiralProduction.new(world, 0, AdmiralLanes.new(world, 0))
 	var saved_time := world.time
-	# The fill schedule: 6 of 18 wanted by 6:00, 13 by 12:00, 17 by 18:00.
-	_check("computer: the fill targets are 6, 13 and 17 of 18", RtsHulls.fill_target(360.0) == 6 and RtsHulls.fill_target(720.0) == 13 and RtsHulls.fill_target(1080.0) == 17 and RtsHulls.fill_target(0.0) == 0 and RtsHulls.fill_target(5000.0) == 17)
+	# The fill schedule: the schedule's percents of the fleet limit, rounded up, wanted by 6:00, 12:00 and 18:00
+	# (30, 70 and 90 percent today). The expected numbers come from RtsHulls.FILL_PERCENT and CAP_IN_FORCE, never typed.
+	var aims: Array[int] = []
+	var aims_ok := true
+	for i in RtsHulls.FILL_SECONDS.size():
+		aims.append(ceili(float(RtsHulls.CAP_IN_FORCE * int(RtsHulls.FILL_PERCENT[i])) / 100.0))
+		aims_ok = aims_ok and RtsHulls.fill_target(float(RtsHulls.FILL_SECONDS[i])) == aims[i]
+	_check("computer: the fill targets are the schedule's percents of the fleet limit, rounded up", aims_ok and RtsHulls.fill_target(0.0) == 0 and RtsHulls.fill_target(5000.0) == aims[aims.size() - 1], "%s of %d" % [str(aims), RtsHulls.CAP_IN_FORCE])
+	# The buying cases below start six ships short of the 6:00 target, whatever the limit is.
 	_reset(5000.0)
+	_pad_fleet(aims[0] - 6)
 	world.time = 360.0
 	ap.run(ts, 5000.0)
 	_check("computer: below the target it buys a Fighter squadron for the push lane", p.ship_items() == 1 and p.items[0]["what"] == "fighter" and int(p.items[0]["count"]) == 3 and p.items[0]["rally"] == "lane", str(p.items.size()))
@@ -338,7 +346,7 @@ func _computer_cases() -> void:
 	ap.run(ts, 5000.0)
 	_check("computer: and again until the target is met", p.ship_items() == 2, str(p.ship_items()))
 	ap.run(ts, 5000.0)
-	_check("computer: then it stops (6 ships are wanted)", p.ship_items() == 2)
+	_check("computer: then it stops (the 6:00 target is met)", p.ship_items() == 2)
 	_check("computer: at the target the repeat goes off", int(p.repeat.get("fighter", 1)) == 0)
 	_check("computer: every buy has a logged reason", ap.log.size() >= 2 and (ap.log[0] as String).begins_with("YARD t=360 team=0 buys Fighter x3 (450)"), ap.log[0] if not ap.log.is_empty() else "")
 
@@ -408,6 +416,22 @@ func _computer_cases() -> void:
 	_reset(0.0)
 
 
+## Put `n` living fleet ships into team 0's squad records (plain unit numbers, no ships in the world), so a
+## case can start with a fleet of a known size whatever the fleet limit is. _reset() clears them. Nothing
+## is made for `n` of 0 or less.
+func _pad_fleet(n: int) -> void:
+	if n <= 0:
+		return
+	var s := Squad.new()
+	s.id = world.next_uid()
+	s.team = 0
+	s.kind = "ship"
+	s.max_members = n
+	for i in n:
+		s.member_uids.append(-1 - i)
+	world.squads[s.id] = s
+
+
 ## Unlock the Destroyer for team 0 (the Capital Ship Facility and the chassis research).
 func _unlock_capital_for_test() -> void:
 	_ts().done["destroyerChassis"] = true
@@ -427,13 +451,13 @@ func _unlock_cases() -> void:
 	_check("unlock: and pays nothing", ts.treasury == 100.0 and int(b["paid"]) == 0)
 	_check("unlock: cancelling it refunds nothing", p.cancel(str(b["id"])) == "" and ts.treasury == 100.0)
 	# The limit still binds.
-	p.capacity.reserve(16)
+	p.capacity.reserve(RtsHulls.CAP_IN_FORCE - 2)  # two places are left: a squadron of three does not fit, one of two does
 	var c := p.add_ship("fighter", 3)
 	_run(2)
 	_check("unlock: the fleet limit still binds", not c["started"] and c["why"] == "room", p.state_text(c))
 	var d := p.add_ship("fighter", 2)
 	_run(2)
-	_check("unlock: a squadron of two still fits under the limit", d["started"] and p.capacity.used() == 18, str(p.capacity.used()))
+	_check("unlock: a squadron of two still fits under the limit", d["started"] and p.capacity.used() == RtsHulls.CAP_IN_FORCE, str(p.capacity.used()))
 	# An unlocked Admiral queues a research with no prerequisite.
 	_reset(0.0)
 	ts.facilities.erase("research")
@@ -474,7 +498,7 @@ func _yard_order_cases() -> void:
 	# Never refused for money or a full fleet.
 	_reset(0.0)
 	_check("orders: PRODUCE with no money is accepted and waits", _send(OrderKinds.PRODUCE, {"hull": "fighter", "count": 3}) == "")
-	p.capacity.reserve(18)
+	p.capacity.reserve(RtsHulls.CAP_IN_FORCE)
 	_check("orders: PRODUCE with a full fleet is accepted and waits", _send(OrderKinds.PRODUCE, {"hull": "fighter", "count": 3}) == "")
 	_run(2)
 	_check("orders: both say the fleet is full", p.state_text(p.items[0]) == "waiting: fleet full" and p.state_text(p.items[1]) == "waiting: fleet full", "%s / %s" % [p.state_text(p.items[0]), p.state_text(p.items[1])])

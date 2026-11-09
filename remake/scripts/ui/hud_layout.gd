@@ -33,8 +33,9 @@ extends RefCounted
 ##     banner_width() how wide the hint and the big message may be, so they
 ##     do not run into the ship readout, the gear slots, the minimap, the
 ##     kill feed, the "me" panel or the text of an open panel.
-## The kill feed sits under the top bar (hud_feed.tscn), so those two never
-## meet. apply() runs 10 times a second (Hud._refresh), when the window is
+## The kill feed sits under the top bar (hud_feed.tscn) and is moved down
+## when the bar, which is taller with the difficulty tag, reaches over its ground
+## (_place_feed()), so those two never meet. apply() runs 10 times a second (Hud._refresh), when the window is
 ## resized and when a panel opens. It writes a value only when it changed.
 ##
 ## WHO USES IT: Hud makes one (hud.layout) in setup() and calls apply().
@@ -66,6 +67,11 @@ const TOAST_LIFT_FLIGHT := 150.0
 ## The narrowest (pixels) a pop-up hint or big message is made, however
 ## little room there is; a narrower message would be a tall thin column.
 const MIN_TEXT_W := 260.0
+## How far (pixels) from the top edge the kill feed starts when the top bar does not
+## reach over it: the offset_top of hud_feed.tscn (_place_feed()).
+const FEED_TOP := 71.0
+## How far (pixels) from the top edge the top bar sits: the offset_top of hud_top_bar.tscn (the command view drops it).
+const TOP_BAR_TOP := 6.0
 
 ## The HUD this part belongs to.
 var hud: Hud
@@ -95,10 +101,18 @@ func apply() -> void:
 	hud.seat_bar.visible = hud.seat_bar.wanted() and not panel
 	if table:
 		hud.status.visible = false
-	# Step 2: the top bar clears the "me" panel.
+	# Step 2: the top bar clears the "me" panel, and the kill feed stays under the bar. While the command view shows, the
+	# strip takes the top 24 pixels: the top bar drops under it, and the "me" panel (the Admiral's lines are in the strip)
+	# gives its corner to the alert slot.
+	var view_on := hud.command_view != null and hud.command_view.is_showing()
+	hud.me_panel.visible = not view_on and (hud.world.human_role != "spectator")
 	_place_top_bar(vp)
+	_place_feed(vp)
 	# Step 3: the bottom row: gear slots, ship readout, minimap.
 	_place_bottom_row(vp)
+	# Step 3b: the Admiral's command view puts its pieces in the corners, now that the bottom row is placed.
+	if hud.command_view != null:
+		hud.command_view.layout(vp)
 	# Step 4: the big panels sit under the top bar and "me" panel.
 	hud.panels.relayout()
 
@@ -144,7 +158,11 @@ func toast_spot(panel_open: bool) -> Vector2:
 	if not panel_open:
 		# The wing strip, when it shows, sits just above the readout: the hint goes above it.
 		var strip := WingStrip.CHIP_H + WingStrip.LIFT if hud.wing_strip != null and hud.wing_strip.visible else 0.0
-		return Vector2(0.0, TOAST_LIFT_FLIGHT + strip)
+		var lift := TOAST_LIFT_FLIGHT + strip
+		# The Admiral's command view has its selection panel in the middle of the bottom edge: the hint rides above it.
+		if hud.command_view != null and hud.command_view.is_showing():
+			lift = maxf(lift, hud.get_viewport_rect().size.y - hud.command_view.sel_top_open() + 10.0)
+		return Vector2(0.0, lift)
 	if not hud.status.visible:
 		return Vector2(0.0, TOAST_LIFT)
 	# The corner runs from GAP right of the readout to GAP in from the edge,
@@ -194,9 +212,30 @@ func banner_width() -> float:
 ## sideways shift is the same number added to its left and right offsets.
 func _place_top_bar(vp: Vector2) -> void:
 	var w := hud.top_bar.get_combined_minimum_size().x
+	var drop := CommandView.TOP_DROP if hud.command_view != null and hud.command_view.is_showing() else 0.0
+	if absf(hud.top_bar.offset_top - (TOP_BAR_TOP + drop)) > 0.5:
+		hud.top_bar.offset_top = TOP_BAR_TOP + drop
 	var low := hud.me_panel.offset_left + hud.me_panel.get_combined_minimum_size().x + GAP
 	var high := vp.x - GAP - w
 	_shift_centered(hud.top_bar, vp, w, clampf(vp.x * 0.5 - w * 0.5, low, maxf(low, high)))
+
+
+## Keep the kill feed, a column at the right edge that starts FEED_TOP pixels down
+## (hud_feed.tscn), under the top bar. In a window narrower than about 1370 pixels the
+## bar reaches over the feed's ground, and a bar with the difficulty tag (or a test
+## tag) is lower than FEED_TOP, so there the feed starts GAP under the bar; wherever
+## the two do not share ground it stays at FEED_TOP.
+func _place_feed(vp: Vector2) -> void:
+	var bar_right := vp.x * 0.5 + hud.top_bar.offset_left + hud.top_bar.get_combined_minimum_size().x * 0.5
+	var feed_left := vp.x + hud.feed.offset_right - hud.feed.get_combined_minimum_size().x
+	var top := FEED_TOP
+	if hud.command_view != null and hud.command_view.is_showing():
+		# Under the production panel (the kill feed is the narrower piece to give way).
+		top = maxf(top, hud.command_view.prod_bottom() + GAP)
+	if bar_right + GAP > feed_left:
+		top = maxf(top, hud.top_bar.offset_top + hud.top_bar.get_combined_minimum_size().y + GAP)
+	if absf(hud.feed.offset_top - top) > 0.5:
+		hud.feed.offset_top = top
 
 
 ## Place the gear slots, the ship readout and the minimap along the bottom.

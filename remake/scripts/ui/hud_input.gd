@@ -117,7 +117,7 @@ func handle(event: InputEvent) -> void:
 	# Step 2: P (the "pause" action) opens the pause menu, which pauses the whole game,
 	# or ends the pause when the menu holds it.
 	if k.pressed and event.is_action("pause", true):
-		hud._toggle_pause_menu()
+		hud.panels.toggle_command_pause()
 		_handled()
 		return
 	# Step 2b: the speed keys. Shift plus the backquote key (left of 1) steps the
@@ -165,6 +165,11 @@ func handle(event: InputEvent) -> void:
 	# Step 3b: the wing's key preset (flying; the actions have keys only while that preset is chosen).
 	if _wing_preset_key(event):
 		return
+	# Step 3c: the Admiral's command view: M selects every squadron, and the card's keys of the page in force (the grid, the digits)
+	# are taken before B, F and H below mean the hangar, dock or help.
+	if hud.command_view != null and hud.command_view.key(event):
+		_handled()
+		return
 	# Step 4: B opens the hangar, or closes it if it is showing.
 	if event.is_action("hangar"):
 		_hangar_key()
@@ -184,6 +189,8 @@ func handle(event: InputEvent) -> void:
 			hud.overlay.disarm()
 		elif hud._any_panel_open():
 			hud._close_others(null)
+		elif hud.command_view != null and hud.command_view.cancel_key():
+			pass
 		else:
 			hud._toggle_pause_menu()
 		_handled()
@@ -246,7 +253,7 @@ func click(action: String) -> void:
 	var world := hud.world
 	if world == null or world.phase != "play" or hud._note_is_open():
 		return
-	if hud.get_tree().paused:
+	if hud.get_tree().paused and not hud.panels.command_paused:
 		if action == "pause" and hud._pause_menu_active() and hud.pause_menu.looking:
 			hud.pause_menu.show_card()
 		return

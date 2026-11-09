@@ -105,6 +105,12 @@ static func _layout_facts(c: Control, hud: Control) -> String:
 	var m := c.get_combined_minimum_size()
 	var clip := 1 if (c is ScrollContainer or c.clip_contents) else 0
 	var s := " |L| path=%s clip=%d min=%dx%d" % [str(hud.get_path_to(c)).replace(" ", "_"), clip, roundi(m.x), roundi(m.y)]
+	# A control is drawn at its own scale times its parents' (the start screen's card is drawn at 0.75). The place and size
+	# above are the drawn ones; min and ink are in the control's own pixels, so the dump says the scale (only when it is not 1)
+	# and the checker reads min and ink at the drawn size (F130: a card that fits was reported as cramped).
+	var gs := c.get_global_transform().get_scale()
+	if absf(gs.x - 1.0) > 0.001 or absf(gs.y - 1.0) > 0.001:
+		s += " scale=%.4fx%.4f" % [gs.x, gs.y]
 	# Step 2: a control with its own script draws itself when it is not a
 	# panel (the minimap, the ship readout): name its class.
 	var sc: Script = c.get_script()
