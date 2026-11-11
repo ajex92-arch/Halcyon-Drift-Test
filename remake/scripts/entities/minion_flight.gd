@@ -23,12 +23,33 @@ extends RefCounted
 ##     point (the lead point, Minion.aim_pt); the corvette's turret aims by
 ##     itself, so its nose follows the target.
 ##   - lane_move(): with no target, fly down the lane (or to the ordered
-##     spot) at the wave's shared pace.
+##     spot) at the wave's shared pace. A minion that is outside its lane's
+##     corridor (after a chase, or pushed by rocks) first aims back at the lane
+##     line, REJOIN_AHEAD further along, instead of at the far corner. A
+##     minion that the rocks hold still for PINNED_S seconds takes no rock push
+##     for the next UNPIN_S seconds, so it cannot sit pinned for the rest of
+##     the match.
 ##   - face(): turn the nose toward an angle, no faster than `turn`.
 ## Distances are in world units (1 world unit is about one pixel at normal
 ## zoom).
 ##
 ## WHO USES IT: only Minion.sim_update(), on every second tick.
+
+
+## A walking minion slower than this (world units per second) with a rock pushing it
+## and its goal still far is pinned by the rocks.
+const PINNED_SPEED := 20.0
+## Seconds a minion must stay pinned before the rock push is switched off for it.
+const PINNED_S := 2.0
+## Seconds the rock push stays off for a minion that was pinned.
+const UNPIN_S := 3.0
+
+
+## How far (world units) along its lane, past the nearest point of the lane
+## line, a minion that is outside its lane's corridor aims when it walks back
+## (lane_move). Shorter turns it harder toward the lane; longer rejoins in a
+## shallower slant.
+const REJOIN_AHEAD := 1200.0
 
 
 ## Turn minion `m`'s nose toward angle `dir_angle` (radians), at most
@@ -143,6 +164,13 @@ static func lane_move(m: Minion, dt: float) -> void:
 					var ems := m.world.mothership(1 - m.team)
 					if ems != null and ems.alive:
 						goal = ems.position
+				else:
+					# A minion outside its lane's corridor (it chased a target or was pushed by rocks) aims
+					# back at the lane line, REJOIN_AHEAD further on, not at the far corner: that would
+					# take it tens of seconds to come back, flying along the jungle's edge.
+					var line := Util.project_on_polyline(m.position, m.lane_line)
+					if float(line["dist"]) > m.lane_half:
+						goal = Util.polyline_at(m.lane_line, float(line["s"]) + REJOIN_AHEAD)
 	# Step 2: fly there at the wave's pace (never faster than
 	# Minions.FORMATION_SPEED, 330 world units per second, so the wave
 	# stays together), slowing down within 300 of the goal, plus the rock
@@ -156,7 +184,21 @@ static func lane_move(m: Minion, dt: float) -> void:
 	if d >= 1.0:
 		want = to / d * (max_s if d > 300.0 else max_s * d / 300.0)
 	steer(m, want, dt)
-	m.velocity += m._rock_push * dt
+	# A minion that the rocks hold still (the push of the rock it is pressed against equals its
+	# own acceleration, for PINNED_S seconds, while its goal is still far) takes no rock push for
+	# the next UNPIN_S seconds, so it flies on through the rock instead of staying there for the
+	# rest of the match (a minion has no body to bump: only this push keeps it off the rocks).
+	if m._unpin_t > 0.0:
+		m._unpin_t -= dt
+	else:
+		m.velocity += m._rock_push * dt
+		if m.velocity.length_squared() < PINNED_SPEED * PINNED_SPEED and d > 300.0 and m._rock_push != Vector2.ZERO:
+			m._pin_t += dt
+			if m._pin_t >= PINNED_S:
+				m._pin_t = 0.0
+				m._unpin_t = UNPIN_S
+		else:
+			m._pin_t = 0.0
 	# Step 3: face the way we fly, but only when moving faster than
 	# Minions.MIN_HEADING_SPEED (10 world units per second; length_squared is
 	# the speed times itself), so a nearly still minion doesn't spin on the

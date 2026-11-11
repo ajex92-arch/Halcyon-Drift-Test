@@ -26,6 +26,8 @@ extends Node2D
 ##     pictures in drawing order (body, engine glows by the frame, outlines), the others on one; the glow,
 ##     the flame, the gun sockets, the guns' heads and the bar are drawn by the frame on this node's own picture.
 ##     A unit the fog hides, or one far from the camera's view (ViewCull), is not brought up to date until it shows or comes near again.
+##   - An enemy mothership the viewer's team has seen and cannot see now is a last-known ghost: this node is lifted off
+##     the ship and stays where it was last seen, drawing the body only (_park_when_unseen(), is_ghost()).
 ##   - Lines are multiplied by `px` (world units per screen pixel) so they
 ##     keep the same thickness on screen at any zoom, and small units are
 ##     never drawn smaller than a few screen pixels.
@@ -107,6 +109,12 @@ var _gauge: DrawCache
 ## True while the body's kept picture has glowing veins that pulse, so the picture is
 ## drawn again at each step of the pulse.
 var _pulses := false
+## A mothership only: true while the picture is parked where the viewer last saw the ship because the fog hides it now
+## (see _park_when_unseen()).
+var _parked := false
+## A mothership only: where it was, and which way it pointed, in the last frame the viewer's team saw it.
+var _seen_at := Vector2.ZERO
+var _seen_rot := 0.0  # the heading it had then (radians)
 
 
 ## Find our unit. The mothership is drawn one layer lower (z_index -1) so
@@ -151,7 +159,10 @@ func _ready() -> void:
 func _process(_dt: float) -> void:
 	if unit == null or not unit.alive:
 		return
-	rotation = -unit.rotation
+	if unit is Mothership:
+		_park_when_unseen()
+	if not _parked:
+		rotation = -unit.rotation
 	if _body != null:
 		# Nobody sees a unit the fog hides, so it is brought up to date when it shows again.
 		if not is_visible_in_tree():
@@ -162,11 +173,44 @@ func _process(_dt: float) -> void:
 		_update_body()
 		if _is_minion:
 			return
+	# A parked picture is drawn once, when it is parked (the gauges and the move line are not part of it).
+	if _parked:
+		return
 	# A unit far from the camera's view is not drawn again (its picture is brought up to date on
 	# the first frame it comes near).
 	if not ViewCull.near(get_viewport(), unit.global_position, _cull_margin()):
 		return
 	if DrawParts.redraw or not _drawn:
+		queue_redraw()
+
+
+## Is the mothership's picture parked at the place the viewer last saw it (a ghost)? Only for an enemy ship that the
+## viewer's team has seen and cannot see now.
+func is_ghost() -> bool:
+	return _parked
+
+
+## Enemy structures, once seen, stay drawn as last-known ghosts: a mothership the viewer's team saw and cannot see now is
+## drawn where it was last seen, not where it is. The picture is lifted off the ship (top level), put at the last seen
+## place and heading and left alone, and it shows the body only (no hull and shield bars, gun heads or move line, which
+## would tell the live state). While the ship is seen, or is the viewer's own, or the viewer is a spectator, or the fog is
+## off, the picture follows the ship as before. It changes nothing in the match: only this node's own place and drawing.
+func _park_when_unseen() -> void:
+	var vt := unit.world.viewer_team
+	if vt >= 0 and unit.team != vt and not FogOff.is_on() and not unit.visible_to(vt):
+		if not _parked:
+			_parked = true
+			top_level = true
+			global_position = _seen_at
+			rotation = 0.0
+			queue_redraw()
+		return
+	_seen_at = unit.global_position
+	_seen_rot = unit.rotation
+	if _parked:
+		_parked = false
+		top_level = false
+		position = Vector2.ZERO
 		queue_redraw()
 
 
@@ -198,12 +242,12 @@ func _zoom() -> float:
 ## look is on, the pulse of its veins (a big Cinder minion), the camera zoom (in steps of
 ## 2%) and the test switches of DrawParts; the hull bar on how hurt the minion is (in 64ths).
 func _update_body() -> void:
-	_spin.rotation = unit.rotation
+	_spin.rotation = _seen_rot if _parked else unit.rotation
 	var z := _zoom()
 	if _is_scum:
 		_update_scum(z)
 		return
-	var bits := (1 if unit.flash > 0.0 else 0) | (2 if CinderPaint.alien(unit.team) else 0) | (4 if DrawCache.is_close(z) else 0) | (DrawParts.version << 28)
+	var bits := (1 if unit.flash > 0.0 and not _parked else 0) | (2 if CinderPaint.alien(unit.team) else 0) | (4 if DrawCache.is_close(z) else 0) | (DrawParts.version << 28)
 	if _pulses:
 		bits |= CinderPaint.pulse_step(0.0 if unit is Mothership else _phase()) << 8
 	# A tower under construction is drawn faded; a finished one solid.
@@ -442,7 +486,8 @@ func _draw() -> void:
 			# kept picture; its engine glow flickers by the frame).
 			ScumPaint.draw_fighter_glow(self, unit as SnubFighter, px)
 		Unit.K_MOTHERSHIP:
-			_draw_mothership(px, col)
+			if not _parked:
+				_draw_mothership(px, col)
 
 
 ## An Aurelian minion `m` of drawing size `size` and team colour `col`, drawn on `ci`
@@ -582,7 +627,7 @@ func _draw_bay_body(ci: CanvasItem, px: float, col: Color) -> void:
 ## dot for each gun. Its gun heads, bars and move line are drawn by _draw_mothership().
 func _draw_mothership_body(ci: CanvasItem, px: float, col: Color) -> void:
 	var ms := unit as Mothership
-	var hit := Palette.HIT_FLASH_MOTHER if ms.flash > 0.0 else 0.0
+	var hit := Palette.HIT_FLASH_MOTHER if ms.flash > 0.0 and not _parked else 0.0
 	if CinderPaint.alien(ms.team):
 		# The alien hull is drawn for a 1600 x 340 ship; stretch it to the real size.
 		var stretch := Vector2(float(ms.def["length"]) / 1600.0, ms.beam / 340.0)

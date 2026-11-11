@@ -1111,9 +1111,9 @@ func _item_p() -> void:
 	await _ticks(35)
 	script_ctl.aim = ward.global_position
 	await _ticks(2)
-	_tap_key(hud, KEY_P)
+	hud._toggle_pause_menu()
 	var menu := hud.pause_menu
-	_check("(p) step 2: P opens the pause card and pauses the game", menu != null and menu.visible and menu.active and not menu.looking and get_tree().paused)
+	_check("(p) step 2: the Menu route opens the pause card and pauses the game", menu != null and menu.visible and menu.active and not menu.looking and get_tree().paused)
 	_check("(p) step 2: under the card the order key is not ready", not hud.wing_ready())
 	hud.toast_box.show_text(MARK)
 	world.orders.last_submitted = {}
@@ -1146,7 +1146,7 @@ func _item_p() -> void:
 	_check("(p) step 3: the carried-out order is confirmed by a pop-up", hud.toast_box._label.text.begins_with("Wing: "), hud.toast_box._label.text)
 	# Step 4, Look around, the hold: the wheel opens while paused, letting go over a slice queues the order.
 	await _ticks(35)
-	_tap_key(hud, KEY_P)
+	hud._toggle_pause_menu()
 	menu.look_around()
 	await _mouse_to(Vector2(640.0, 330.0))
 	var t4 := world.tick_count
@@ -1171,7 +1171,7 @@ func _item_p() -> void:
 	_check("(p) step 4: after the resume the held order is carried out on the first ticks", not get_tree().paused and got4 >= 0 and got4 <= 4 and _done_since(cursor4, OrderKinds.HOLD) == 1, "after %d ticks, apply_tick %d (paused at %d), %d order_done" % [got4, int(rec4.get("apply_tick", -1)), t4, _done_since(cursor4, OrderKinds.HOLD)])
 	# Step 5, Esc with the wheel open while looking around: the wheel closes first and the look-around stays.
 	await _ticks(35)
-	_tap_key(hud, KEY_P)
+	hud._toggle_pause_menu()
 	menu.look_around()
 	await _mouse_to(Vector2(640.0, 330.0))
 	hud.router.handle(_key(KEY_X, true))

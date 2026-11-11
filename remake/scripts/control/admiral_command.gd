@@ -176,8 +176,10 @@ func turret_blocker(team: int, node_id: String, ttype: String) -> String:
 		return "No such node"
 	# Torpedo turrets need the Platform Missiles research first (an unlocked
 	# Admiral, UnlockAll, needs no research).
-	if ttype == "torp" and not world.teams[team].turret_torp and not UnlockAll.is_unlocked(world.teams[team]):
-		return "Needs Platform Missiles research"
+	if ttype == "torp":
+		var need := torpedo_research_blocker(team)
+		if need != "":
+			return need
 	# The node itself checks the rest (ResourceNode.build_blocker): whose
 	# side it is, a recently destroyed turret, torpedo turrets only at inner
 	# nodes, enemy turrets there, a free slot, enemy ships close by.
@@ -247,16 +249,34 @@ func rebuild_post(team: int, lane: String) -> String:
 	return _done(o, "")
 
 
+## "Needs Platform Missiles research" while team `team` has not researched torpedo turrets (an unlocked Admiral,
+## UnlockAll, needs no research), else "". The command card reads it to draw the Torpedo button locked before it is pressed.
+func torpedo_research_blocker(team: int) -> String:
+	var ts := world.teams[team]
+	if not ts.turret_torp and not UnlockAll.is_unlocked(ts):
+		return "Needs Platform Missiles research"
+	return ""
+
+
+## "Needs Repair Bays research" while team `team` has not researched repair bays (an unlocked Admiral, UnlockAll, needs no
+## research), else "". The command card reads it to draw the Repair bay button locked before it is pressed.
+func bay_research_blocker(team: int) -> String:
+	var ts := world.teams[team]
+	if not ts.repair_bays and not UnlockAll.is_unlocked(ts):
+		return "Needs Repair Bays research"
+	return ""
+
+
 ## Why a repair bay can't be sent to `point` right now, or "" if it can.
 ## (A repair bay flies out from the mothership, anchors at the spot for
 ## good, and its drones heal nearby friendly ships.) The price is not
 ## checked here.
 func bay_blocker(team: int, point: Vector2) -> String:
-	var ts := world.teams[team]
 	# Rule 1: needs the Repair Bays research (an unlocked Admiral, UnlockAll,
 	# needs no research).
-	if not ts.repair_bays and not UnlockAll.is_unlocked(ts):
-		return "Needs Repair Bays research"
+	var need := bay_research_blocker(team)
+	if need != "":
+		return need
 	# Rule 2: at most 3 living bays per team (Structures.REPAIR_BAY "max_per_team").
 	var count := 0
 	for b in world.bays:

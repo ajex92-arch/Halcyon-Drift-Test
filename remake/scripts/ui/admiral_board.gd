@@ -100,6 +100,8 @@ var _scoreboard: Scoreboard = null
 ## node name is its tab key (the Fleet button reads Yard); _set_tab()
 ## colours the selected one in the highlight colour.
 @onready var _tab_buttons: Array[Button] = [$Col/Tabs/Research, $Col/Tabs/Build, $Col/Tabs/Mothership, $Col/Tabs/Pilots]
+## The scroll area that holds the current tab's cards.
+@onready var _scroll: ScrollContainer = $Col/Scroll
 ## The column inside the scroll area that holds the current tab's cards.
 @onready var _content: VBoxContainer = $Col/Scroll/Content
 ## The details line at the bottom: the details of the last card or button
@@ -181,6 +183,16 @@ func _set_tab(t: String) -> void:
 			_scoreboard.setup(world)
 	# Step 4: fill in the texts straight away.
 	_refresh()
+
+
+## Scroll the tab's list until card `key` (a key of `_cards`) shows, once the tab has been laid out (a few frames after
+## _set_tab()). The command card's Doctrine button uses it to land on the Fleet Doctrine card.
+func show_card(key: String) -> void:
+	for i in 3:
+		await get_tree().process_frame
+	var c := _cards.get(key) as Control
+	if c != null and is_instance_valid(c) and is_visible_in_tree():
+		_scroll.ensure_control_visible(c)
 
 
 ## Our team's shared state (treasury, research, buildings and more).

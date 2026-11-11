@@ -1,6 +1,6 @@
 class_name PauseMenu
 extends Control
-## WHAT THIS IS: the pause menu, the screen that P or Esc opens during a match.
+## WHAT THIS IS: the pause menu, the screen that Esc (or the Menu button) opens during a match; P never opens it, it only resumes it.
 ## The game stays paused while it shows. It offers Resume, Look around (hides the
 ## card and keeps the pause, so the camera can be moved), How to play and Controls
 ## (the key settings; these two share a row), a row of speed buttons (SpeedRow),

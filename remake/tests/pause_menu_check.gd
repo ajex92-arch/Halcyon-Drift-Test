@@ -1,5 +1,5 @@
 extends Node
-## WHAT THIS IS: the pause menu check: a test that P and Esc open and close the
+## WHAT THIS IS: the pause menu check: a test that Esc opens and closes the
 ## pause menu the way the design says, that the game really stands still while
 ## it shows, and that Restart and Quit to start load a fresh match. It plays the
 ## keys through the game's own input path, like a person at the keyboard, and
@@ -12,7 +12,7 @@ extends Node
 ##      and the big centre message steps aside; the match clock stands still for
 ##      30 frames; Esc again resumes (the clock moves again, and a mouse button
 ##      the World still thought was held is read again);
-##   3. P opens the menu and P resumes;
+##   3. P only pauses and unpauses (no menu); the Menu route opens the menu and P resumes;
 ##   4. H over the menu shows the help pages and hides the menu while the game
 ##      stays paused; the help's Close button, Esc and H each close the help and
 ##      the menu comes back; P from the help pages resumes at once;
@@ -123,17 +123,16 @@ func _run() -> void:
 	var t1 := world.time
 	await _frames(MOVING_FRAMES)
 	_expect(world.time > t1, "the match clock moves again after the resume (%.3f -> %.3f)" % [t1, world.time])
-	# Step 3: P opens and P resumes. (The docked Admiral's P is the command pause: no menu, the command view stays alive; it is checked here and the menu is opened by its Menu route.)
-	if world.human_role == "admiral" and hud.command_view != null and hud.command_view.is_showing():
-		_key(KEY_P)
-		await _frames(2)
-		_expect(get_tree().paused and hud.panels.command_paused and (hud.pause_menu == null or not hud.pause_menu.visible), "the docked Admiral's P holds the match with no pause menu (command pause)")
-		_key(KEY_P)
-		await _frames(2)
-		_expect(not get_tree().paused and not hud.panels.command_paused, "P again ends the command pause")
+	# Step 3: P only pauses and unpauses, in every seat: no pause menu. The menu is opened by Esc or the Menu route; P over it resumes.
+	_key(KEY_P)
+	await _frames(2)
+	_expect(get_tree().paused and hud.panels.command_paused and (hud.pause_menu == null or not hud.pause_menu.active), "P pauses the match and opens no pause menu")
+	_key(KEY_P)
+	await _frames(2)
+	_expect(not get_tree().paused and not hud.panels.command_paused and (hud.pause_menu == null or not hud.pause_menu.active), "P again unpauses, still no menu")
 	_p_open()
 	await _frames(2)
-	_expect(_menu_open(), "P opens the pause menu")
+	_expect(_menu_open(), "the Menu route opens the pause menu")
 	_key(KEY_P)
 	await _frames(2)
 	_expect(_menu_closed(), "P over the menu resumes")
@@ -360,12 +359,9 @@ func _button(text: String) -> Button:
 	return null
 
 
-## Open the pause menu the way P does, except for the docked Admiral, whose P is the command pause (RT4): they open it by the Menu button's route.
+## Open the pause menu by the Menu button's route (P does not open it any more: it only pauses).
 func _p_open() -> void:
-	if world.human_role == "admiral" and hud.command_view != null and hud.command_view.is_showing():
-		hud._toggle_pause_menu()
-	else:
-		_key(KEY_P)
+	hud._toggle_pause_menu()
 
 
 ## Press and let go of keyboard key `code` (a place on the keyboard, such as

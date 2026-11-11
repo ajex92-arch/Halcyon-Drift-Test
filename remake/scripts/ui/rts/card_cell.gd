@@ -105,18 +105,21 @@ func show_data(d: Dictionary) -> void:
 	var state := str(d["state"])
 	var wash := state == "cannot_pay" and RtsUiCalls.CANNOT_PAY_LOOK == "wash"
 	var bar := state == "cannot_pay" and RtsUiCalls.CANNOT_PAY_LOOK == "bar"
-	theme_type_variation = &"RtsRowPicked" if bool(d.get("picked", false)) else StringName(RtsTheme.variation_of("ready" if wash else state))
+	var red := state == "locked" and bool(d.get("red", false))
+	theme_type_variation = &"RtsRowPicked" if bool(d.get("picked", false)) else StringName(RtsTheme.variation_name("refused") if red else RtsTheme.variation_of("ready" if wash else state))
 	tooltip_text = str(d["tip"])
 	RtsBeat.set_if_changed(_name, str(d["name"]))
 	RtsBeat.set_if_changed(_key, str(d["key"]) if RtsUiCalls.KEY_LABELS_ON else "")
 	RtsBeat.set_if_changed(_digit, str(d.get("digit", "")) if RtsUiCalls.KEY_LABELS_ON else "")
 	RtsBeat.set_if_changed(_count, str(d.get("count", "")))
 	RtsBeat.set_if_changed(_sub, str(d["sub"]))
-	_name.add_theme_color_override("font_color", Palette.with_alpha(Palette.MIST, 0.8) if state == "locked" else Palette.ICE)
+	_name.add_theme_color_override("font_color", Palette.with_alpha(Palette.MIST, 0.8) if state == "locked" and not red else Palette.ICE)
 	var mark := state == "full" or wash
 	var lock := state == "locked"
 	_mark.visible = mark
 	_lock.visible = lock
+	_lock.tint = Palette.DANGER if red else Palette.MIST
+	_lock.queue_redraw()
 	if slim:
 		mark = false
 		lock = false
@@ -132,11 +135,11 @@ func show_data(d: Dictionary) -> void:
 	_count.visible = true
 	var left := 15.0 if (mark or lock) else 2.0
 	var counted := str(d.get("count", "")) != ""
-	var room := size.x - left - 2.0 - (22.0 if counted else 0.0)
+	var room := size.x - left - 2.0 - (30.0 if counted else 0.0)
 	_sub.position = Vector2(left, size.y - 17.0)
 	_sub.size = Vector2(maxf(10.0, room), 13.0)
-	_count.position = Vector2(size.x - 24.0, size.y - 17.0)
-	_count.size = Vector2(22.0, 13.0)
+	_count.position = Vector2(size.x - 32.0, size.y - 17.0)
+	_count.size = Vector2(30.0, 13.0)
 	_wash.visible = wash
 	if wash:
 		_wash.color = Palette.with_alpha(Palette.DANGER, clampf(0.20 + 0.36 * float(d.get("short", 0.0)), 0.20, 0.56))

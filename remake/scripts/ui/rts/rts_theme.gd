@@ -21,7 +21,7 @@ extends RefCounted
 ## The state words a cell can be in, in the order the design lists them.
 const STATES := ["ready", "cannot_pay", "locked", "full"]
 ## The look names that are not states.
-const PLAIN := ["cell", "row", "row_picked", "tag", "tag_on"]
+const PLAIN := ["cell", "row", "row_picked", "tag", "tag_on", "refused"]
 
 ## The box styles made so far, keyed by "<look>/<mode>" (mode: normal, hover, pressed, disabled).
 static var _cache := {}
@@ -98,6 +98,8 @@ static func variation_name(look: String) -> String:
 			return "RtsTag"
 		"tag_on":
 			return "RtsTagOn"
+		"refused":
+			return "RtsCellRefused"
 	return "RtsCell"
 
 
@@ -149,6 +151,10 @@ static func _make(look_name: String, mode: String) -> StyleBoxFlat:
 		"full":
 			fill = Palette.with_alpha(Palette.PANEL, 0.9)
 			edge = Palette.DANGER
+		"refused":
+			# A locked cell whose research is missing (the Repair bay, the Torpedo turret): red, as a refusal is.
+			fill = Palette.with_alpha(Palette.DANGER, 0.22)
+			edge = Palette.DANGER
 		"row":
 			fill = Palette.with_alpha(Palette.INK, 0.8)
 		"row_picked":
@@ -161,11 +167,11 @@ static func _make(look_name: String, mode: String) -> StyleBoxFlat:
 			edge = hi
 	match mode:
 		"hover":
-			if look_name != "full":
+			if look_name != "full" and look_name != "refused":
 				edge = hi
 		"pressed":
 			fill = Palette.with_alpha(Palette.PANEL, 1.0)
-			if look_name != "full":
+			if look_name != "full" and look_name != "refused":
 				edge = hi
 		"disabled":
 			fill = Palette.with_alpha(fill, fill.a * 0.6)

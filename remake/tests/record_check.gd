@@ -4,7 +4,9 @@ extends Node
 ## by a hair), that the hangar door (HumanCmd) records its commands and refuses a screen's command
 ## during a replay, that a `c` line is written only when the controls change, that the header
 ## names the build and the switches, and that --replay=<file> brings the settings its log was made
-## with. The end-to-end proof (a recorded match played again) is tests/record_drive.gd.
+## with, a team's own rule variant (--variant-team0 or --variant-team1) included: named in the header
+## when one is given, brought back by --replay, a typed one that disagrees losing. The end-to-end
+## proof (a recorded match played again) is tests/record_drive.gd.
 ##
 ## HOW IT WORKS: setup() runs the checks that need no match (the number text, the line round trips,
 ## the option helpers) and then plays 240 ticks of a match with the recorder on: it gives hangar
@@ -13,6 +15,9 @@ extends Node
 ##
 ## HOW TO RUN IT ("godot" is the Godot console program; <dir> is a folder for the recording):
 ##   godot --headless --path remake --fixed-fps 60 -- --auto --role=pilot --seed=7 --record --recordings-dir=<dir> --record-name=check --test=record_check
+##
+## The same with a team variant (the header must then name it):
+##   godot --headless --path remake --fixed-fps 60 -- --auto --role=pilot --seed=7 --record --recordings-dir=<dir> --record-name=check --variant-team0=eff:on --test=record_check
 ##
 ## WHO USES IT: main.gd loads it for --test=record_check; run_checks lists it.
 
@@ -113,6 +118,34 @@ func _check_options() -> void:
 	_check("an option typed by hand wins over the log", str(options.get("seed")) == "9")
 	_check("the log's rule variants come back as they are", variants.get("gear_mk2") == "on" and variants.get("retreat") == "none" and variants.size() == 2, str(variants))
 	_check("a screen switch is not turned into an option", not options.has("fog-off"))
+	_check("a header without a variants_team word leaves the team options alone", not options.has("variant-team0") and not options.has("variant-team1"))
+	var typed_old := {"replay": path, "variant-team1": "eff:on"}
+	ReplayOptions.fill(typed_old)
+	_check("an older recording replays with its team option typed again", str(typed_old.get("variant-team1")) == "eff:on", str(typed_old))
+	_check_team_variants(dir)
+
+
+## The per-team rule variants (--variant-team0 and --variant-team1) in the header: a replay applies
+## them, and a typed option that disagrees loses with one line saying so.
+func _check_team_variants(dir: String) -> void:
+	var path := dir.path_join("check_header_variants.log")
+	var f := FileAccess.open(path, FileAccess.WRITE)
+	f.store_string("log v2 seed=42 preset=none variants={\"retreat\":\"none\"} variants_team0={\"eff\":\"on\",\"ms\":\"nosmall\"} role=pilot team=0 rocks=1 nodes=1 camps=1 route_nodes=1 wings=off cwings=0 play=difficulty:medium,unlock:0,dmg:1,flight:1 opts=none screen=fog:0 fp0=1,2 build=abc\n")
+	f = null
+	var plain := {"replay": path}
+	ReplayOptions.fill(plain)
+	_check("--replay brings a team's variants from the header, with no option typed", str(plain.get("variant-team0")) == "eff:on,ms:nosmall" and not plain.has("variant-team1"), str(plain))
+	var agree := {"replay": path, "variant-team0": "ms:nosmall,eff:on"}
+	ReplayOptions.fill(agree)
+	_check("a typed option that says the same changes nothing", str(agree.get("variant-team0")) == "eff:on,ms:nosmall")
+	var clash := {"replay": path, "variant-team0": "ai_calib:on", "variant-team1": "eff:on"}
+	ReplayOptions.fill(clash)
+	_check("a typed option that disagrees loses to the header, and a team the header does not name has none", str(clash.get("variant-team0")) == "eff:on,ms:nosmall" and not clash.has("variant-team1"), str(clash))
+	var script: Script = load("res://scripts/rts/replay_options.gd")
+	var line := ""
+	if script.has_method("conflict_line"):
+		line = str(script.call("conflict_line", 0, "ai_calib:on", {"eff": "on"}))
+	_check("the disagreement is said in one line that names the option", line.begins_with("replay: --variant-team0=ai_calib:on") and not line.contains("\n"), line)
 
 
 ## The recorder's default: a match a person plays is recorded, a test run is not, and the options
@@ -137,6 +170,17 @@ func _check_start() -> void:
 	for key in ["play=", "opts=", "screen=", "build=", "fp0=", "variants="]:
 		_check("the header has %s" % key, head.contains(" %s" % key))
 	_check("the header's last word is the build", head.get_slice(" ", head.count(" ")).begins_with("build="))
+	# The per-team variants: named in the header when a team holds one (the run with --variant-team0 or
+	# --variant-team1), and absent otherwise, so the header of an ordinary match is what it always was.
+	for team in range(2):
+		var own: Dictionary = Game.team_variants[team]
+		var word := "variants_team%d=" % team
+		if own.is_empty():
+			_check("no variant for team %d: the header has no %s word" % [team, word], not head.contains(word), head)
+		else:
+			_check("the header names team %d's variants (%s)" % [team, JSON.stringify(own, "", true)], head.contains(" %s%s " % [word, JSON.stringify(own, "", true)]), head)
+	if not Game.has_team_variants():
+		_check("no team variant at all: the header has no variants_team word", not head.contains("variants_team"))
 	_check("the log is in the recordings folder", world.orders.log.path.begins_with(MatchRecorder.folder()), world.orders.log.path)
 
 

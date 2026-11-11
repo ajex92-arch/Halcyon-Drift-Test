@@ -13,7 +13,8 @@ extends Control
 ## cell's snapshot (only what changed is set). The cell labels show the key from the key map in force (KeyMap), so a
 ## rebind or another layout shows at once; the labels let the mouse through. key() takes a key press and runs the cell
 ## whose key it is: an exact match (Shift+V is not V), only for cells on the page in force (the digits 1-0 queue the ten
-## hulls on every page: Shift to the cap, Alt repeat). While a verb or tool is armed the last extra cell reads "Cancel
+## hulls on every page: Shift to the cap, Alt repeat; a click carries its own Shift and Alt, never the game's key state,
+## which can hold a key whose release was lost). While a verb or tool is armed the last extra cell reads "Cancel
 ## (Esc)". The result line shows the answer of the last click (the overlay's result_text), in the danger colour with
 ## the triangle for a refusal.
 ##
@@ -57,6 +58,11 @@ var _result_at := -100.0  # the result at
 ## The selection and the layout the page was last chosen for.
 var _sel_sig := ""
 var _layout_sig := ""  # the layout sig
+## The Shift and Alt that the last mouse click on a cell or an entry carried. A click takes them from itself, never from the
+## game's key state, which can still hold a key whose release never reached the window (a click would then count as
+## Alt+click: every Build click turned Repeat on). A press that is not a click (a test's) carries none.
+var _click_shift := false
+var _click_alt := false  # the click's Alt
 
 
 ## Make the parts and remember the view.
@@ -78,6 +84,7 @@ func setup(v: CommandView) -> void:
 		c.setup()
 		var idx := i
 		c.pressed.connect(func() -> void: _cell_pressed(false, idx))
+		c.gui_input.connect(_note_click)
 		add_child(c)
 		_grid.append(c)
 		_grid_ids.append("")
@@ -86,6 +93,7 @@ func setup(v: CommandView) -> void:
 		c.setup()
 		var idx := i
 		c.pressed.connect(func() -> void: _cell_pressed(true, idx))
+		c.gui_input.connect(_note_click)
 		add_child(c)
 		_extra.append(c)
 		_extra_ids.append("")
@@ -106,6 +114,7 @@ func setup(v: CommandView) -> void:
 		e.add_theme_font_size_override("font_size", 11)
 		var idx := i
 		e.pressed.connect(func() -> void: _entry_pressed(idx))
+		e.gui_input.connect(_note_click)
 		e.visible = false
 		add_child(e)
 		_entries.append(e)
@@ -201,6 +210,8 @@ func toggle_list(which: String) -> void:
 func _more_ids() -> Array:
 	var p := CardPages.page(_preset(), page)
 	var out: Array = (p["more"] as Array).duplicate()
+	if page == "base" and DoctrineFeature.current() == null:
+		out.erase("doctrine")
 	if page == "orders":
 		for e: Dictionary in CommandOrdersUi.entries(view.world, view.team):
 			out.append("feat:" + str(e["id"]))
@@ -240,27 +251,44 @@ func _on_result() -> void:
 	_result.position.x = PAD + (15.0 if _mark.visible else 0.0)
 
 
+## A mouse event reached a cell or an entry: note the Shift and Alt it carries (the release comes after the press, so the
+## release's are the ones that count when the button reports its press).
+func _note_click(event: InputEvent) -> void:
+	if event is InputEventMouseButton:
+		var m := event as InputEventMouseButton
+		_click_shift = m.shift_pressed
+		_click_alt = m.alt_pressed
+
+
 ## A grid cell or an extra cell was clicked.
 func _cell_pressed(extra: bool, idx: int) -> void:
 	var id := _extra_ids[idx] if extra else _grid_ids[idx]
+	var shift := _click_shift
+	var alt := _click_alt
+	_click_shift = false
+	_click_alt = false
 	if extra and idx == 2 and view.overlay.tool != "":
 		view.overlay.disarm()
 		view.overlay.say("Cancelled", true)
 		after_action()
 		return
 	if id != "":
-		CardActions.run(self, page, id, Input.is_key_pressed(KEY_SHIFT), Input.is_key_pressed(KEY_ALT))
+		CardActions.run(self, page, id, shift, alt)
 
 
 ## A pop-out entry was clicked.
 func _entry_pressed(idx: int) -> void:
+	var shift := _click_shift
+	var alt := _click_alt
+	_click_shift = false
+	_click_alt = false
 	var ids := _list_ids()
 	if idx < ids.size():
 		if str(ids[idx]).begins_with("feat:"):
 			CommandOrdersUi.press(view, str(ids[idx]).substr(5))
 			after_action()
 			return
-		CardActions.run(self, page if _open == "more" else "build", str(ids[idx]), Input.is_key_pressed(KEY_SHIFT), Input.is_key_pressed(KEY_ALT))
+		CardActions.run(self, page if _open == "more" else "build", str(ids[idx]), shift, alt)
 
 
 ## Rewrite the card from the match (the view's beat calls this): the page, the cells' snapshots, the pop-out.

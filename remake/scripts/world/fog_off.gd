@@ -14,7 +14,7 @@ extends RefCounted
 ## WHO USES IT: the HUD top bar (the FOG OFF tag and the enemy turret and post counts), FogView (the fog
 ## picture is hidden), WorldVisibility and WorldRegistry (units are shown), WorldSetup (the viewer copies
 ## of the shots and effects), the minimap, Sfx, SiteMarks, the scoreboard, FanPaint, the help panel, the
-## recorder's note and tests/fog_check.gd.
+## recorder's note, UnitVisual (an enemy mothership is not parked as a ghost with No fog on) and tests/fog_check.gd.
 
 
 ## Is the "No fog" option on right now? True means the human's screen shows everything.

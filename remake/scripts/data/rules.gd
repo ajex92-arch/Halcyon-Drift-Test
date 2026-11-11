@@ -789,6 +789,13 @@ const VARIANT_DEFAULTS := {
 	## big plain luck is). Nothing else changes; it has no feature module and is
 	## never in a preset.
 	"ai_calib": "off",
+	## The AI lane's stuck-flak fix (PilotFlight.travel() step 1b, item C4): "off" |
+	## "on". "on" for a team makes that team's big ships (a frigate or bigger) treat
+	## a gap between two structures (a lane turret and its defense post, 300 apart)
+	## that is narrower than the ship as a wall and fly round its end, instead of
+	## flying into the gap and wedging there for the rest of the match. A per-team
+	## AI switch: give it with --variant-team0 / --variant-team1; no feature module.
+	"ail_c4_flak": "off",
 }
 
 

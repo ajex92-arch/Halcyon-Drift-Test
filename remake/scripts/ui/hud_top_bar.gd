@@ -1,9 +1,9 @@
 class_name HudTopBar
 extends PanelContainer
 ## WHAT THIS IS: the strip at the top centre of the HUD: the match clock,
-## when the next minion wave launches, the difficulty tag (the level the match is
-## played at and what it gives the enemy, "Hard · enemy earns 125%", for a match with a
-## human seat; see Difficulty), the test tags (UNLOCKED, shown while the
+## when the next minion wave launches ("Next wave 0:21"), the difficulty tag (the level the match is
+## played at, one word, "Hard", for a match with a human seat that is not the Admiral's: the Admiral's
+## strip at the top right (TopStrip) has it, and the speed, instead; see Difficulty), the test tags (UNLOCKED, shown while the
 ## human buys for nothing, see UnlockAll; FOG OFF, shown while the No fog test option
 ## is on (see FogOff); SPEED 0.75x / 0.5x / 1.5x / 2x, shown while
 ## the world is not at normal speed, see WorldSpeed, and "(limited)" after it when the
@@ -28,9 +28,9 @@ extends PanelContainer
 
 ## The match clock ("12:34").
 @onready var _clock: Label = $Row/Middle/Clock
-## "Next minion wave 0:21".
+## "Next wave 0:21" (or that no more waves are due: wave_line()).
 @onready var _wave: Label = $Row/Middle/Wave
-## The difficulty tag under the wave line ("Hard · enemy earns 125%"); hidden in a match
+## The difficulty tag under the wave line ("Hard"); hidden for the Admiral and in a match
 ## with no human seat. Pointing at it shows the full sentence.
 @onready var _diff: Label = $Row/Middle/DiffTag
 ## The test tags under the difficulty tag ("UNLOCKED", "FOG OFF"); hidden while there are none.
@@ -54,15 +54,17 @@ func _ready() -> void:
 
 ## Rewrite the clock, the wave timer and both teams' columns.
 func refresh(world: World) -> void:
-	# Step 1: the clock and the wave timer (the free waves never stop).
+	# Step 1: the clock and the wave timer (the free waves never stop; wave_line()).
 	UiKit.set_text(_clock, Util.clock(world.time))
-	UiKit.set_text(_wave, "Next minion wave %s" % Util.clock(maxf(0.0, world.minion_director.next_wave - world.time)))
+	UiKit.set_text(_wave, wave_line(world.minion_director, world.time))
 	# Step 1a: the difficulty tag, from the number the enemy team really earns by
 	# (Difficulty.tag_mult(), -1 when the match names no level: no human seat, or
-	# humans on both teams); its hover is the full sentence.
+	# humans on both teams); its hover is the full sentence. The Admiral's strip at the
+	# top right (TopStrip) shows the word, so the Admiral's box does not.
+	var admiral := world.human_role == "admiral"
 	var enemy_mult := Difficulty.tag_mult(world)
-	_diff.visible = enemy_mult >= 0.0
-	if enemy_mult >= 0.0:
+	_diff.visible = enemy_mult >= 0.0 and not admiral
+	if _diff.visible:
 		UiKit.set_text(_diff, Difficulty.short_tag_for(enemy_mult))
 		_diff.tooltip_text = Difficulty.blurb_for(enemy_mult)
 	# Step 1b: the test tags: UNLOCKED while the human's purchases are free
@@ -76,7 +78,7 @@ func refresh(world: World) -> void:
 	if FogOff.is_on() and world.viewer_team >= 0:
 		tags.append("FOG OFF")
 	var speed_tag: String = world.speed.tag()
-	if speed_tag != "":
+	if speed_tag != "" and not admiral:   # the Admiral's strip has the speed button
 		tags.append(speed_tag + (" (limited)" if SpeedControl.limited(world) else ""))
 	UiKit.set_text(_tags, "  ·  ".join(tags))
 	_tags.visible = not tags.is_empty()
@@ -85,6 +87,15 @@ func refresh(world: World) -> void:
 	var vt := world.viewer_team
 	for t in 2:
 		_refresh_team(world, t, vt)
+
+
+## The wave timer's text at match time `time` (seconds). The free waves never
+## stop on their own, but when no wave is due ever again (next_wave is INF: the
+## waves_late variant "none") there is no countdown to show.
+static func wave_line(md: MinionDirector, time: float) -> String:
+	if is_inf(md.next_wave):
+		return "No more minion waves"
+	return "Next wave %s" % Util.clock(maxf(0.0, md.next_wave - time))
 
 
 ## Rewrite team `t`'s hull bar, name line and turret line.
@@ -108,15 +119,16 @@ func _refresh_team(world: World, t: int, vt: int) -> void:
 	# "FORTIFIED 3s"); none in today's game.
 	if not world.command.orders.is_empty():
 		extra += CommandOrders.hud_tag(world, t, vt)
-	# Step 2: the name line, "Aurelian (us)  87%  STRAINED". Vhorr's is
-	# written the other way round ("STRAINED  87%  Vhorr (enemy)"), so on
-	# both sides the team name sits at the outer edge.
+	# Step 2: the name line, "Aurelian (us)  STRAINED" (the hull bar under it
+	# shows the hull, so no percent). Vhorr's is written the other way round
+	# ("STRAINED  Vhorr (enemy)"), so on both sides the team name sits at the
+	# outer edge.
 	var tname: String = Rules.TEAM_DISPLAY[t]
 	if vt >= 0:
 		tname += " (us)" if t == vt else " (enemy)"
-	var txt := "%s  %d%%%s" % [tname, int(ms.hull_frac() * 100.0), extra]
+	var txt := "%s%s" % [tname, extra]
 	if t == 1:
-		txt = "%s  %d%%  %s" % [extra.strip_edges(), int(ms.hull_frac() * 100.0), tname]
+		txt = "%s  %s" % [extra.strip_edges(), tname]
 	UiKit.set_text(_ms_labels[t], txt.strip_edges())
 	# Step 3: live turrets per lane.
 	var lanes := _count_turrets(world, t, vt)

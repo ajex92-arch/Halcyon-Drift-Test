@@ -63,7 +63,7 @@ extends Control
 ## narrow, and hides the pieces a big panel would cover while it is open.
 ## HudInput routes the keys: Esc closes panels, cancels a map tool, or (with
 ## nothing to close) opens the pause menu, C switches the Admiral's camera
-## between free and following their ship, P opens the pause menu (or resumes),
+## between free and following their ship, P pauses (or resumes; Esc opens the pause menu),
 ## X and the wing keys give a pilot's wing orders, F launches when docked (in
 ## flight, PlayerController uses F to dock instead), and F9 opens the note box
 ## (NoteBox: it pauses the match, and Enter saves a one-line note with a

@@ -75,7 +75,8 @@ func refresh() -> void:
 		elif hud.pause_menu != null and hud.pause_menu.looking:
 			sub = "%s or the Menu button: menu   %s: resume" % [KeyMapText.key_of("cancel"), KeyMapText.key_of("pause")]
 		else:
-			sub = "Press P for the pause menu."
+			# A plain pause (P) needs no hint line: P pauses and unpauses, nothing more.
+			sub = ""
 	elif hud.overlay.tool != "":
 		title = hud.overlay.hint()
 		# Amber is this banner's tone for a notice; red stays for danger.

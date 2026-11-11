@@ -75,7 +75,7 @@ const LABELS := {EASY: "Easy", MEDIUM: "Medium", HARD: "Hard", VERY_HARD: "Very 
 ## The sentence the start screen ends every level's description with.
 const SCOPE_NOTE := "This changes the enemy's income in single player only."
 ## The name of an enemy multiplier that is none of the five (a tuned value): the
-## tags then read "Custom · enemy earns 140%".
+## tags then read "Custom" and the sentence "Custom: the enemy earns 140% ...".
 const CUSTOM_LABEL := "Custom"
 
 
@@ -139,16 +139,16 @@ static func tag_mult(world: World) -> float:
 	return world.teams[Rules.enemy_of(world.human_team)].income_mult
 
 
-## The top bar's short tag for level `level`: "Hard · enemy earns 125%", or
-## "Medium · normal income" at the normal rate.
+## The short tag for level `level`: the level's word alone, "Hard" (the sentence about the
+## enemy's income is blurb(), shown when the tag is pointed at).
 static func short_tag(level: String) -> String:
-	return _short_tag(String(LABELS.get(level, level)), income_mult(level))
+	return String(LABELS.get(level, level))
 
 
-## The short tag for the enemy multiplier `mult` (a number that is none of the five
-## reads "Custom · enemy earns 140%").
+## The short tag for the enemy multiplier `mult`: its level's word, or "Custom" for a number
+## that is none of the five.
 static func short_tag_for(mult: float) -> String:
-	return _short_tag(name_of(mult), mult)
+	return name_of(mult)
 
 
 ## The sentence the top bar's tag shows when pointed at: blurb() for the multiplier.
@@ -176,14 +176,7 @@ static func help_text() -> String:
 	var parts := PackedStringArray()
 	for id: String in ORDER:
 		parts.append("%s %d%%" % [String(LABELS[id]), percent(income_mult(id))])
-	return "Single player only. The level picked on the start screen changes how much the enemy team earns, as a share of its normal income: %s. Only the enemy's income changes: your own team earns the normal income, and prices, rules and how the computer plays stay the same. The level shows in the top bar under the next-wave line (point at it for the full sentence), on the scoreboard and on the end screen." % ", ".join(parts)
-
-
-## `label` and the enemy multiplier `mult` as the top bar's short tag.
-static func _short_tag(label: String, mult: float) -> String:
-	if percent(mult) == 100:
-		return "%s · normal income" % label
-	return "%s · enemy earns %d%%" % [label, percent(mult)]
+	return "Single player only. The level picked on the start screen changes how much the enemy team earns, as a share of its normal income: %s. Only the enemy's income changes: your own team earns the normal income, and prices, rules and how the computer plays stay the same. The level shows as one word in the strip at the top right (the Admiral) or under the next-wave line in the top bar (a pilot); point at it for the full sentence. It shows on the scoreboard and on the end screen too." % ", ".join(parts)
 
 
 ## The description of the level called `label` that earns `mult`: what the enemy

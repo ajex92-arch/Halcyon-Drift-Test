@@ -86,7 +86,7 @@ static func check(w: World, o: Dictionary) -> String:
 	var first: Variant = w.squads.get(int(subjects[0]))
 	if first == null:
 		return OrderKinds.TEXT_GONE_SQUAD
-	# A bought squadron (the Admiral's) takes Move, Hold and Stop only (OrderKinds.BOUGHT_KINDS).
+	# A bought squadron (the Admiral's) takes Move, Hold, Stop and Attack only (OrderKinds.BOUGHT_KINDS).
 	if is_bought(first):
 		return check_bought(w, o)
 	if kind == OrderKinds.STOP:
@@ -122,8 +122,9 @@ static func check(w: World, o: Dictionary) -> String:
 
 ## The rules for an order to bought squadrons (every record the order names is checked, not only the first): only
 ## OrderKinds.BOUGHT_KINDS are carried out (every other kind is "Comes with a later stage"); each record must be a
-## bought squadron of the order's own team that still has a ship alive; Move and Hold take a point, Stop none.
-## Returns "" or the refusal text.
+## bought squadron of the order's own team that still has a ship alive; Move and Hold take a point, Stop none, Attack
+## a unit of another team that the order's team sees now (the enemy mothership too; there is no leash, a bought
+## squadron flies as far as the target is). Returns "" or the refusal text.
 static func check_bought(w: World, o: Dictionary) -> String:
 	var kind := str(o.get("kind", ""))
 	if not OrderKinds.BOUGHT_KINDS.has(kind):
@@ -141,14 +142,22 @@ static func check_bought(w: World, o: Dictionary) -> String:
 	if kind == OrderKinds.STOP:
 		if target_kind != "none":
 			return OrderKinds.TEXT_VALUE
+	elif kind == OrderKinds.ATTACK:
+		if target_kind != "unit":
+			return OrderKinds.TEXT_VALUE
+		var t := w.orders.unit_by_uid(int(o.get("target", 0)))
+		if t == null or t.team == team:
+			return TEXT_NO_TARGET
+		if not t.visible_to(team):
+			return TEXT_NOT_SEEN
 	elif target_kind != "point":
 		return OrderKinds.TEXT_VALUE
 	return ""
 
 
-## Carry out a Move, Hold or Stop for every bought squadron the order names: each record's standing order is
+## Carry out a Move, Hold, Stop or Attack for every bought squadron the order names: each record's standing order is
 ## written (the shape of a wing's, with no settings), and its move stance is hold (0) for Hold, manoeuvre (1)
-## otherwise. The stand-in brain (Standin.hold_point_of) reads the point; a repeat is not looked for.
+## otherwise. The stand-in brain (Standin.hold_point_of, Standin._attack) reads the order; a repeat is not looked for.
 static func _handle_bought(w: World, o: Dictionary) -> String:
 	var kind := str(o["kind"])
 	var apply_tick := int(o["apply_tick"])

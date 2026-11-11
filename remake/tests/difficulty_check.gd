@@ -57,7 +57,7 @@ extends Node
 ## The enemy income multiplier of each level, as the check expects it.
 const EXPECTED := {"easy": 0.75, "medium": 1.0, "hard": 1.25, "very_hard": 1.5, "extreme": 2.0}
 ## The top bar's tag of each level, written out here again (not copied from Difficulty).
-const TAGS := {"easy": "Easy · enemy earns 75%", "medium": "Medium · normal income", "hard": "Hard · enemy earns 125%", "very_hard": "Very hard · enemy earns 150%", "extreme": "Extreme · enemy earns 200%"}
+const TAGS := {"easy": "Easy", "medium": "Medium", "hard": "Hard", "very_hard": "Very hard", "extreme": "Extreme"}
 ## What the scoreboard's enemy heading ends with, after "  ·  ".
 const HEADS := {"easy": "Easy: earns 75%", "medium": "Medium: normal income", "hard": "Hard: earns 125%", "very_hard": "Very hard: earns 150%", "extreme": "Extreme: earns 200%"}
 ## The end screen's difficulty line.
@@ -196,7 +196,7 @@ func _check_tag_texts() -> void:
 		_check(tag + ": the scoreboard heading ends '%s'" % HEADS[level], Difficulty.heading_tag(mult) == HEADS[level], Difficulty.heading_tag(mult))
 		_check(tag + ": the end screen line reads '%s'" % LINES[level], Difficulty.result_line(mult) == LINES[level], Difficulty.result_line(mult))
 		_check(tag + ": the multiplier finds its level and the hover sentence is blurb()", Difficulty.level_of(mult) == level and Difficulty.blurb_for(mult) == Difficulty.blurb(level), "level_of %s" % Difficulty.level_of(mult))
-	_check("tag text: a multiplier that is none of the five reads Custom", Difficulty.level_of(1.4) == "" and Difficulty.short_tag_for(1.4) == "Custom · enemy earns 140%" and Difficulty.heading_tag(1.4) == "Custom: earns 140%" and Difficulty.result_line(1.4) == "Difficulty: Custom. The enemy earned 140% of its normal income." and Difficulty.blurb_for(1.4).begins_with("Custom: the enemy earns 140%"), Difficulty.short_tag_for(1.4))
+	_check("tag text: a multiplier that is none of the five reads Custom", Difficulty.level_of(1.4) == "" and Difficulty.short_tag_for(1.4) == "Custom" and Difficulty.heading_tag(1.4) == "Custom: earns 140%" and Difficulty.result_line(1.4) == "Difficulty: Custom. The enemy earned 140% of its normal income." and Difficulty.blurb_for(1.4).begins_with("Custom: the enemy earns 140%"), Difficulty.short_tag_for(1.4))
 	var help := Difficulty.help_text()
 	var listed := true
 	for part in ["Easy 75%", "Medium 100%", "Hard 125%", "Very hard 150%", "Extreme 200%", "Only the enemy's income changes"]:
@@ -229,12 +229,15 @@ func _check_screens() -> void:
 	var enemy := Rules.enemy_of(world.human_team)
 	var middle := hud.top_bar.get_node("Row/Middle")
 	var diff: Label = middle.get_node("DiffTag")
+	var admiral := world.human_role == "admiral"
+	# The Admiral reads the level as a word in the strip at the top right; everyone else under the wave line in the top bar.
+	var tag_ctl: Control = hud.command_view.strip._b["diff"] if admiral else diff
 	var tag := "%s %s:" % [world.human_role, level]
 	# Step 1: with the picker on the level of the match, then on another level.
 	var other := "easy" if level != "easy" else "extreme"
 	for picker: String in [level, other]:
 		Game.difficulty = picker
-		hud.top_bar.refresh(world)
+		_refresh_tags(hud)
 		var sb := (load("res://scenes/ui/scoreboard.tscn") as PackedScene).instantiate() as Scoreboard
 		add_child(sb)
 		sb.setup(world)
@@ -243,12 +246,12 @@ func _check_screens() -> void:
 		var where := "picker on %s" % picker
 		if seat:
 			_near("%s the enemy team's income_mult is the level's number (%s)" % [tag, where], world.teams[enemy].income_mult, float(EXPECTED[level]))
-			_check("%s the top bar's tag reads '%s' (%s)" % [tag, TAGS[level], where], diff.visible and diff.text == TAGS[level], "visible %s, '%s'" % [str(diff.visible), diff.text])
-			_check("%s the tag's hover is blurb(): %s" % [tag, where], diff.tooltip_text == Difficulty.blurb(level) and diff.tooltip_text.begins_with(String(Difficulty.LABELS[level]) + ":"), diff.tooltip_text)
+			_check("%s the tag reads '%s' (%s)" % [tag, TAGS[level], where], tag_ctl.visible and str(tag_ctl.get("text")) == TAGS[level] and (not admiral or not diff.visible), "visible %s, '%s'" % [str(tag_ctl.visible), str(tag_ctl.get("text"))])
+			_check("%s the tag's hover is blurb(): %s" % [tag, where], tag_ctl.tooltip_text == Difficulty.blurb(level) and tag_ctl.tooltip_text.begins_with(String(Difficulty.LABELS[level]) + ":"), tag_ctl.tooltip_text)
 			_check("%s the enemy team's heading ends '  ·  %s' and the other team's has none (%s)" % [tag, HEADS[level], where], sb._heads[enemy].text.ends_with("  ·  " + HEADS[level]) and not sb._heads[world.human_team].text.contains(": earns") and not sb._heads[world.human_team].text.contains("normal income"), "'%s' / '%s'" % [sb._heads[enemy].text, sb._heads[world.human_team].text])
 			_check("%s the end screen's line reads '%s' (%s)" % [tag, LINES[level], where], line.visible and line.text == LINES[level], "visible %s, '%s'" % [str(line.visible), line.text])
 		else:
-			_check("%s no human seat: no tag, no heading level, no end screen line (%s)" % [tag, where], not diff.visible and not sb._heads[0].text.contains(": earns") and not sb._heads[1].text.contains(": earns") and not sb._heads[0].text.contains("normal income") and not sb._heads[1].text.contains("normal income") and not line.visible, "tag visible %s '%s', line visible %s" % [str(diff.visible), diff.text, str(line.visible)])
+			_check("%s no human seat: no tag, no heading level, no end screen line (%s)" % [tag, where], not tag_ctl.visible and not sb._heads[0].text.contains(": earns") and not sb._heads[1].text.contains(": earns") and not sb._heads[0].text.contains("normal income") and not sb._heads[1].text.contains("normal income") and not line.visible, "tag visible %s '%s', line visible %s" % [str(tag_ctl.visible), str(tag_ctl.get("text")), str(line.visible)])
 		sb.free()
 		es.free()
 	Game.difficulty = level
@@ -256,20 +259,23 @@ func _check_screens() -> void:
 	if seat:
 		var wave: Label = middle.get_node("Wave")
 		var tags: Label = middle.get_node("Tags")
-		_check("%s the tag sits between the wave line and the test tags" % tag, diff.get_index() == wave.get_index() + 1 and tags.get_index() == diff.get_index() + 1, "index %d, wave %d, tags %d" % [diff.get_index(), wave.get_index(), tags.get_index()])
+		if admiral:
+			_check("%s the top bar has no tag (the strip has the word) and the strip's word is not under the box" % tag, not diff.visible and tag_ctl.visible, "tag visible %s" % str(diff.visible))
+		else:
+			_check("%s the tag sits between the wave line and the test tags" % tag, diff.get_index() == wave.get_index() + 1 and tags.get_index() == diff.get_index() + 1, "index %d, wave %d, tags %d" % [diff.get_index(), wave.get_index(), tags.get_index()])
 		_check("%s the tag is size 12, grey (MIST) and takes the pointer with the pass filter" % tag, diff.get_theme_font_size("font_size") == 12 and diff.get_theme_color("font_color") == Palette.MIST and diff.mouse_filter == Control.MOUSE_FILTER_PASS and hud.top_bar.mouse_filter == Control.MOUSE_FILTER_IGNORE, "size %d, colour %s, filter %d" % [diff.get_theme_font_size("font_size"), str(diff.get_theme_color("font_color")), diff.mouse_filter])
 		# Step 3: humans on both teams (an online match): nothing names a level.
 		world.orders.human_seats_override = 2
-		hud.top_bar.refresh(world)
+		_refresh_tags(hud)
 		var sb2 := (load("res://scenes/ui/scoreboard.tscn") as PackedScene).instantiate() as Scoreboard
 		add_child(sb2)
 		sb2.setup(world)
 		var es2 := _end_screen()
-		_check("%s humans on both teams: no tag, no heading level, no end screen line" % tag, not diff.visible and not sb2._heads[enemy].text.contains(": earns") and not sb2._heads[enemy].text.contains("normal income") and not (es2.get_node("Center/Card/Col/Difficulty") as Label).visible, "tag visible %s" % str(diff.visible))
+		_check("%s humans on both teams: no tag, no heading level, no end screen line" % tag, not diff.visible and not tag_ctl.visible and not sb2._heads[enemy].text.contains(": earns") and not sb2._heads[enemy].text.contains("normal income") and not (es2.get_node("Center/Card/Col/Difficulty") as Label).visible, "tag visible %s" % str(tag_ctl.visible))
 		sb2.free()
 		es2.free()
 		world.orders.human_seats_override = -1
-		hud.top_bar.refresh(world)
+		_refresh_tags(hud)
 		# Step 4: the bar is one line taller with the tag; the kill feed starts under it in a window 1280 wide, where
 		# the two share ground, and keeps its own place in one 1920 wide, where they do not (HudLayout._place_feed()).
 		var feed_tops := {}
@@ -278,8 +284,17 @@ func _check_screens() -> void:
 			hud.layout._place_feed(win)
 			feed_tops[int(win.x)] = hud.feed.offset_top
 		var bar_bottom: float = hud.top_bar.offset_top + hud.top_bar.get_combined_minimum_size().y
-		_check("%s the kill feed starts under the top bar at 1280 wide (%d, the bar ends at %d) and at %d at 1920 wide (%d)" % [tag, int(feed_tops[1280]), int(bar_bottom), int(HudLayout.FEED_TOP), int(feed_tops[1920])], float(feed_tops[1280]) >= bar_bottom and is_equal_approx(float(feed_tops[1920]), HudLayout.FEED_TOP))
+		# The narrower bar may no longer reach over the feed's ground at 1280 wide; then the feed keeps its own place (HudLayout._place_feed()).
+		var shares: bool = 640.0 + hud.top_bar.offset_left + hud.top_bar.get_combined_minimum_size().x * 0.5 + HudLayout.GAP > 1280.0 + hud.feed.offset_right - hud.feed.get_combined_minimum_size().x
+		_check("%s the kill feed starts under the top bar at 1280 wide (%d, the bar ends at %d) and at %d at 1920 wide (%d)" % [tag, int(feed_tops[1280]), int(bar_bottom), int(HudLayout.FEED_TOP), int(feed_tops[1920])], (float(feed_tops[1280]) >= bar_bottom or not shares) and is_equal_approx(float(feed_tops[1920]), HudLayout.FEED_TOP))
 		hud.layout.apply()
+
+
+## Rewrite the difficulty tag on both places it can stand: the top bar and, for an Admiral, the strip at the top right.
+func _refresh_tags(hud: Hud) -> void:
+	hud.top_bar.refresh(world)
+	if hud.command_view != null and world.human_role == "admiral":
+		hud.command_view.strip.refresh()
 
 
 ## Only in a window, with --shots=<folder>: the pictures of the tag's hover sentence, in the

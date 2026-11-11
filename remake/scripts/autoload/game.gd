@@ -51,11 +51,11 @@ extends Node
 ## choose_fog_off() (its No fog toggle), use_remembered_wings(),
 ## choose_test_wing() and choose_cpu_wings() (its two wing switches),
 ## use_remembered_keys() (the player's own
-## keys, put on the controls) and reads preset_error;
+## keys, put on the controls) and reads preset_error and variant_error;
 ## WorldSetup reads `difficulty` and `human_team` when it builds a match; UnlockAll
 ## is the one place that reads `unlock_everything`, FogOff the one that reads `fog_off`;
 ## and FeatureRegistry reads
-## preset_error, difficulty_error and team_error; NoteWriter reads `preset`. ReplayOptions
+## preset_error, variant_error, difficulty_error and team_error; NoteWriter reads `preset`. ReplayOptions
 ## fills the options from the first line of a --replay log (while this file reads the command
 ## line), main.gd sets `match_seed`, and MatchRecorder, OrderLog and BuildId read the recording
 ## options (--record, --recordings-dir, --build ...).
@@ -82,7 +82,10 @@ extends Node
 ##                                    (names and values: see
 ##                                    Rules.VARIANT_DEFAULTS). A variant
 ##                                    that has a feature module switches
-##                                    it on (FeatureRegistry).
+##                                    it on (FeatureRegistry). A pair that
+##                                    is not name:value, or a name that is
+##                                    not a variant, stops the match at its
+##                                    start (FeatureRegistry, exit code 3).
 ##   --variant-team0=<pairs>, --variant-team1=<pairs>
 ##                                    the same name:value pairs as --variant,
 ##                                    but each holds for ONE team's AI only
@@ -105,9 +108,10 @@ extends Node
 ##                                    (Council's pick), the standard rules.
 ##                                    "none" is the old standard rules (every
 ##                                    variant at its default). No screen offers
-##                                    the choice. An unknown name stops the
-##                                    match at its start (FeatureRegistry,
-##                                    exit code 3). (Game, StartScreen)
+##                                    the choice. An unknown name, or an empty
+##                                    one ("--preset="), stops the match at
+##                                    its start (FeatureRegistry, exit code
+##                                    3). (Game, StartScreen)
 ##   --difficulty=<level>             the difficulty of a single-player match
 ##                                    (easy, medium, hard, very_hard or
 ##                                    extreme; Difficulty): how much the enemy
@@ -149,6 +153,9 @@ extends Node
 ##                                    "=0" or "=false" turns it off even if the start
 ##                                    screen remembered it on. Read into Game.fog_off.
 ##                                    (FogOff)
+##   --web-sim                        test option: the end screen acts as the browser
+##                                    build does (no Quit button: a web page cannot
+##                                    close itself). A bare switch. (EndScreen)
 ##   --wingmen=<hull,hull,hull>       test option: every pilot seat of both teams
 ##                                    gets a wing of these hulls (up to three, any
 ##                                    hull id; "off" or empty = none; an unknown
@@ -299,7 +306,9 @@ extends Node
 ##                                    from the match log, with the settings the
 ##                                    log's first line names (seed, seat, team,
 ##                                    rules; ReplayOptions) unless an option here
-##                                    says otherwise, and compare the fingerprints:
+##                                    says otherwise (a team's variants,
+##                                    --variant-team0/1, come from the log: a typed one that
+##                                    disagrees is reported and loses), and compare the fingerprints:
 ##                                    prints "replay: ok" or "replay: MISMATCH".
 ##                                    Headless or in a window. (OrderQueue)
 ##   --admiral-replay=<file>          play the computer Admirals' orders of a
@@ -381,6 +390,13 @@ var preset := ""
 ## match (exit code 3), so a typo never plays other rules by mistake. The
 ## start screen shows the line and keeps its seat buttons off.
 var preset_error := ""
+## Why the --variant that was asked for could not be used: "" when it could (or
+## when none was asked for), else a line naming the first pair that is not a
+## "name:value" pair or whose name is not a rule variant (a key of
+## Rules.VARIANT_DEFAULTS). FeatureRegistry.install() then refuses the match
+## (exit code 3), so a mistyped variant name never quietly plays other rules.
+## The start screen shows the line and keeps its seat buttons off.
+var variant_error := ""
 ## Feature hook: tuned numbers changed for this match, by name: name ->
 ## new value (for example "kill_base" -> 150.0). Empty (the default) =
 ## every number has its normal value. A feature module sets entries in its
@@ -573,7 +589,7 @@ func _parse_options() -> void:
 	# Step 2: the variants: start from the defaults, then the preset named by
 	# --preset (the standard rules when none is named), then each "name:value"
 	# pair of --variant (see _build_variants()). The preset is named in the log.
-	_build_variants(str(options.get("preset", "")))
+	_build_variants(str(options.get("preset", "")), options.has("preset"))
 	# A replay plays the rules its log was made with, to the last key, unless the command line
 	# named other rules.
 	if not replay_variants.is_empty() and not typed_rules:
@@ -590,14 +606,20 @@ func _parse_options() -> void:
 ## Build `variants`: start from Rules.VARIANT_DEFAULTS, then apply the pairs
 ## of preset `preset_name` (CouncilPresets; "" = CouncilPresets.STANDARD, the
 ## standard rules), then the pairs of --variant, so --variant wins where both
-## set a key. Sets `preset` and `preset_error`: an unknown preset name adds
-## nothing and leaves an error line for FeatureRegistry.
-func _build_variants(preset_name: String) -> void:
+## set a key. Sets `preset`, `preset_error` and `variant_error`: an unknown
+## preset name adds nothing and leaves an error line for FeatureRegistry, and
+## so does a --preset given with an empty name (`preset_given` is true when the
+## option was on the command line at all, so "--preset=" is told apart from no
+## --preset), and so does a --variant pair that is not a known name:value.
+func _build_variants(preset_name: String, preset_given: bool = false) -> void:
 	variants = Rules.VARIANT_DEFAULTS.duplicate()
 	preset = ""
 	preset_error = ""
+	variant_error = ""
 	var wanted := preset_name if preset_name != "" else CouncilPresets.STANDARD
-	if CouncilPresets.is_preset(wanted):
+	if preset_given and preset_name == "":
+		preset_error = "no preset name was given (the presets are: %s)" % ", ".join(PackedStringArray(CouncilPresets.ORDER))
+	elif CouncilPresets.is_preset(wanted):
 		preset = wanted
 		_apply_pairs(CouncilPresets.variant_string(wanted))
 	else:
@@ -606,11 +628,20 @@ func _build_variants(preset_name: String) -> void:
 
 
 ## Apply each "name:value" pair of `text` (pairs split by commas) to
-## `variants`; a pair that isn't exactly name:value is skipped.
+## `variants`. A pair that is not exactly name:value (an empty name or value,
+## a third part) or whose name is not a rule variant (Rules.VARIANT_DEFAULTS)
+## is not applied; the first one is named in `variant_error`, which
+## FeatureRegistry turns into a refusal.
 func _apply_pairs(text: String) -> void:
 	for pair in text.split(",", false):
 		var kv := pair.split(":")
-		if kv.size() == 2:
+		if kv.size() != 2 or kv[0] == "" or kv[1] == "":
+			if variant_error == "":
+				variant_error = "\"%s\" is not a name:value pair" % pair
+		elif not Rules.VARIANT_DEFAULTS.has(kv[0]):
+			if variant_error == "":
+				variant_error = "unknown variant name \"%s\" (check its spelling)" % kv[0]
+		else:
 			variants[kv[0]] = kv[1]
 
 

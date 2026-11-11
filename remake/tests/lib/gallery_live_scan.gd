@@ -16,7 +16,7 @@ extends RefCounted
 ## and a last line with the "all on" mean.
 ##
 ## WHO USES IT: tests/hull_gallery.gd, for --live --live-look=scan (give --late and --secs, for
-## example --late --secs=1620, the match time to stop at; --scan-rounds=N, default 2; --scan-hud also lists each child of the screens; --scan-only=A,B keeps only the parts with those words in their names).
+## example --late --secs=1620, the match time to stop at; --scan-rounds=N, default 2; --scan-hud also lists what the screens are made of and measures each part of them, --scan-hud-depth=N levels down (default 2; a CanvasLayer is a part too); --scan-freeze stops the world while the parts are measured, so the draw calls are exact; --scan-hold stops the screens' own per-frame work, which otherwise puts a hidden part back on show within 0.1 s; --scan-alone[=Path,Path] measures each part of the screens (or of Hud/Path) on its own, so the numbers add up; --scan-only=A,B keeps only the parts with those words in their names).
 
 ## How many frames each measurement takes.
 const FRAMES := 90
@@ -55,6 +55,15 @@ func scan(view: float) -> void:
 		stretch += 1
 		if stretch % 120 == 1:
 			world.camera.global_position = meter._busiest(world)
+	# A human seat (a pilot or an Admiral, not --all-ai): close any big panel, so the seat's own screens are the ones measured, and say
+	# whether the pilot's ship is flying (the readout and the gear slots show only then).
+	if world.human != null:
+		var seat_hud := gallery.get_tree().root.find_child("Hud", true, false)
+		if seat_hud != null:
+			seat_hud.call("_close_others", null)
+			await gallery.wait_frames(5)
+		var ship_ok: bool = world.human.ship != null and is_instance_valid(world.human.ship) and world.human.ship.alive
+		print("scan: seat %s, the ship is flying: %s" % [world.human_role, ship_ok])
 	# The parts: [name, the nodes to hide, or the kind of unit to hide (-1 for none)].
 	var parts: Array = []
 	for c: Node in world.get_children():
@@ -63,14 +72,12 @@ func scan(view: float) -> void:
 	var hud := gallery.get_tree().root.find_child("Hud", true, false)
 	if hud != null and hud is CanvasItem:
 		parts.append(["screens (Hud)", [hud], -1])
-		# --scan-hud: each child of the screens on its own, too.
+		# --scan-hud: each part of the screens on its own, too (--scan-hud-depth=N levels down, default 2; a CanvasLayer
+		# counts as a part), and a listing of what the screens are made of.
 		if Game.opt("scan-hud", false):
-			for c: Node in hud.get_children():
-				if c is CanvasItem and (c as CanvasItem).visible:
-					parts.append(["hud child " + str(c.name), [c], -1])
-					for g: Node in c.get_children():
-						if g is CanvasItem and (g as CanvasItem).visible:
-							parts.append(["hud child " + str(c.name) + "/" + str(g.name), [g], -1])
+			var depth := int(Game.opt("scan-hud-depth", 2))
+			_list_tree(hud, "Hud", depth + 1)
+			_add_hud_parts(parts, hud, "", depth)
 	var kinds := {}
 	for u: Unit in world.units:
 		if u.visible:
@@ -89,6 +96,27 @@ func scan(view: float) -> void:
 					break
 		parts = kept
 	var rounds := int(Game.opt("scan-rounds", ROUNDS))
+	# --scan-freeze: the world stops (its nodes stop processing) while the parts are measured, so the units, the shots and the
+	# fog stay as they are, a part's draw calls are exact and the screens' own cost is not drowned in the match's.
+	if Game.opt("scan-freeze", false):
+		world.process_mode = Node.PROCESS_MODE_DISABLED
+	# --scan-hold: the screens' own per-frame work stops (Hud._process), so what the scan hides stays hidden: the screens put
+	# their pieces back on show every 0.1 s (HudLayout.apply()), which undoes a part hidden for longer than that.
+	var hold: bool = bool(Game.opt("scan-hold", false)) and hud != null
+	if hold:
+		hud.set_process(false)
+	# --scan-alone[=Path,Path]: instead of the parts above, each visible part of the screens (or of Hud/Path) ALONE, with its siblings
+	# hidden, against all of them hidden: its own draw calls and milliseconds, which add up (the calls of one part hidden among the
+	# rest do not: neighbours that draw the same way are drawn in one call).
+	var alone = Game.opt("scan-alone")
+	if alone != null and hud != null:
+		for under: String in ([""] if alone is bool else str(alone).split(",", false)):
+			await _alone(hud, "" if under == "Hud" else under, rounds)
+		world.process_mode = Node.PROCESS_MODE_INHERIT
+		if hold:
+			hud.set_process(true)
+		print("scan: done")
+		return
 	var saved := {}
 	var on_runs: Array = []
 	for part: Array in parts:
@@ -101,7 +129,7 @@ func scan(view: float) -> void:
 			var off: Array = await meter._measure()
 			for n in hidden:
 				if is_instance_valid(n):
-					(n as CanvasItem).visible = true
+					n.set("visible", true)
 			var s: Array = saved[part[0]]
 			s[0] += float(before[0]) - float(off[0])
 			s[1] += float(before[4]) - float(off[4])
@@ -120,7 +148,117 @@ func scan(view: float) -> void:
 		var s: Array = saved[part[0]]
 		var k := float(maxi(1, int(s[4])))
 		print("scan: %-34s saves %6.2f ms (script %6.2f, render %6.2f), %5d draw calls" % [part[0], s[0] / k, s[1] / k, s[2] / k, int(s[3] / k)])
+	world.process_mode = Node.PROCESS_MODE_INHERIT
+	if hold:
+		hud.set_process(true)
 	print("scan: done")
+
+
+## The --scan-alone listing: the visible canvas items just below `hud` (or below its child `under`, a path), each measured on its own
+## with the others hidden, against none of them showing. Prints "scan-alone: <path> alone: <draw calls>, script, render" lines.
+func _alone(hud: Node, under: String, rounds: int) -> void:
+	var root: Node = hud if under == "" else hud.get_node_or_null(under)
+	if root == null:
+		print("scan-alone: no such part: ", under)
+		return
+	var kids: Array = []
+	for c: Node in root.get_children():
+		if c is CanvasItem and (c as CanvasItem).visible:
+			kids.append(c)
+	var calls := {}
+	var script := {}
+	var render := {}
+	for c: Node in kids:
+		calls[c.name] = 0.0
+		script[c.name] = 0.0
+		render[c.name] = 0.0
+	# What the screens' own per-frame work (Hud._process: the pointer checks, the 0.1 s refresh and layout) costs: the frame with it
+	# on against with it off (only for the whole screens).
+	if under == "":
+		var was_on := hud.is_processing()
+		hud.set_process(true)
+		var p_on: Array = await meter._measure()
+		hud.set_process(false)
+		var p_off: Array = await meter._measure()
+		hud.set_process(was_on)
+		print("scan-alone: Hud._process costs: script %.2f ms, render %.2f ms, %.0f draw calls" % [float(p_on[4]) - float(p_off[4]), float(p_on[5]) - float(p_off[5]), float(p_on[3]) - float(p_off[3])])
+	# The three reference measurements: everything showing, every part hidden, and the whole of `root` hidden.
+	var ref := [0.0, 0.0, 0.0]
+	for _r in rounds:
+		var full: Array = await meter._measure()
+		(root as CanvasItem).visible = false
+		var gone: Array = await meter._measure()
+		(root as CanvasItem).visible = true
+		ref[0] += float(full[3])
+		ref[2] += float(gone[3])
+		for c: Node in kids:
+			(c as CanvasItem).visible = false
+		var off: Array = await meter._measure()
+		ref[1] += float(off[3])
+		# What still shows below `root` with every listed part hidden (the calls that stay are drawn by these).
+		if _r == 0:
+			var left: PackedStringArray = []
+			for d: Node in root.find_children("*", "CanvasItem", true, false):
+				if (d as CanvasItem).is_visible_in_tree():
+					left.append("%s [%s]" % [root.get_path_to(d), d.get_class()])
+			print("scan-alone: still showing with every part of %s hidden: %d: %s" % [root.name, left.size(), ", ".join(left.slice(0, 12))])
+			var layers: PackedStringArray = []
+			for d: Node in root.find_children("*", "CanvasLayer", true, false):
+				layers.append(str(root.get_path_to(d)))
+			print("scan-alone: canvas layers below %s: %s" % [root.name, ", ".join(layers)])
+		for c: Node in kids:
+			(c as CanvasItem).visible = true
+			var on: Array = await meter._measure()
+			(c as CanvasItem).visible = false
+			calls[c.name] += float(on[3]) - float(off[3])
+			script[c.name] += float(on[4]) - float(off[4])
+			render[c.name] += float(on[5]) - float(off[5])
+		for c: Node in kids:
+			(c as CanvasItem).visible = true
+	var path := "Hud" if under == "" else "Hud/" + under
+	var sum_calls := 0.0
+	var n := float(maxi(1, rounds))
+	for c: Node in kids:
+		sum_calls += float(calls[c.name]) / n
+		print("scan-alone: %-44s alone: %5.0f draw calls, script %6.2f ms, render %6.2f ms" % [path + "/" + str(c.name), float(calls[c.name]) / n, float(script[c.name]) / n, float(render[c.name]) / n])
+	print("scan-alone: %s: the parts add up to %.0f draw calls; draw calls with all showing %.0f, all parts hidden %.0f, %s hidden %.0f" % [path, sum_calls, float(ref[0]) / n, float(ref[1]) / n, path, float(ref[2]) / n])
+
+
+## Add a part for each visible CanvasItem (and each visible CanvasLayer) below `node`, down `depth` levels. A part is named
+## "hud child <path under the screens>". A node that is not a canvas item (a plain Node, a CanvasLayer) is walked through
+## without a level counted for a plain Node, and counts as a level of its own when it is a layer.
+func _add_hud_parts(parts: Array, node: Node, path: String, depth: int) -> void:
+	if depth <= 0:
+		return
+	for c: Node in node.get_children():
+		var shown := (c is CanvasItem and (c as CanvasItem).visible) or (c is CanvasLayer and (c as CanvasLayer).visible)
+		var sub := (path + "/" if path != "" else "") + str(c.name)
+		if shown:
+			parts.append(["hud child " + sub, [c], -1])
+		if c is CanvasItem and not shown:
+			continue
+		_add_hud_parts(parts, c, sub, depth - 1 if (c is CanvasItem or c is CanvasLayer) else depth)
+
+
+## Print one "scan-tree:" line for `node` and for every node below it down `depth` levels: its path, class, whether it
+## shows, and how many canvas items it holds (all, and the ones showing), so the listing names where a part's draw calls sit.
+func _list_tree(node: Node, path: String, depth: int) -> void:
+	var all := 0
+	var shown := 0
+	for d: Node in node.find_children("*", "CanvasItem", true, false):
+		all += 1
+		if (d as CanvasItem).is_visible_in_tree():
+			shown += 1
+	var vis := "-"
+	if node is CanvasItem:
+		vis = "yes" if (node as CanvasItem).is_visible_in_tree() else "no"
+	elif node is CanvasLayer:
+		vis = "yes" if (node as CanvasLayer).visible else "no"
+	print("scan-tree: %-46s %-18s shows=%-3s items=%d showing=%d" % [path, node.get_class(), vis, all, shown])
+	if depth <= 0:
+		return
+	for c: Node in node.get_children():
+		_list_tree(c, path + "/" + str(c.name), depth - 1)
 
 
 ## Hide the nodes of part (its listed nodes, or every visible unit of its kind) and return the ones hidden.
@@ -135,7 +273,7 @@ func _hide(world: World, part: Array) -> Array:
 			if is_instance_valid(n):
 				hidden.append(n)
 	for n in hidden:
-		(n as CanvasItem).visible = false
+		n.set("visible", false)
 	return hidden
 
 
