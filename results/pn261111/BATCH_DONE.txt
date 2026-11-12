@@ -1,0 +1,12 @@
+batch: pn261111
+run: 43127695405
+finished: 2026-11-12T00:59:22Z
+runs: 4
+jobs: 6
+expected: 50
+present: 50
+missing: 0
+failed_jobs: 0
+filled_by_collect: 0
+matches_nonzero_exit: 0
+run_jobs_result: success
