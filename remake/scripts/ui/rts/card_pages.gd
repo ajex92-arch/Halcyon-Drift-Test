@@ -70,7 +70,7 @@ const CELLS := {
 	"base/defenses": {"name": "Defenses", "row": "", "kind": "", "tip": "Open the defense posts: their state and Rebuild."},
 	"base/turret_list": {"name": "Turret list", "row": "", "kind": "", "tip": "Open the list of turrets at every node."},
 	"base/ms_status": {"name": "Mothership", "row": "", "kind": "", "tip": "Open the mothership's status and warnings."},
-	"base/doctrine": {"name": "Doctrine", "row": "", "kind": "", "tip": "Open the Fleet Doctrine card."},
+	"base/doctrine": {"name": "Doctrine", "row": "", "kind": "", "tip": "Open the Mothership tab, scrolled to the Fleet Doctrine card (only in a match with Fleet Doctrine on)."},
 }
 
 ## Layout B (and C): a 3x3 grid R T Y / F G H / V B N.

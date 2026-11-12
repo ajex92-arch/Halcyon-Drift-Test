@@ -188,11 +188,13 @@ func toggle_board() -> void:
 
 ## Open the Admiral board on tab `tab` ("Research", "Build", "Mothership", "Fleet" or "Pilots"), making it first if needed
 ## (the command card sends the player here for the facts it has no cell for). A board that is open already just
-## changes tab.
-func open_board_at(tab: String) -> void:
+## changes tab. With `card` (a key of the board's cards) the tab's list is scrolled to that card.
+func open_board_at(tab: String, card: String = "") -> void:
 	if hud.board == null or not hud.board.visible:
 		toggle_board()
 	hud.board._set_tab(tab)
+	if card != "":
+		hud.board.show_card(card)
 
 
 ## Show (`on` = true) or hide the scoreboard, making it first if needed.
@@ -237,14 +239,15 @@ func toggle_help() -> void:
 		panel_closed()
 
 
-## The command pause: in the command view P (and the strip's pause button) holds the match WITHOUT the pause menu, and the
-## strip's clock reads PAUSED with Resume; the second press resumes. Orders given meanwhile are queued by the order queue
-## and run on the first tick after resume (the map draws them as dotted lines "on resume"). While flying, in the pause menu,
-## or with no command view, P keeps today's pause menu (toggle_pause_menu). The mouse buttons are read again on resume,
-## as the pause menu does, because a button let go while paused never reached the World.
+## The plain pause: P (and the strip's pause button) holds the match WITHOUT the pause menu, in every screen state (flying,
+## the command view, a panel such as the research board open); the second press resumes. When the clock strip is
+## showing it reads PAUSED with Resume. Orders given meanwhile are queued by the order queue and run on the first tick
+## after resume (the map draws them as dotted lines "on resume"). The one exception: while the pause menu (opened by Esc or
+## its Menu button) holds the game, P ends that pause (toggle_pause_menu), so P never opens the menu. The mouse buttons are
+## read again on resume, as the pause menu does, because a button let go while paused never reached the World.
 func toggle_command_pause() -> void:
 	var view := hud.command_view
-	if view == null or not view.is_showing() or view.flying() or hud._pause_menu_active():
+	if hud._pause_menu_active():
 		toggle_pause_menu()
 		return
 	if command_paused:
@@ -252,8 +255,9 @@ func toggle_command_pause() -> void:
 		return
 	command_paused = true
 	hud.get_tree().paused = true
-	view.strip.paused = true
-	view.refresh()
+	if view != null:
+		view.strip.paused = true
+		view.refresh()
 
 
 ## End the command pause (a no-op when it is not on): the match runs again, the strip reads its clock.

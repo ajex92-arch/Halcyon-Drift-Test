@@ -11,7 +11,9 @@ extends RefCounted
 ## did: the hull, the squadron size from the view's yard choices (never more than the hull allows), repeat and the
 ## rally. Shift on a build key queues up to the list's depth ("to the cap"; the queue refuses what does not fit), Alt
 ## turns repeat on for that order. A locked hull is refused by the queue and the click then opens the research board. Base cells arm the map tools
-## ("turret", "torpedo", "bay", "ward", "waypoint", "move", "rally"), open the board at the page that holds the facts
+## ("turret", "torpedo", "bay", "ward", "waypoint", "move", "rally"; the Torpedo and Repair bay cells refuse a press with
+## "Needs ... research" while the research is missing, and the Doctrine cell opens the Mothership tab scrolled to the Fleet Doctrine
+## card, only in a match with Fleet Doctrine on), open the board at the page that holds the facts
 ## the card has no cell for (option P), cancel the newest list item, fold the production panel or open the hangar.
 ##
 ## WHO USES IT: CommandCard (a click on a cell, a card key, the digit keys).
@@ -26,6 +28,9 @@ static func run(card: CommandCard, page_id: String, id: String, shift: bool = fa
 			_build(card, id, shift, alt)
 		"base":
 			_base(card, id)
+	# The Capitals opener has just opened its pop-out: after_action() would close it again.
+	if page_id == "build" and id == "capitals":
+		return
 	card.after_action()
 
 
@@ -128,12 +133,21 @@ static func _base(card: CommandCard, id: String) -> void:
 		"deputy", "deputy_preset":
 			ov.say("Comes with the deputy stage", false)
 		"turret", "torpedo", "waypoint", "ward", "move", "rally":
+			# A tool whose research is missing starts no place mode: the notice comes first (the cell is drawn locked).
+			var need := view.world.command.torpedo_research_blocker(view.team) if id == "torpedo" else ""
+			if need != "":
+				ov.say(need, false)
+				return
 			if id == "rally":
 				view.yard["rally"] = "point"
 			ov.arm(id)
 			if ov.tool != "":
 				ov.say(ov.tool_text(), true)
 		"repair":
+			var need := view.world.command.bay_research_blocker(view.team)
+			if need != "":
+				ov.say(need, false)
+				return
 			ov.arm("bay")
 			if ov.tool != "":
 				ov.say(ov.tool_text(), true)
@@ -145,8 +159,14 @@ static func _base(card: CommandCard, id: String) -> void:
 			view.hud.router.click("hangar")
 		"defenses", "turret_list":
 			panels.open_board_at("Build")
-		"ms_status", "doctrine":
+		"ms_status":
 			panels.open_board_at("Mothership")
+		"doctrine":
+			# The card exists only with the doctrine variant: without it the button is not shown, and a key or a call says so.
+			if DoctrineFeature.current() == null:
+				ov.say("Fleet Doctrine is not in this match", false)
+			else:
+				panels.open_board_at("Mothership", "doctrine_btn")
 
 
 ## Cancel the newest item of the build list (the last one in it).

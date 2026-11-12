@@ -115,7 +115,9 @@ static func _drone(card: CommandCard, d: Dictionary) -> void:
 	var cost := int(Structures.MINING_DRONE["cost"])
 	var working := view.world.mining_drone_count(view.team)
 	var most := int(Structures.MINING_DRONE["max"])
-	d["count"] = "%d/%d" % [working, most]
+	# The count is what the limit counts (AdmiralCommand.drone_blocker): working drones plus the ones queued (being
+	# built, waiting or on hold), so at the limit the cell reads 14/14, not "4/14" with ten still in the queue.
+	d["count"] = "%d/%d" % [working + ts.drones_queued(), most]
 	d["sub"] = str(cost)
 	var why: String = view.world.command.drone_blocker(view.team)
 	if why != "":
@@ -146,9 +148,11 @@ static func _base(card: CommandCard, id: String, d: Dictionary) -> void:
 			d["picked"] = ov.tool == "turret"
 		"torpedo":
 			d["picked"] = ov.tool == "torpedo"
+			_research_lock(d, cmd.torpedo_research_blocker(view.team))
 		"repair":
 			d["picked"] = ov.tool == "bay"
 			d["count"] = "%d/%d" % [_alive(view.world.bays, view.team), int(Structures.REPAIR_BAY["max_per_team"])]
+			_research_lock(d, cmd.bay_research_blocker(view.team))
 		"ward":
 			d["picked"] = ov.tool == "ward"
 			d["count"] = "%d/%d" % [_alive(view.world.wards, view.team), int(Structures.WARD["max_per_team"])]
@@ -172,6 +176,20 @@ static func _base(card: CommandCard, id: String, d: Dictionary) -> void:
 				d["sub"] = "none"
 		"production":
 			d["picked"] = not view.prod.folded
+
+
+## Draw cell `d` locked while its research is missing: `why` is AdmiralCommand's "Needs <research> research" (or "" with the
+## research done, then nothing changes). The cell keeps no count, says "research" under its name and its tooltip names the
+## research; a press starts no place mode (CardActions answers with the same words).
+static func _research_lock(d: Dictionary, why: String) -> void:
+	if why == "":
+		return
+	d["state"] = "locked"
+	d["sub"] = "research"
+	d["red"] = true
+	d["count"] = ""
+	d["picked"] = false
+	d["tip"] = "%s. %s. Research it on the research board first." % [str(d["tip"]).trim_suffix("."), why]
 
 
 ## How many of `things` (units with a team and `alive`) team `team` has alive.

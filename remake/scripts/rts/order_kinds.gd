@@ -79,10 +79,10 @@ const ALL := [
 ]
 ## The squad orders.
 const SQUADRON_KINDS := [ESCORT, ATTACK, HOLD, MOVE, GUARD, SET_FORMATION, SET_STANCE]
-## The orders a BOUGHT squadron (the Admiral's, made by the yard) takes. Every other kind sent to one is refused
-## "Comes with a later stage". The command card lights a cell only when its kind is in this list; a later stage
-## (RT12) widens it.
-const BOUGHT_KINDS := [MOVE, HOLD, STOP]
+## The orders a BOUGHT squadron (the Admiral's, made by the yard) takes: Move, Hold and Stop on a point, and Attack on
+## an enemy unit (the smart right-click, the mothership included). Every other kind sent to one is refused "Comes with
+## a later stage". The command card lights a cell only when its kind is in this list; a later stage widens it.
+const BOUGHT_KINDS := [MOVE, HOLD, STOP, ATTACK]
 ## The ship yard's orders.
 const PRODUCTION_KINDS := [PRODUCE, CANCEL, MOVE_ITEM, HOLD_ITEM, SET_REPEAT, SET_RALLY]
 ## The kinds that AdmiralCommand carries out (the queue calls its functions).

@@ -21,6 +21,10 @@ extends RefCounted
 ##     at every think, so the hook runs at every think. One thing it cannot stop: a turret
 ##     hunting a small or medium ship makes the brain step away for 2.5 seconds, and then it
 ##     comes back.
+##   - Attack: a squadron whose standing order is Attack makes the order's unit its target at
+##     every think, wherever the unit is (the enemy mothership too, which the rule ms:nosmall
+##     keeps the brain from picking by itself), and its goal the unit's gun-reach point
+##     (PilotTargeting.standoff). When the unit is gone the squadron stops where it stands.
 ## The formation and the stances of the squadron record are ignored here; the record keeps
 ## them for the squad engine. The brain keeps its own few dice (its first think time and the
 ## way it circles a target), so the bought ships' matches have their own baselines.
@@ -86,3 +90,22 @@ static func _think(w: World, ship: Ship, brain: PilotAI) -> void:
 			brain.soft_retreat = false
 			brain.goal = brain.hold_point
 	ship.controls.dock = false
+	if squad != null and str(squad.order.get("kind", "")) == OrderKinds.ATTACK:
+		_attack(w, ship, brain, squad)
+
+
+## A standing Attack order (see the top): the brain's target is the order's unit and its goal the unit's gun-reach point,
+## as seen from the ship's own place. A unit that is gone turns the order into a Stop where the ship is. A unit the brain
+## gave up on for a while (it stayed hidden behind rocks, PilotAI.skip_until) is left alone until the pause ends.
+static func _attack(w: World, ship: Ship, brain: PilotAI, squad: Squad) -> void:
+	var t := w.orders.unit_by_uid(int(squad.order.get("target", 0)))
+	if t == null:
+		squad.order = {"kind": OrderKinds.STOP, "target_kind": "none", "target": 0, "tick": w.tick_count, "settings": {}}
+		brain.hold_point = ship.global_position
+		return
+	if brain.skip_id == t.get_instance_id() and w.time < brain.skip_until:
+		return
+	brain.target = t
+	brain.lock_target = t
+	brain.intent = "push"
+	brain.goal = PilotTargeting.standoff(ship, t, ship.global_position)

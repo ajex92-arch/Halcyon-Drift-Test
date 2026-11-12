@@ -11,7 +11,9 @@ extends RefCounted
 ## option typed by hand always wins, and then the replay's header check says that the match
 ## differs). It also adds --auto and --bot=replay so that the match starts at once and nothing
 ## buys or launches for the human: the log's own commands do that. The header's rule variants are
-## returned in `variants` for Game to use as they are. The header keeps four groups of
+## returned in `variants` for Game to use as they are. The per-team variants (variants_team0 and
+## variants_team1, the AI lane's) become --variant-team0 and --variant-team1, and for those the
+## header wins over the command line (a replay of a variant match needs no retyped option). The header keeps four groups of
 ## settings, written by OrderLog.make_header(): the seed, role, team and preset; `play=`
 ## (difficulty, Unlock everything, the damage and flight switches); `opts=` (the test options
 ## that change the simulation, such as no-jungle); and the wings. Display-only switches (`screen=`,
@@ -23,6 +25,9 @@ extends RefCounted
 
 ## The test options that change the simulation and that the header lists in `opts=`.
 const SIM_OPTIONS := ["no-pilots", "no-jungle", "no-admiral-ai", "no-admiral-field", "no-tail-gun", "skill-jitter", "admiral-ai"]
+## The header words that name a team's own rule variants: this text plus the team (0 or 1), for
+## example "variants_team0".
+const TEAM_KEY := "variants_team"
 
 
 ## The header line of the log in `path` as {key: value}, or {} when it cannot be read or is not
@@ -64,6 +69,7 @@ static func fill(options: Dictionary) -> Dictionary:
 		_give(options, "seed", str(head["seed"]))
 	if str(head.get("preset", "")) != "":
 		_give(options, "preset", str(head["preset"]))
+	_team_variant_options(options, head)
 	_play_options(options, str(head.get("play", "")))
 	_sim_options(options, str(head.get("opts", "")))
 	_wing_options(options, str(head.get("wings", "off")), str(head.get("cwings", "0")))
@@ -81,6 +87,68 @@ static func parse_until(text: String) -> float:
 			return -1.0
 		return float(int(parts[0])) * 60.0 + parts[1].to_float()
 	return t.to_float() if t.is_valid_float() else -1.0
+
+
+## The per-team rule variants of the match (the AI lane's --variant-team0 and --variant-team1).
+## When the header has a variants_team0= or variants_team1= word, the log is the one that says: each
+## team's variants become that team's option, whatever the command line gave. A team the header
+## does not name has none, so a typed option for it is dropped too. An option typed by hand that
+## says something else is reported in one line (see conflict_line()). A header with neither word
+## (a match played without the option, or a log made before the words existed) leaves the command
+## line alone, so an older recording still replays with its option typed again.
+static func _team_variant_options(options: Dictionary, head: Dictionary) -> void:
+	if not head.has(TEAM_KEY + "0") and not head.has(TEAM_KEY + "1"):
+		return
+	for team: int in range(2):
+		var opt_name := "variant-team%d" % team
+		var logged := _read_variants(str(head.get(TEAM_KEY + str(team), "")))
+		if options.has(opt_name):
+			var typed := _pairs_to_variants(str(options[opt_name]))
+			if typed != logged:
+				print(conflict_line(team, str(options[opt_name]), logged))
+		if logged.is_empty():
+			options.erase(opt_name)
+		else:
+			options[opt_name] = _variants_to_pairs(logged)
+
+
+## The one line a replay prints when the command line gave team `team` a variant that the recording
+## does not agree with: it names the option, what was typed and what the recording holds (and says
+## the recording's is used).
+static func conflict_line(team: int, typed: String, logged: Dictionary) -> String:
+	var held := _variants_to_pairs(logged)
+	return "replay: --variant-team%d=%s does not match the recording (%s); using the recording's" % [team, typed, held if held != "" else "no variant for this team"]
+
+
+## A header's JSON word as a Dictionary (name -> value text), {} when it is not one.
+static func _read_variants(word: String) -> Dictionary:
+	var parsed: Variant = JSON.parse_string(word)
+	if typeof(parsed) != TYPE_DICTIONARY:
+		return {}
+	var out := {}
+	for k: Variant in (parsed as Dictionary):
+		out[str(k)] = str((parsed as Dictionary)[k])
+	return out
+
+
+## A launch option's "name:value,name:value" text as a Dictionary (a part that is not name:value is skipped).
+static func _pairs_to_variants(text: String) -> Dictionary:
+	var out := {}
+	for pair in text.split(",", false):
+		var kv := pair.split(":")
+		if kv.size() == 2:
+			out[kv[0]] = kv[1]
+	return out
+
+
+## A Dictionary of variants as "name:value,name:value" (names in alphabetical order), the launch option's text.
+static func _variants_to_pairs(variants: Dictionary) -> String:
+	var keys := variants.keys()
+	keys.sort()
+	var parts := PackedStringArray()
+	for k: Variant in keys:
+		parts.append("%s:%s" % [str(k), str(variants[k])])
+	return ",".join(parts)
 
 
 ## Add option `key` = `value` unless the command line gave it.

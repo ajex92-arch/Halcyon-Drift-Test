@@ -18,7 +18,9 @@ extends Unit
 ##     stretch goes to wherever the enemy mothership is now (it can move
 ##     from 20:00). A minion that starts outside its lane's corridor (its
 ##     mothership is parked up another lane) first follows the big-ship
-##     route graph to the lane (World.lane_path_from).
+##     route graph to the lane (World.lane_path_from). A minion that gets
+##     outside the corridor later (after a chase, or pushed by rocks) aims
+##     back at the lane line (MinionFlight.lane_move, `lane_line`).
 ##   - Picking a fight ("aggro", the gaming word for who a computer enemy
 ##     attacks): four times a second it looks around (MinionTargeting). It
 ##     likes, from most to least: an enemy ship that just hurt one of our
@@ -78,6 +80,13 @@ var mounts: Array[WeaponMount] = []
 var path := PackedVector2Array()
 ## Which point of `path` it is flying to now (an index into `path`).
 var path_i := 0
+## The whole centre line of its lane, walked from its own end to the enemy's
+## (MapLayout.lane_points). MinionFlight.lane_move measures how far it has
+## strayed from it, and aims back at it, with this.
+var lane_line := PackedVector2Array()
+## Half the width of its lane's corridor (MapLayout.LANES "half"): a minion
+## further than this from `lane_line` is outside the corridor.
+var lane_half := 900.0
 ## The enemy it is fighting, or null for nobody.
 var target: Unit = null
 ## Seconds until its next "think" (target choice and rock check).
@@ -122,6 +131,10 @@ var _aim_offset := Vector2.ZERO
 ## The push away from nearby asteroids found at the last think (a velocity
 ## change per second, in world units per second, per second).
 var _rock_push := Vector2.ZERO
+## Seconds the minion has been held still by the rocks (MinionFlight.lane_move).
+var _pin_t := 0.0
+## Seconds left in which the rock push is off for it after it was pinned too long.
+var _unpin_t := 0.0
 ## Flips on every tick; on ticks where it becomes true the minion only moves
 ## (see sim_update()).
 var _skip := false
@@ -214,6 +227,8 @@ func set_lane(lane_id: String) -> void:
 	lane = lane_id
 	path = world.lane_path_from(lane_id, team, position)
 	path_i = 0
+	lane_line = MapLayout.lane_points(lane_id, team)
+	lane_half = float(MapLayout.LANES[lane_id]["half"])
 
 
 ## One tick of `tick_dt` seconds. World calls it every tick. Moving happens

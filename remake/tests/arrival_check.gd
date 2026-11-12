@@ -21,7 +21,7 @@ extends Node
 ##   - Stand-in: the brain's skill and hold point, "just launched" every tick, a retreat turned
 ##     back into the lane job, no dock.
 ##   - Bought orders: the Admiral's Move, Hold and Stop for a bought squadron go through the order queue,
-##     every named squadron is checked and written, the stand-in holds the point, and Attack is refused.
+##     every named squadron is checked and written, the stand-in holds the point, and Guard is refused.
 ##   - Fleet limit: reserved at the start, the living ships count, a dead ship gives its place
 ##     back, a repeat stops at the limit and at the list depth.
 ##
@@ -398,8 +398,8 @@ func _bought_order_cases() -> void:
 	ship.global_position = Vector2(77, 88)
 	Standin._think(world, ship, ai)
 	_check("bought orders: Stop holds where the ship is", str(sq.order.get("kind", "")) == OrderKinds.STOP and ai.hold_point.distance_to(Vector2(77, 88)) < 0.01)
-	r = q.submit(Order.make(OrderKinds.ATTACK, 0, seat, true, {}, [sq.id], "unit", ship.uid))
-	_check("bought orders: Attack is refused 'Comes with a later stage'", r == OrderKinds.TEXT_UNBUILT, r)
+	r = q.submit(Order.make(OrderKinds.GUARD, 0, seat, true, {}, [sq.id], "unit", ship.uid))
+	_check("bought orders: Guard is refused 'Comes with a later stage'", r == OrderKinds.TEXT_UNBUILT, r)
 	r = q.submit(Order.make(OrderKinds.MOVE, 0, seat, true, {}, [sq.id], "unit", ship.uid))
 	_check("bought orders: Move to a unit is refused for a bought squadron", r == OrderKinds.TEXT_VALUE, r)
 	r = q.submit(Order.make(OrderKinds.MOVE, 1, seat, true, {}, [sq.id], "point", spot))

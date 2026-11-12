@@ -38,7 +38,7 @@ const ALLOWED := [
 	"scripts/autoload/game.gd", "scripts/world/fog_off.gd", "scripts/ui/start_screen.gd", "scripts/ui/hud_top_bar.gd",
 	"scripts/world/fog_view.gd", "scripts/world/world_visibility.gd", "scripts/world/world_registry.gd", "scripts/world/world_setup.gd",
 	"scripts/ui/minimap.gd", "scripts/audio/sfx.gd", "scripts/ui/site_marks.gd", "scripts/ui/scoreboard.gd",
-	"scripts/entities/fan_paint.gd", "scripts/ui/help_panel.gd", "scripts/ui/note_writer.gd"
+	"scripts/entities/fan_paint.gd", "scripts/ui/help_panel.gd", "scripts/ui/note_writer.gd", "scripts/entities/unit_visual.gd"
 ]
 
 ## The running match (set by setup()).

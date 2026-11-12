@@ -2,8 +2,9 @@ class_name HudMePanel
 extends PanelContainer
 ## WHAT THIS IS: the small panel in the top-left corner of the HUD about
 ## you: your callsign and credits, K/D/A (kills / deaths / assists), last
-## hits, ship and lane. For the Admiral it shows the team treasury, mining
-## drones, ore delivered and current research instead. Under that is a
+## hits, ship and lane. For the Admiral it shows the team treasury, the
+## Admiral's own Personal Wallet, mining drones, ore delivered and current
+## research instead. Under that is a
 ## short log of what just paid you ("+40 last hit").
 ##
 ## HOW IT WORKS: the layout is the scene scenes/ui/hud_me_panel.tscn: a
@@ -38,7 +39,7 @@ var world: World
 ## remembers when it was made ("born", in milliseconds) and its total
 ## ("amount", credits) as metadata (extra values stored on the node).
 @onready var earn_box: VBoxContainer = $Rows/Earnings
-## First line: callsign and credits (or "Admiral · treasury ...").
+## First line: callsign and credits (or "Team treasury ...").
 @onready var _me_title: Label = $Rows/Title
 ## The lines under it: K/D/A, ship and lane (or the Admiral's economy).
 @onready var _me_line: Label = $Rows/Line
@@ -57,14 +58,13 @@ func refresh(w: World) -> void:
 		visible = w.human_role != "spectator"
 		UiKit.set_text(_me_title, "Spectating")
 		return
-	# The Admiral: treasury, drones, ore, research, and their own credits.
+	# The Admiral: the team treasury, their own Personal Wallet, drones, ore and research.
 	if w.human_role == "admiral":
 		var ts := w.teams[h.team]
-		UiKit.set_text(_me_title, "Admiral  ·  treasury %s" % Util.money(ts.treasury))
-		var line := "%d mining drones · %s ore delivered" % [w.mining_drone_count(h.team), Util.money(ts.ore_delivered)]
+		UiKit.set_text(_me_title, "Team treasury %s" % Util.money(ts.treasury))
+		var line := "Personal Wallet %s\n%d mining drones · %s ore delivered" % [Util.money(h.credits), w.mining_drone_count(h.team), Util.money(ts.ore_delivered)]
 		if not ts.research.is_empty():
 			line += "\nResearching %s" % Tech.TECHS[ts.research[0]["id"]]["label"]
-		line += "\nYour own ship: %s credits" % Util.money(h.credits)
 		UiKit.set_text(_me_line, line)
 		return
 	# A pilot: credits, K/D/A, last hits, ship (or the docked hull) and lane.

@@ -19,8 +19,9 @@ extends Node2D
 ## sends `selection_changed`. Selection by clicking works while the Admiral is docked (or the board is open
 ## over a flying Admiral), never while their own ship is flying: there a click fires the guns.
 ## Orders: every order is `world.orders.submit(Order.make(kind, team, ADMIRAL_SEAT, true, ...))`. The smart
-## right-click (smart_order_at) sends Move for a click on open ground; an enemy, our pilot, a structure or our
-## mothership says "<Verb>: later stage" and sends nothing. The answer of the last click is in `result_text`
+## right-click (smart_order_at) sends Move for a click on open ground and Attack for a click on an enemy unit the
+## team sees (the enemy mothership too); our pilot, a structure of ours or our mothership says "<Verb>: later stage"
+## and sends nothing. The answer of the last click is in `result_text`
 ## (the card prints it) and arrives by `result_changed`.
 ## This node lives under World (not under the HUD), so it draws in world positions and gets the clicks the
 ## HUD's buttons didn't take, before the ship's guns do. For everyone it also draws the team's rally waypoint
@@ -48,8 +49,8 @@ const TOOL_TEXT := {
 	"torpedo": "Click one of your inner turret sites to build a torpedo turret",
 	"verb_move": "Click where the selected squadrons should move",
 }
-## The verb a right-click on each kind of target would be (the later stage's order).
-const LATER_VERBS := {"enemy": "Attack", "pilot": "Escort", "structure": "Defend", "base": "Retreat"}
+## The verb a right-click on each kind of target would be when its order comes with a later stage (an enemy sends Attack now).
+const LATER_VERBS := {"pilot": "Escort", "structure": "Defend", "base": "Retreat"}
 
 ## The game world (set by setup()).
 var world: World

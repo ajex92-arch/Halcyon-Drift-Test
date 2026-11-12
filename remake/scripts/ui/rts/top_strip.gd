@@ -4,7 +4,8 @@ extends Control
 ## that answers "what do I have, what does my list need, how full is my fleet": ORE (the treasury and the income a
 ## minute), LIST NEEDS (what the items not yet started still cost, as "needs 2,500 in 1:21" at the income, or "1,290 left"
 ## when the list is paid), FLEET (places used of the limit, then ships out, places held by builds that have started,
-## ships waiting in the list), and at the right a pause button, the match clock, the speed button and the deputy ("off").
+## ships waiting in the list), and at the right a pause button, the match clock, the difficulty as one word ("Hard", hidden in a
+## match that names no level; its tooltip is the full sentence), the speed button and the deputy ("off").
 ##
 ## HOW IT WORKS: a Control that draws its box in the shared "row" look and holds flat buttons ("RtsStrip") placed one
 ## after the other by the width of their words. Every count is a button: ore and list open the production panel, fleet
@@ -26,7 +27,7 @@ const FONT := 11
 
 ## The command view (set by setup()).
 var view: CommandView
-## The buttons by name: ore, list, fleet, pause, clock, speed, deputy.
+## The buttons by name: ore, list, fleet, pause, clock, speed, diff, deputy.
 var _b := {}
 ## The 60 s history of income: [time, gained] pairs.
 var _earn: Array = []
@@ -51,6 +52,7 @@ func setup(v: CommandView) -> void:
 	_make("pause", "Pause the match to give orders (the card, the panel and the map keep working). A click again resumes.", func() -> void: _pause_pressed())
 	_make("clock", "The match clock. A click pauses.", func() -> void: _pause_pressed())
 	_make("speed", "The match speed. A click goes to the next speed.", func() -> void: _speed_pressed())
+	_make("diff", "The difficulty.", func() -> void: _diff_pressed())
 	_make("deputy", "The deputy: it comes with a later stage. A click opens the Base page.", func() -> void: view.card.set_page("base"))
 
 
@@ -77,6 +79,13 @@ func _speed_pressed() -> void:
 	var why := SpeedControl.send(view.world, int(steps[(i + 1) % steps.size()]))
 	if why != "":
 		view.overlay.say(why, false)
+
+
+## The difficulty word was pressed: say its sentence on the card's result line (the tooltip holds it too).
+func _diff_pressed() -> void:
+	var mult := Difficulty.tag_mult(view.world)
+	if mult >= 0.0:
+		view.overlay.say(Difficulty.blurb_for(mult), true)
 
 
 ## Place the buttons again for the strip's size.
@@ -134,6 +143,13 @@ func refresh() -> void:
 	_text("pause", "Resume" if paused else "Pause")
 	_text("clock", "PAUSED" if paused else Util.clock(world.time))
 	_text("speed", SpeedControl.label_of(SpeedControl.current(world)))
+	# The difficulty as one word (the level the enemy's income names); hidden in a match that names no level. Its tooltip is the full sentence.
+	var mult := Difficulty.tag_mult(world)
+	var diff: Button = _b["diff"]
+	diff.visible = mult >= 0.0
+	if mult >= 0.0:
+		_text("diff", Difficulty.short_tag_for(mult))
+		diff.tooltip_text = Difficulty.blurb_for(mult)
 	_text("deputy", "DEPUTY off")
 	_place()
 
@@ -174,7 +190,7 @@ func _place() -> void:
 		b.custom_minimum_size = Vector2.ZERO
 		var w := b.get_combined_minimum_size().x + 6.0
 		widths[id] = w
-		sig += "|%d" % int(w)
+		sig += "|%d" % (int(w) if b.visible else -1)
 	if sig == _placed:
 		return
 	_placed = sig
@@ -183,7 +199,9 @@ func _place() -> void:
 		_put(id, x, float(widths[id]))
 		x += float(widths[id]) + GAP
 	var rx := size.x - PAD
-	for id: String in ["deputy", "speed", "clock", "pause"]:
+	for id: String in ["deputy", "speed", "diff", "clock", "pause"]:
+		if not (_b[id] as Button).visible:
+			continue
 		rx -= float(widths[id])
 		_put(id, rx, float(widths[id]))
 		rx -= GAP * 0.5

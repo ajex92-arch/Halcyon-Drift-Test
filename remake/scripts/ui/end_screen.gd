@@ -16,7 +16,8 @@ extends Control
 ## ranked by damage done; if you are not among them, your own line is added
 ## under them. Those lines are made in code and go between TopHeading and
 ## Buttons. "New match" reloads the main scene, which goes back to the seat
-## choice (StartScreen).
+## choice (StartScreen). "Quit" closes the game; the browser build has none
+## (quit_offered() hides it).
 ##
 ## WHO USES IT: Hud._on_match_over() makes it from
 ## scenes/ui/end_screen.tscn, calls setup() and adds it on top of the HUD.
@@ -35,6 +36,13 @@ var reason := ""
 @onready var _teams: Array[VBoxContainer] = [$Center/Card/Col/Teams/Halcyon, $Center/Card/Col/Teams/Cinder]
 
 
+## Does the "Quit" button show? Not in a browser: a web page cannot close itself, and the game's quit() only stops
+## its main loop, which leaves the page frozen (the pause menu leaves its "Quit game" out for the same reason).
+## `--web-sim` makes a desktop test run act as the browser build does here.
+static func quit_offered() -> bool:
+	return not (OS.has_feature("web") or Game.opt("web-sim") != null)
+
+
 ## Remember the world, the winning team `win` and the reason `why`, and the match series
 ## (MatchSeries) for the graph, or null for none. The series gets its last sample at once.
 func setup(w: World, win: int, why: String, match_series: MatchSeries = null) -> void:
@@ -50,11 +58,12 @@ func setup(w: World, win: int, why: String, match_series: MatchSeries = null) ->
 ## the buttons and fill in the results.
 func _ready() -> void:
 	# Step 1: the cover is 80% dark. "New match" clears Game.world and
-	# reloads the main scene; "Quit" closes the game.
+	# reloads the main scene; "Quit" closes the game (not offered in a browser).
 	$Cover.color = Palette.with_alpha(Palette.VOID, 0.8)
 	$Center/Card/Col/Buttons/NewMatch.pressed.connect(func() -> void:
 		Game.world = null
 		get_tree().reload_current_scene())
+	($Center/Card/Col/Buttons/Quit as Button).visible = quit_offered()
 	$Center/Card/Col/Buttons/Quit.pressed.connect(func() -> void: get_tree().quit())
 	# No world means setup() was never called (tests/load_all.gd builds
 	# every UI scene once that way): leave the texts empty.

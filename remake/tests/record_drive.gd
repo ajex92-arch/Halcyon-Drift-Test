@@ -22,7 +22,9 @@ extends Node
 ##   record: godot --headless --path remake --fixed-fps 60 -- --auto --role=pilot --seed=7 --secs=330 --record --recordings-dir=<dir> --record-name=drive1 --test=record_drive
 ##   replay: godot --headless --path remake --fixed-fps 60 -- --seed=7 --secs=330 --replay=<dir>/drive1.log --test=record_drive
 ## (--replay brings the seat, the team and the rules from the log; add --record --recordings-dir=<dir>
-## --record-name=drive2 to record the replay too: its log must equal the first byte for byte.)
+## --record-name=drive2 to record the replay too: its log must equal the first byte for byte.
+## Add --variant-team0=eff:on to the first run and not to the replay to prove the team's variant
+## travels in the recording's header: the replay checks it plays the variant the log names.)
 ##
 ## WHO USES IT: main.gd loads it for --test=record_drive; the recorder proof script runs it.
 
@@ -226,6 +228,10 @@ func _check_recording(q: OrderQueue) -> void:
 	var controls := (read["controls"] as Array).size()
 	var commands := (read["commands"] as Array).size()
 	_check("the log has its v2 header", str(read["header"]).begins_with("log v2 seed="))
+	for team in range(2):
+		var own: Dictionary = Game.team_variants[team]
+		if not own.is_empty():
+			_check("the log's header names team %d's variants" % team, str(read["header"]).contains(" variants_team%d=%s " % [team, JSON.stringify(own, "", true)]))
 	_check("the log has flight control lines (%d)" % controls, controls > 100)
 	_check("the log has hangar command lines (%d)" % commands, commands > 3)
 	_check("the log has fingerprint lines (%d)" % (read["hashes"] as Dictionary).size(), (read["hashes"] as Dictionary).size() > 0)
@@ -237,6 +243,15 @@ func _check_replay(q: OrderQueue) -> void:
 	var r := q.replay
 	_check("the replay compared fingerprint lines (%d)" % r.compared, r.compared > 0)
 	_check("the replay's header agreed with the match", r.header_ok)
+	# A match played with --variant-team0 or --variant-team1: the replay, with no such option typed, runs
+	# the variants the log's header names (and none for a team it does not name).
+	var head: Dictionary = r.data["head"]
+	for team in range(2):
+		var named := str(head.get("variants_team%d" % team, ""))
+		var own: Dictionary = Game.team_variants[team]
+		var live := JSON.stringify(own, "", true) if not own.is_empty() else ""
+		if named != "" or live != "":
+			_check("team %d plays the variants the log names (log %s, replay %s)" % [team, named if named != "" else "none", live if live != "" else "none"], named == live)
 	_check("no fingerprint line differed (%d differ)" % r.mismatches, r.mismatches == 0)
 	_check("no hangar command gave another result (%d differ)" % r.command_diffs, r.command_diffs == 0)
 	_check("flight controls were played (%d ticks)" % r.controls_played, r.controls_played > 100)

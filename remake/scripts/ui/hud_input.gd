@@ -114,7 +114,7 @@ func handle(event: InputEvent) -> void:
 		return
 	if world.phase != "play":
 		return
-	# Step 2: P (the "pause" action) opens the pause menu, which pauses the whole game,
+	# Step 2: P (the "pause" action) pauses the whole game without a menu (in every screen state),
 	# or ends the pause when the menu holds it.
 	if k.pressed and event.is_action("pause", true):
 		hud.panels.toggle_command_pause()

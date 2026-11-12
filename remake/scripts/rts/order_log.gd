@@ -11,7 +11,9 @@ extends RefCounted
 ##       camps=<n> route_nodes=<n> wings=<off or hull,hull,hull> cwings=<0 or 1>
 ##       play=<difficulty:..,unlock:..,dmg:..,flight:..> opts=<none or test options> screen=<fog:0 or 1>
 ##       fp0=<units>,<hash8> build=<id>
-##   (wings= is the wing the human's seat gets, cwings= is 1 when the computer pilots' seats get one: Squads;
+##   (variants_team0=<json> and variants_team1=<json> follow variants= only when --variant-team0 or
+##   --variant-team1 gave that team's AI a rule variant of its own; without them the header has neither word.
+##   wings= is the wing the human's seat gets, cwings= is 1 when the computer pilots' seats get one: Squads;
 ##   play= and opts= are the switches that change the match, screen= the ones that only change what the
 ##   human sees; build= is the build that wrote the log: BuildId. A v1 log has none of play, opts, screen.)
 ##   o <apply_tick> <team> <seat> <h|a|t> <id> <KIND> <json> <ok or reason code>   (see Order)
@@ -84,6 +86,9 @@ static func make_header(w: World) -> String:
 		"seed=%s" % seed_text(),
 		"preset=%s" % Game.preset,
 		"variants=%s" % JSON.stringify(Game.variants, "", true),
+	])
+	parts.append_array(team_variant_words())
+	parts.append_array(PackedStringArray([
 		"role=%s" % w.human_role, "team=%d" % w.human_team,
 		"rocks=%d" % w.asteroids.pos.size(), "nodes=%d" % w.nodes.size(),
 		"camps=%d" % w.map.camps.size(), "route_nodes=%d" % w.map.route.node_count(),
@@ -91,8 +96,21 @@ static func make_header(w: World) -> String:
 		"play=%s" % play_word(), "opts=%s" % opts_word(), "screen=%s" % screen_word(),
 		"fp0=%s" % fingerprint_pair(w),
 		"build=%s" % BuildId.get_id(),
-	])
+	]))
 	return " ".join(parts)
+
+
+## The header's per-team rule variant words (--variant-team0 and --variant-team1, the AI lane's):
+## "variants_team0=<json>" and "variants_team1=<json>", one for each team that holds a variant, in
+## that order. Empty when neither team does, so a match played without the option has the header it
+## always had.
+static func team_variant_words() -> PackedStringArray:
+	var words := PackedStringArray()
+	for team: int in range(2):
+		var own: Dictionary = Game.team_variants[team]
+		if not own.is_empty():
+			words.append("%s%d=%s" % [ReplayOptions.TEAM_KEY, team, JSON.stringify(own, "", true)])
+	return words
 
 
 ## The seed of the match as text: the number main.gd started the match with, else the --seed
