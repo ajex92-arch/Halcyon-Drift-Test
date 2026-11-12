@@ -1,0 +1,240 @@
+Godot Engine v4.7.2.stable.official.ed1daf0bf - https://godotengine.org
+preset: pick = minion_cap:on,lance_role:on,bomber_role:both,admiral_sinks:fleet,redeploy:on,gear_mk2:on,node_persist:on,ms:nosmall
+difficulty: none (no human seat), both teams earn x1.00
+features: ms, minion_cap, lance_role, bomber_role, redeploy, gear_mk2, node_persist, admiral_sinks
+match: role=spectator variants={ "retreat": "systems_failure", "escort_wing": "extra", "siege_fix": "off", "breach": "off", "ms_cap": "off", "attrition": "off", "surrender": "off", "breach_extra": "off", "ms_soft": "off", "waves_late": "off", "lanespawn": "off", "eff": "off", "ms": "nosmall", "minion_cap": "on", "escort_pd": "off", "lance_role": "on", "routing_payoff": "off", "jungle_big": "off", "zoom_max": "off", "bomber_role": "both", "slipstream": "off", "redeploy": "on", "recall": "off", "respawn": "off", "respawn_site": "off", "bay_shop": "off", "respawn_curve": "off", "bayA": "off", "econ": "off", "bounties": "off", "gear_mk2": "on", "buyback": "off", "doctrine": "off", "catchup": "off", "pilot_mining": "off", "ms_spend_weak": "off", "morale": "off", "group_late": "off", "salvage_core": "off", "jungle_scale": "off", "node_persist": "on", "epic": "off", "beacons": "off", "camp4": "off", "feats": "off", "assets": "off", "orders": "off", "fortify": "off", "admiral_smart": "off", "ms_move": "off", "home_vision": "off", "mutiny": "off", "admiral_sinks": "fleet", "fleet_cap": "30", "ai_calib": "off", "ail_c4_flak": "off" } rocks=3749 nodes=26 camps=14 route_nodes=611
+build: unknown
+hash t=5 58 units, 8768005c
+hash t=10 60 units, 63f6fdc0
+hash t=15 62 units, 88be40c3
+hash t=20 62 units, 09bdbb43
+hash t=25 62 units, 71556f64
+hash t=30 63 units, abd8b722
+hash t=35 65 units, 13d178ab
+hash t=40 64 units, f33b89ae
+hash t=45 70 units, 42ab41b1
+hash t=50 106 units, ffafb2a3
+hash t=55 106 units, d62505c9
+hash t=60 106 units, e4e4d8bb
+hash t=65 106 units, eaa0fced
+hash t=70 104 units, 90e58fcf
+hash t=75 95 units, 0210ea35
+hash t=80 97 units, 8067dd7d
+hash t=85 123 units, c99fe89d
+hash t=90 119 units, 06f11813
+hash t=95 118 units, ed1e9a36
+hash t=100 117 units, 186d0060
+hash t=105 116 units, 8dcca3eb
+hash t=110 105 units, eabe7340
+hash t=115 102 units, d56aadda
+hash t=120 125 units, f4af9068
+hash t=125 121 units, a0261f03
+YARD t=128 team=1 buys Fighter x3 (450): the fleet is 0 of 7 wanted by 2:08, the treasury 481, 256 to spare, the income 28 a second
+hash t=130 119 units, 67fbf56e
+hash t=135 118 units, 67377c73
+hash t=140 115 units, b60b79ec
+hash t=145 106 units, 4ba65c4d
+YARD t=150 team=1 repeats Fighter x3 (450): Fighter squadrons are on repeat while the fleet is below its target
+hash t=150 103 units, 55699c07
+hash t=155 129 units, cf256ec3
+hash t=160 124 units, 21b2912e
+hash t=165 124 units, 0de38fec
+hash t=170 122 units, 5ce3f54d
+YARD t=171 team=1 repeats Fighter x3 (450): Fighter squadrons are on repeat while the fleet is below its target
+hash t=175 123 units, 268a902f
+hash t=180 116 units, 78e1919c
+hash t=185 112 units, 66780ffc
+hash t=190 141 units, b61ac16c
+hash t=195 135 units, bfa39626
+hash t=200 130 units, 20a46a6d
+YARD t=204 team=1 repeats Fighter x3 (450): Fighter squadrons are on repeat while the fleet is below its target
+hash t=205 126 units, 56070e84
+hash t=210 124 units, f8acde2c
+hash t=215 117 units, dcef82a0
+hash t=220 114 units, 5d524747
+hash t=225 144 units, d64c6c26
+hash t=230 140 units, a93734d3
+hash t=235 133 units, 691e81d0
+YARD t=235 team=0 buys Fighter x3 (450): the fleet is 0 of 13 wanted by 3:55, the treasury 781, 331 to spare, the income 24 a second
+hash t=240 131 units, 729646d0
+hash t=245 131 units, ec1ac929
+hash t=250 125 units, 7b3d7908
+FIELD_TRIP t=219.5 team=0 reason=pilots_down dur=35.0 result=docked hull=fighter resupplies=0
+hash t=255 118 units, b70ff769
+YARD t=256 team=0 repeats Fighter x3 (450): Fighter squadrons are on repeat while the fleet is below its target
+YARD t=257 team=1 holds Corvette Facility (900): the treasury 465 and the income 22 a second do not pay it within 20 seconds, so the next item may start
+YARD t=258 team=1 goes on with Corvette Facility (900): the treasury 268 pays it now or nothing else waits
+hash t=260 149 units, cf12222c
+hash t=265 142 units, 100881a7
+hash t=270 138 units, 5ffb9fcb
+hash t=275 137 units, 0d80038d
+YARD t=276 team=0 repeats Fighter x3 (450): Fighter squadrons are on repeat while the fleet is below its target
+hash t=280 136 units, 7dce30c0
+hash t=285 133 units, 53bc527c
+hash t=290 129 units, 8c0cc84d
+hash t=295 161 units, 608a98f6
+YARD t=296 team=0 repeats Fighter x3 (450): Fighter squadrons are on repeat while the fleet is below its target
+hash t=300 158 units, c296abf2
+hash t=305 150 units, bcef6aa7
+FIELD_TRIP t=288.5 team=0 reason=pilots_down dur=21.0 result=destroyed hull=fighter resupplies=0
+hash t=310 150 units, f0259fcd
+hash t=315 139 units, 03ab0203
+YARD t=316 team=0 repeats Fighter x3 (450): Fighter squadrons are on repeat while the fleet is below its target
+hash t=320 139 units, c567f7a4
+hash t=325 141 units, 6c314250
+YARD t=327 team=1 holds Lance Beams (550): the treasury 50 and the income 24 a second do not pay it within 20 seconds, so the next item may start
+hash t=330 172 units, f7de6cb6
+hash t=335 161 units, 8124cca2
+YARD t=336 team=0 repeats Fighter x3 (450): Fighter squadrons are on repeat while the fleet is below its target
+hash t=340 154 units, 37e830b9
+hash t=345 150 units, 36157ff6
+hash t=350 147 units, c858a418
+hash t=355 145 units, cce366ba
+YARD t=356 team=1 goes on with Lance Beams (550): the treasury 27 pays it now or nothing else waits
+YARD t=356 team=0 repeats Fighter x3 (450): Fighter squadrons are on repeat while the fleet is below its target
+hash t=360 143 units, 21293e6b
+hash t=365 170 units, 92c69610
+hash t=370 158 units, b064f094
+hash t=375 153 units, 8402a0d3
+YARD t=377 team=0 repeats Fighter x3 (450): Fighter squadrons are on repeat while the fleet is below its target
+hash t=380 156 units, 4ed1b34f
+hash t=385 153 units, abfbcccb
+hash t=390 147 units, 38aba9f0
+FIELD_TRIP t=358.5 team=0 reason=pilots_down dur=36.0 result=docked hull=fighter resupplies=0
+hash t=395 141 units, 156a2de7
+hash t=400 171 units, 43d98cbf
+YARD t=403 team=0 repeats Fighter x3 (450): Fighter squadrons are on repeat while the fleet is below its target
+hash t=405 171 units, af8f8f10
+hash t=410 169 units, 54d67abd
+hash t=415 165 units, 675c2b2f
+YARD t=417 team=0 buys Fighter x3 (450): the fleet is 22 of 23 wanted by 6:57, the treasury 762, 312 to spare, the income 37 a second
+hash t=420 156 units, 418893a6
+hash t=425 157 units, 783c7ca8
+hash t=430 157 units, 82394faa
+hash t=435 188 units, 652a2052
+hash t=440 190 units, 2ef10cb4
+hash t=445 182 units, 37447443
+hash t=450 173 units, 80cf8970
+hash t=455 164 units, 5c57043e
+hash t=460 160 units, 2deb83a1
+hash t=465 154 units, 8d51c57a
+hash t=470 190 units, 8e49852a
+hash t=475 186 units, 23b935c9
+YARD t=478 team=0 holds Lance Beams (550): the treasury 55 and the income 24 a second do not pay it within 20 seconds, so the next item may start
+hash t=480 181 units, b2681bf8
+hash t=485 168 units, 4a72d9aa
+FIELD_TRIP t=445.0 team=1 reason=pilots_down dur=41.0 result=docked hull=fighter resupplies=0
+hash t=490 159 units, 28f6d0e5
+FIELD_TRIP t=457.5 team=0 reason=pilots_down dur=35.0 result=docked hull=fighter resupplies=0
+hash t=495 152 units, c2761f91
+hash t=500 155 units, f8695eba
+YARD t=504 team=0 goes on with Lance Beams (550): the treasury 23 pays it now or nothing else waits
+YARD t=504 team=1 buys Fighter x3 (450): the fleet is 8 of 30 wanted by 8:24, the treasury 979, 1054 to spare, the income 37 a second
+hash t=505 189 units, 03b39f44
+hash t=510 186 units, 1bbf19a1
+hash t=515 177 units, 5fe4158b
+hash t=520 167 units, 93942adc
+hash t=525 161 units, e0c83910
+YARD t=525 team=1 repeats Fighter x3 (450): Fighter squadrons are on repeat while the fleet is below its target
+hash t=530 158 units, 7c6e273d
+hash t=535 166 units, 833cd336
+hash t=540 195 units, 17fbf9e8
+hash t=545 194 units, 67ecc77d
+YARD t=545 team=1 repeats Fighter x3 (450): Fighter squadrons are on repeat while the fleet is below its target
+hash t=550 187 units, 1e7a9d6c
+hash t=555 175 units, 329adbd3
+hash t=560 171 units, 2733d703
+hash t=565 167 units, 70d32a1e
+YARD t=565 team=1 repeats Fighter x3 (450): Fighter squadrons are on repeat while the fleet is below its target
+hash t=570 164 units, 977ae9d5
+hash t=575 194 units, bc45713a
+hash t=580 192 units, 7e4f00ec
+hash t=585 185 units, fd18d908
+YARD t=587 team=1 repeats Fighter x3 (450): Fighter squadrons are on repeat while the fleet is below its target
+hash t=590 180 units, b9c5df5a
+hash t=595 173 units, 573e696f
+hash t=600 168 units, fae154a6
+WARN pacing: no fight of 10 or more ships in the first 10:00 (biggest: 7 ships at 4:00)
+hash t=605 174 units, 3adeba72
+YARD t=607 team=1 repeats Fighter x3 (450): Fighter squadrons are on repeat while the fleet is below its target
+hash t=610 199 units, e70c3303
+hash t=615 200 units, 9eb14ec1
+hash t=620 199 units, 98332101
+FIELD_TRIP t=561.5 team=0 reason=pilots_down dur=61.0 result=docked hull=fighter resupplies=0
+hash t=625 195 units, 6a0e3cbc
+YARD t=625 team=1 buys Lance Fighter x3 (900): the fleet is 26 of 38 wanted by 10:25, the treasury 1132, 432 to spare, the income 44 a second
+YARD t=627 team=1 repeats Fighter x3 (450): Fighter squadrons are on repeat while the fleet is below its target
+hash t=630 195 units, 7f58991d
+YARD t=633 team=1 buys Logistics Corvette x1 (500): the fleet is 32 of 39 wanted by 10:33, the treasury 596, -103 to spare, the income 47 a second
+hash t=635 188 units, 5d806c5d
+hash t=640 192 units, 6e624421
+hash t=645 207 units, 5463fe59
+YARD t=647 team=1 repeats Fighter x3 (450): Fighter squadrons are on repeat while the fleet is below its target
+hash t=650 208 units, b3685d34
+hash t=655 203 units, c404c380
+hash t=660 197 units, 134aecd3
+hash t=665 194 units, 76c691ca
+hash t=670 188 units, 44eb16c4
+YARD t=672 team=1 buys Fighter x3 (450): the fleet is 36 of 41 wanted by 11:12, the treasury 768, 68 to spare, the income 43 a second
+hash t=675 194 units, 264ae9b6
+YARD t=677 team=1 repeats Fighter x3 (450): Fighter squadrons are on repeat while the fleet is below its target
+hash t=680 213 units, 4b447bc3
+hash t=685 206 units, 79136ad6
+FIELD_TRIP t=620.0 team=1 reason=pilots_down dur=67.0 result=docked hull=fighter resupplies=0
+hash t=690 202 units, 93f48607
+YARD t=690 team=1 buys Fighter x3 (450): the fleet is 42 of 43 wanted by 11:30, the treasury 862, 162 to spare, the income 40 a second
+hash t=695 203 units, 7b1a4c8b
+hash t=700 202 units, aaf0aaf8
+hash t=705 199 units, 2b6c07b1
+hash t=710 197 units, 953e711b
+hash t=715 224 units, 9fea8dbf
+hash t=720 217 units, cd247ae4
+hash t=725 206 units, a0ee87ab
+hash t=730 205 units, 4c7babfc
+hash t=735 203 units, 26146201
+hash t=740 200 units, 89882bae
+YARD t=744 team=0 buys Lance Fighter x3 (900): the fleet is 24 of 45 wanted by 12:24, the treasury 948, 698 to spare, the income 38 a second
+hash t=745 203 units, a4a9203a
+hash t=750 218 units, df2f8d47
+hash t=755 212 units, 126be1df
+hash t=760 206 units, d9b50539
+hash t=765 205 units, b3bb235f
+hash t=770 202 units, 9f0856fa
+FIELD_TRIP t=733.0 team=1 reason=pilots_down dur=40.0 result=docked hull=fighter resupplies=0
+hash t=775 199 units, c55a788d
+hash t=780 198 units, 78616c77
+hash t=785 217 units, f7d85bcc
+YARD t=788 team=0 buys Logistics Corvette x1 (500): the fleet is 27 of 47 wanted by 13:08, the treasury 880, 180 to spare, the income 37 a second
+hash t=790 211 units, c27e2fe4
+hash t=795 205 units, 6a843ecb
+hash t=800 199 units, 71121e32
+hash t=805 196 units, 706e39b1
+hash t=810 196 units, be2361e1
+hash t=815 198 units, 881f6123
+hash t=820 217 units, 75cae531
+hash t=825 217 units, b85469f1
+YARD t=826 team=0 buys Fighter x3 (450): the fleet is 28 of 48 wanted by 13:46, the treasury 1154, 454 to spare, the income 36 a second
+hash t=830 216 units, 352fe0ea
+hash t=835 212 units, 8848820f
+hash t=840 209 units, 5f312541
+t=14:00  sim 542.6 ms/sim-s  worst tick 38.2 ms  units=209 ships=81 minions=43 drones=28 projectiles=5 fps=100
+  Halcyon tr=345 ore=29999 fac=4 tech=9 turrets=6 killed_turrets=3 K/D=7/31 avg_cr=1675 ms=87% sh=0% flying={ "fighter": 26, "lance": 5, "logistics": 1, "bomber": 1 }
+  Cinder tr=1215 ore=32699 fac=7 tech=14 turrets=6 killed_turrets=6 K/D=7/27 avg_cr=1168 ms=100% sh=100% flying={ "fighter": 41, "lance": 5, "logistics": 1, "flak": 1 }
+hash t=845 207 units, 3a4b8c5c
+YARD t=847 team=0 repeats Fighter x3 (450): Fighter squadrons are on repeat while the fleet is below its target
+hash t=850 208 units, 802067d2
+hash t=855 224 units, eb026ab6
+hash t=860 222 units, e844b550
+hash t=865 220 units, ff3038ca
+YARD t=865 team=0 buys Fighter x3 (450): the fleet is 34 of 50 wanted by 14:25, the treasury 771, 71 to spare, the income 34 a second
+YARD t=867 team=0 repeats Fighter x3 (450): Fighter squadrons are on repeat while the fleet is below its target
+hash t=870 215 units, fd977492
+hash t=875 213 units, 8f02ee0a
+hash t=880 211 units, b2d25c16
+hash t=885 215 units, 2635b4d3
+YARD t=886 team=0 repeats Fighter x3 (450): Fighter squadrons are on repeat while the fleet is below its target
+YARD t=889 team=0 repeats Fighter x3 (450): Fighter squadrons are on repeat while the fleet is below its target
+hash t=890 233 units, deae0b86
+hash t=895 232 units, 8b4a9a82
+hash t=900 232 units, 4adae58e
+DET_HASH END t=900 232 units, 4adae58e
