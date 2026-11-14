@@ -1,0 +1,7 @@
+cores: 4
+setup: os=Windows image=win25-vs2026-20261103.298.1 cpu="Intel(R) Xeon(R) Platinum 8370C CPU @ 2.80GHz" godot=4.7.2 cache=on godot_cache=hit import_cache=hit godot_s=0 import_s=0 setup_s=12 timeout=timeout
+seed 26111320 exit 0 wall_s 516
+seed 26111316 exit 0 wall_s 1111
+seed 26111317 exit 0 wall_s 1133
+seed 26111318 exit 0 wall_s 1285
+seed 26111319 exit 0 wall_s 1407
