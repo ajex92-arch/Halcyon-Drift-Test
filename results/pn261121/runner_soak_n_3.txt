@@ -1,0 +1,7 @@
+cores: 4
+setup: os=Windows image=win25-vs2026-20261116.315.1 cpu="AMD EPYC 9V74 80-Core Processor                " godot=4.7.2 cache=on godot_cache=hit import_cache=hit godot_s=0 import_s=0 setup_s=11 timeout=timeout
+seed 26112108 exit 0 wall_s 778
+seed 26112109 exit 0 wall_s 851
+seed 26112107 exit 0 wall_s 863
+seed 26112110 exit 0 wall_s 917
+seed 26112106 exit 0 wall_s 925
