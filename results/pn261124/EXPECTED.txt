@@ -1,0 +1,54 @@
+# cloud results of batch pn261124: the files this batch leaves in this folder
+# runs: 4
+# jobs: 6
+# files: 50
+det_n900w_seed7.txt
+det_n900w_seed7_err.txt
+runner_det_n900w_0.txt
+det_l300w_seed7.txt
+det_l300w_seed7_err.txt
+runner_det_l300w_1.txt
+soak_n_seed26112401.txt
+soak_n_seed26112401_err.txt
+soak_n_seed26112402.txt
+soak_n_seed26112402_err.txt
+soak_n_seed26112403.txt
+soak_n_seed26112403_err.txt
+soak_n_seed26112404.txt
+soak_n_seed26112404_err.txt
+soak_n_seed26112405.txt
+soak_n_seed26112405_err.txt
+runner_soak_n_2.txt
+soak_n_seed26112406.txt
+soak_n_seed26112406_err.txt
+soak_n_seed26112407.txt
+soak_n_seed26112407_err.txt
+soak_n_seed26112408.txt
+soak_n_seed26112408_err.txt
+soak_n_seed26112409.txt
+soak_n_seed26112409_err.txt
+soak_n_seed26112410.txt
+soak_n_seed26112410_err.txt
+runner_soak_n_3.txt
+soak_l_seed26112411.txt
+soak_l_seed26112411_err.txt
+soak_l_seed26112412.txt
+soak_l_seed26112412_err.txt
+soak_l_seed26112413.txt
+soak_l_seed26112413_err.txt
+soak_l_seed26112414.txt
+soak_l_seed26112414_err.txt
+soak_l_seed26112415.txt
+soak_l_seed26112415_err.txt
+runner_soak_l_4.txt
+soak_l_seed26112416.txt
+soak_l_seed26112416_err.txt
+soak_l_seed26112417.txt
+soak_l_seed26112417_err.txt
+soak_l_seed26112418.txt
+soak_l_seed26112418_err.txt
+soak_l_seed26112419.txt
+soak_l_seed26112419_err.txt
+soak_l_seed26112420.txt
+soak_l_seed26112420_err.txt
+runner_soak_l_5.txt
