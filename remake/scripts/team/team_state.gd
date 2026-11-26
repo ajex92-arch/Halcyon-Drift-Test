@@ -243,6 +243,12 @@ var drone_loss_log := {}
 
 ## All the ore our drones have brought home (1 ore is worth 1 credit).
 var ore_delivered := 0.0
+## All the ore our pilots, turrets and minions took from enemy drones they shot
+## down (1 ore is worth 1 credit).
+var ore_stolen := 0.0
+## The part of ore_stolen taken in the first 10 minutes of the match: the snowball
+## measure.
+var ore_stolen_10m := 0.0
 ## Enemy ships our pilots destroyed (a pilot of ours made the last hit).
 var kills := 0
 ## Enemy turrets our side destroyed.

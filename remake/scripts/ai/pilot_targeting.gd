@@ -97,6 +97,11 @@ const STICK_BONUS := 250.0
 ## the search range (so a step back or a dodge doesn't end the duel). A
 ## tuning knob.
 const STICK_RANGE := 1.3
+## How much better (lower score) a drone with a full hold scores than an empty
+## one, on top of the flat 200 every drone already gets; scaled by how full the
+## hold is (drone_ore_pull). A tuning knob: more sends the pilots after the drones
+## that hold the most ore; 0 rates every drone the same.
+const DRONE_ORE_PULL := 200.0
 
 ## The pilot brain this part belongs to (we read its state and world, and
 ## set its lock_target). It is reached through a weak link: see `_ai_ref`.
@@ -114,6 +119,12 @@ var _ai_ref: WeakRef
 ## nearby units fast) fills with nearby units. PilotSenses has its own, so
 ## asking it questions while we walk through this list is safe.
 var _scratch: Array = []
+## The big ship whose part this pilot is aiming at (the parts build, see part_delta()), or null.
+var part_unit: Unit = null
+## The number of that part in the ship's parts (-1 = none: aim at the middle).
+var part_idx := -1
+## The match tick (World.tick_count) until which the choice is held.
+var part_until := -1
 
 
 ## Remember which brain we belong to.
@@ -122,7 +133,8 @@ func _init(owner: PilotAI) -> void:
 
 
 ## The best enemy within r of us to shoot, or null. Lower score = better.
-## Last hits, weak pilots and drones are juicy; turrets only while our
+## Last hits, weak pilots and drones (more so the more ore a drone holds,
+## drone_ore_pull) are juicy; turrets only while our
 ## minions tank them; an enemy with a rock between it and us (a shot would
 ## hit the rock) scores 700 worse. The pilot we are shooting now (the
 ## brain's target) counts STICK_BONUS better and may be up to STICK_RANGE
@@ -135,7 +147,7 @@ func pick_target(ship: Ship, r: float) -> Unit:
 	var best_s := INF
 	# Ships with big guns for big hulls and structures (they hurt those a lot
 	# while the damage modifiers are kept; this is the AI's choice either way).
-	var heavy_hitter := ship.hull_id in ["bomber", "ion", "destroyer", "battlecruiser", "lance"]
+	var heavy_hitter := Ships.has_role(ship.hull_id, "heavy_hitter")
 	# Are we inside an enemy turret's range ourselves (plus 150)?
 	var me_covered := brain.senses.enemy_turret_at(ship.global_position, ship.team, 150.0) != null
 	# The pilot we are shooting now, if it is still a live ship: it counts
@@ -147,7 +159,7 @@ func pick_target(ship: Ship, r: float) -> Unit:
 	# A bomber in the lane leaves small craft alone: its torpedoes miss them 8
 	# times in 10, and do only x0.35 to them while the damage modifiers are
 	# kept (minions, drones, wards and small pilots).
-	var bomber_lane := ship.hull_id == "bomber" and brain.state == "lane"
+	var bomber_lane := Ships.has_role(ship.hull_id, "torpedo") and brain.state == "lane"
 	var small := ship.is_small()
 	# Feature hook (eff:on): the weapon-aware target score, see EffFeature.
 	var eff_on := FeatureRegistry.active_for(world, ship.team, "eff")
@@ -178,13 +190,16 @@ func pick_target(ship: Ship, r: float) -> Unit:
 				# (hull and shields together: the hull alone stays at 100%
 				# until the shields are gone).
 				s += 200.0 - (1.0 - u.total_frac()) * 600.0
+				# A pilot that is overloaded or venting cannot fire back: prize it.
+				if u is Ship and (u as Ship).systems_off():
+					s -= float(PilotVentRules.row(brain.profile)["target_bonus"])
 				# Much bigger hulls (2+ size classes up) are a poor match,
 				# unless our weapons are made for them.
 				if u.size_class > ship.size_class + 1 and not heavy_hitter:
 					s += 500.0
 				# Torpedoes are wasted on strike craft (easy to dodge, and x0.35
 				# damage while the damage modifiers are kept).
-				if ship.hull_id == "bomber" and u.size_class == Rules.SIZE_SMALL:
+				if Ships.has_role(ship.hull_id, "torpedo") and u.size_class == Rules.SIZE_SMALL:
 					s += 800.0
 				# Shooting a pilot under their turret makes the turret pick us.
 				# Small and medium ships skip that, unless the pilot is nearly
@@ -210,6 +225,10 @@ func pick_target(ship: Ship, r: float) -> Unit:
 				s += 300.0 - (500.0 if heavy_hitter else 0.0)
 			Unit.K_MINING_DRONE:
 				s -= 200.0
+				# A fuller hold is worth more to shoot (the hold is shown to anyone
+				# who looks at the drone).
+				if Rules.drone_ore_steal():
+					s -= drone_ore_pull((u as MiningDrone).cargo, (u as MiningDrone).capacity)
 			Unit.K_WARD:
 				s -= 100.0
 			Unit.K_REPAIR_DRONE:
@@ -245,7 +264,7 @@ func pick_target(ship: Ship, r: float) -> Unit:
 	var ems := world.mothership(1 - ship.team)
 	# (ms:nosmall: small non-bomber ships leave the mothership alone.)
 	if ems != null and ems.alive and ems.hull_dist(ship.global_position) < r * 0.8 and not (FeatureRegistry.active_for(world, ship.team, "ms") and MsNosmallFeature.skips(ship)):
-		var s2 := ems.hull_dist(ship.global_position) + (100.0 if ship.size_class >= Rules.SIZE_LARGE or ship.hull_id == "bomber" else 900.0)
+		var s2 := ems.hull_dist(ship.global_position) + (100.0 if ship.size_class >= Rules.SIZE_LARGE or Ships.has_role(ship.hull_id, "siege") else 900.0)
 		if s2 < best_s:
 			best = ems
 			best_adj = 0.0
@@ -254,6 +273,67 @@ func pick_target(ship: Ship, r: float) -> Unit:
 		Game.count_usage("eff_picks")
 	brain.lock_target = best
 	return best
+
+
+## How much better (lower score) a drone holding `cargo` ore in a hold of `capacity`
+## scores in pick_target(): 0 for an empty hold (or less), DRONE_ORE_PULL for a full
+## one, in proportion between, and never more than DRONE_ORE_PULL.
+static func drone_ore_pull(cargo: float, capacity: float) -> float:
+	if cargo <= 0.0:
+		return 0.0
+	return DRONE_ORE_PULL * clampf(cargo / maxf(capacity, 1.0), 0.0, 1.0)
+
+
+## Where to aim on `target` instead of its middle: the offset (world units, from the target's middle) of the part a
+## strike craft pilot should shoot at, or Vector2.ZERO to aim at the middle as before. Only a small ship aiming at a
+## big ship that has parts gets one (the capital AI keeps its aim at the unit). The choice is made by PartAim and held
+## for PartAim.HOLD_TICKS ticks, so the aim does not flicker; an offline part is dropped at once.
+func part_delta(ship: Ship, target: Unit) -> Vector2:
+	if target == null or target.parts == null or not ship.is_small() or not target.alive:
+		return Vector2.ZERO
+	var world := ai.world
+	var parts: ShipSystems = target.parts
+	var now := world.tick_count
+	if part_unit != target or now >= part_until or parts.is_offline(part_idx):
+		_pick_part(ship, target, parts, now)
+	if part_unit != target or part_idx < 0:
+		return Vector2.ZERO
+	var off: Vector2 = (parts.rows[part_idx] as Dictionary)["off"]
+	return off.rotated(target.rotation)
+
+
+## Score the parts of `target` for pilot `ship` (PartAim) and keep the best one for PartAim.HOLD_TICKS ticks.
+func _pick_part(ship: Ship, target: Unit, parts: ShipSystems, now: int) -> void:
+	var main: WeaponMount = ship.mounts[0] if not ship.mounts.is_empty() else null
+	var strength := 0.0
+	var pierces := false
+	if main != null:
+		var d: Dictionary = main.def
+		strength = float(d["dmg"]) if d.has("dmg") else float(d.get("dps", 0.0)) * 0.5
+		pierces = int(d.get("pierce", 0)) >= 100
+	var away := target.global_position - ship.global_position
+	var leaving := away.length() > 1.0 and target.velocity.dot(away.normalized()) > PartAim.LEAVING_SPEED
+	var last := part_idx if part_unit == target else -1
+	var cands: Array = []
+	for i in parts.count():
+		var row: Dictionary = parts.rows[i]
+		var off: Vector2 = row["off"]
+		var wp := target.global_position + off.rotated(target.rotation)
+		var sec := int(row["sec"])
+		var a_eff := 0.0
+		if target.armour != null and sec >= 0 and target.armour.a_max[sec] > 0:
+			a_eff = float(target.armour.armour_value) * float(target.armour.a_hp[sec]) / float(target.armour.a_max[sec])
+		var zone := ShipParts.zone_of(off, target.spine_len, target.spine_off)
+		var up := target.shields != null and target.shields.max_total > 0.0 and target.shields.values[zone] > 0.0
+		cands.append({"id": i, "cls": int(row["cls"]), "offline": parts.is_offline(i), "exposed": bool(row["exposed"]),
+			"shield_up": up, "a_eff": a_eff, "friends": parts.friends_on(i, ship.team, ship.uid, now),
+			"dist": ship.global_position.distance_to(wp)})
+	var k := PartAim.choose(cands, leaving, Ships.has_role(ship.hull_id, "torpedo"), strength, pierces, last)
+	part_unit = target
+	part_idx = int((cands[k] as Dictionary)["id"]) if k >= 0 else -1
+	part_until = now + PartAim.HOLD_TICKS
+	if part_idx >= 0:
+		parts.mark_aim(ship.uid, ship.team, part_idx, part_until)
 
 
 ## A structure worth attacking now (DESIGN A9: push the wave into turrets),
@@ -277,7 +357,7 @@ func push_target(ship: Ship, station: Vector2) -> Unit:
 	var brain := ai
 	var world := brain.world
 	# Not when hurt (below 45% hull), and not in a scout or logistics ship.
-	if ship.hull_frac() < 0.45 or ship.hull_id == "scout" or ship.hull_id == "logistics":
+	if ship.hull_frac() < 0.45 or Ships.has_role(ship.hull_id, "no_hunt"):
 		return null
 	# Feature hooks that re-score the turrets (usually none).
 	var hooks := world.push_weight_hooks
@@ -340,7 +420,7 @@ func push_target(ship: Ship, station: Vector2) -> Unit:
 	# Step 2: no turret or post: the enemy mothership, if it is close enough.
 	var ems := world.mothership(1 - ship.team)
 	if ems != null and ems.alive and ems.hull_dist(station) < PUSH_RANGE + 1500.0:
-		if not ship.is_small() or ship.hull_id == "bomber" or brain.senses.minions_at_hull(ems, ship.team, 2500.0) >= 3:
+		if not ship.is_small() or Ships.has_role(ship.hull_id, "siege") or brain.senses.minions_at_hull(ems, ship.team, 2500.0) >= 3:
 			# (ms:nosmall: a small non-bomber ship never pushes the mothership.)
 			if FeatureRegistry.active_for(world, ship.team, "ms") and MsNosmallFeature.skips(ship):
 				return null
@@ -369,12 +449,13 @@ func prey(ship: Ship, station: Vector2) -> Unit:
 	# hull, and never in a scout or logistics ship.
 	var si := Rules.size_index(ship.size_class)
 	var seek: float = SEEK[si]
-	if seek <= 0.0 or ship.hull_frac() < 0.5 or ship.hull_id in ["scout", "logistics"]:
+	if seek <= 0.0 or ship.hull_frac() < 0.5 or Ships.has_role(ship.hull_id, "no_hunt"):
 		return null
 	var leash: float = LEASH[si]
 	var best: Unit = null
 	var best_s := INF
-	for u: Unit in brain.world.unit_hash.query(ship.global_position, seek, _scratch):
+	# (World.ship_hash: only the pilot ships, in unit_hash's order; F311.)
+	for u: Unit in brain.world.ship_hash.query(ship.global_position, seek, _scratch):
 		# Step 2: live, visible enemy pilot ships only.
 		if u.kind != Unit.K_SHIP or not u.alive or u.team == ship.team or u.team == Rules.NEUTRAL:
 			continue
@@ -395,7 +476,7 @@ func prey(ship: Ship, station: Vector2) -> Unit:
 		# Match-ups: bombers hunt big hulls; everyone else avoids frigates
 		# and capitals unless they're nearly dead (30% hull or less), since
 		# flak shreds strike craft.
-		if ship.hull_id == "bomber":
+		if Ships.has_role(ship.hull_id, "torpedo"):
 			if u.size_class == Rules.SIZE_SMALL:
 				continue
 			s -= 400.0
@@ -431,9 +512,9 @@ func prey(ship: Ship, station: Vector2) -> Unit:
 func farm_target(ship: Ship, front: Minion) -> Unit:
 	var brain := ai
 	var world := brain.world
-	if ship.hull_frac() < 0.5 or ship.hull_id == "scout" or ship.hull_id == "logistics":
+	if ship.hull_frac() < 0.5 or Ships.has_role(ship.hull_id, "no_hunt"):
 		return null
-	var heavy_hitter := ship.hull_id in ["bomber", "ion", "destroyer", "battlecruiser", "lance"]
+	var heavy_hitter := Ships.has_role(ship.hull_id, "heavy_hitter")
 	# The enemy mothership's reach: no minion closer to its hull than this is farmed.
 	var ems := world.mothership(1 - ship.team)
 	var ms_reach := Weapons.reach(Weapons.get_def("ms_ion")) + MOTHERSHIP_MARGIN
@@ -447,7 +528,7 @@ func farm_target(ship: Ship, front: Minion) -> Unit:
 			continue
 		if brain.skip_id != 0 and m.get_instance_id() == brain.skip_id and world.time < brain.skip_until:
 			continue
-		if ship.hull_id == "bomber" and m.size_class == Rules.SIZE_SMALL:
+		if Ships.has_role(ship.hull_id, "torpedo") and m.size_class == Rules.SIZE_SMALL:
 			continue
 		# Step 2: not within the enemy mothership's guns.
 		if ems != null and ems.alive and ems.hull_dist(m.global_position) < ms_reach:

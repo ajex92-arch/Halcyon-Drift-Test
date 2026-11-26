@@ -6,7 +6,8 @@ extends PanelContainer
 ##
 ## HOW IT WORKS: the layout is the scene scenes/ui/scoreboard.tscn: a box
 ## (the "ScoreLook" look) holding a scroll area, Scroll, with one column in
-## it, Col > HalcyonHead, Halcyon, CinderHead, Cinder. Each team has a
+## it, Col > HalcyonHead, Halcyon, CinderHead, Cinder (T-126a: _ready() moves each heading into a row with a 12 px team mark
+## before it, TeamMarks). Each team has a
 ## heading line and a grid (a table)
 ## whose first row is the column titles (Pilot, Ship, K / D / A, Minions,
 ## Bounties, Earned, Status); each title's minimum width in the scene is
@@ -63,6 +64,20 @@ func _ready() -> void:
 		_scroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	for t in 2:
 		_heads[t].add_theme_color_override("font_color", Palette.team(t))
+		# T-126a: a 12 px team mark (TeamMarks) before the heading, 4 px gap: the label moves into a row with it, in the same
+		# place of the column.
+		var head := _heads[t]
+		var col := head.get_parent()
+		var at := head.get_index()
+		var row := HBoxContainer.new()
+		row.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		row.add_theme_constant_override("separation", 0)
+		col.add_child(row)
+		col.move_child(row, at)
+		head.reparent(row, false)
+		head.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		row.add_child(TeamMarks.View.new(t, 12.0, ThemeDB.fallback_font.get_height(17)))
+		row.move_child(row.get_child(row.get_child_count() - 1), 0)
 
 
 ## Remember the world and fill the table once.

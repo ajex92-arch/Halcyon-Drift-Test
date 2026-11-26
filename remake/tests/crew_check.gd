@@ -56,6 +56,7 @@ var _next_uid := 91000
 ## main.gd calls this once, right after the World is built.
 func setup(w: World) -> void:
 	world = w
+	SquadronRules.use_squad_brain = false  # this check pins the stand-in's own internals
 	world.minion_director.next_wave = INF
 
 

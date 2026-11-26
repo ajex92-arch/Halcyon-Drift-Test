@@ -51,6 +51,7 @@ var _ran := false
 ## main.gd calls this once, right after the World is built.
 func setup(w: World) -> void:
 	world = w
+	SquadronRules.use_squad_brain = false  # this check pins the stand-in's own internals
 	world.minion_director.next_wave = INF
 
 
@@ -379,14 +380,14 @@ func _bought_order_cases() -> void:
 	_check("bought orders: Move is accepted at once", r == "", r)
 	world.tick_count += 1
 	q.run_due()
-	_check("bought orders: Move writes the squadron's order and the manoeuvre stance", str(sq.order.get("kind", "")) == OrderKinds.MOVE and sq.order.get("target") == spot and sq.move_stance == 1)
+	_check("bought orders: Move writes the squadron's order and leaves its move stance alone (manoeuvre by default)", str(sq.order.get("kind", "")) == OrderKinds.MOVE and sq.order.get("target") == spot and sq.move_stance == 1)
 	Standin._think(world, ship, ai)
 	_check("bought orders: the stand-in holds at the Move point", ai.hold_point.distance_to(Vector2(spot)) < 0.01)
 	r = q.submit(Order.make(OrderKinds.HOLD, 0, seat, true, {}, [sq.id], "point", Vector2i(10, 20)))
 	_check("bought orders: Hold is accepted", r == "", r)
 	world.tick_count += 1
 	q.run_due()
-	_check("bought orders: Hold writes the hold stance (0) and the point", str(sq.order.get("kind", "")) == OrderKinds.HOLD and sq.move_stance == 0)
+	_check("bought orders: Hold writes the order and the point and no longer overwrites the move stance (RT12: the brain reads the Hold order itself)", str(sq.order.get("kind", "")) == OrderKinds.HOLD and sq.move_stance == 1)
 	r = q.submit(Order.make(OrderKinds.HOLD, 0, seat, true, {}, [sq.id], "point", Vector2i(10, 20)))
 	world.tick_count += 1
 	q.run_due()
@@ -421,7 +422,7 @@ func _bought_order_cases() -> void:
 	r = q.submit(Order.make(OrderKinds.HOLD, 0, seat, true, {}, [sq.id, sq2.id], "point", Vector2i(5, 6)))
 	world.tick_count += 1
 	q.run_due()
-	_check("bought orders: every named squadron gets the order", r == "" and str(sq.order.get("kind", "")) == OrderKinds.HOLD and str(sq2.order.get("kind", "")) == OrderKinds.HOLD and sq2.move_stance == 0)
+	_check("bought orders: every named squadron gets the order", r == "" and str(sq.order.get("kind", "")) == OrderKinds.HOLD and str(sq2.order.get("kind", "")) == OrderKinds.HOLD and sq2.move_stance == 1)
 	_reset(0.0)
 
 

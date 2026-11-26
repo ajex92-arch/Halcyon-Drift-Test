@@ -83,6 +83,9 @@ signal minion_launched(m: Node, wave_id: float)
 ## Sent by weapons, combat, effects, ships, the mothership and the hangar;
 ## only Sfx listens and plays them.
 signal cue(name: String, pos: Vector2)
+## A spoken team call or reply: `line` is an id of CalloutData.ORDER, `team` the team that says it.
+## Sent by CalloutData.say; only Sfx listens, and it plays the line only for the team on screen.
+signal callout(line: String, team: int)
 ## An admiral order finished. `action` names the order, `ok` says whether
 ## it worked, and `message` is "" on success or the reason it failed. Sent
 ## by AdmiralCommand; the HUD listens.
@@ -104,6 +107,11 @@ signal admiral_field(team: int, started: bool, reason: String)
 ## listens. For a killing hit
 ## it comes just before unit_killed.
 signal damage_applied(target: Node, info: RefCounted, amount: float, hull_dmg: float)
+## S7A: a hit was applied to `target` (a Unit): `info` is the hit's DamageInfo, `hull_dmg` what the hull took (0 when the shields
+## soaked it all) and `zone_broke` is true when the hit emptied a shield zone of the target (the zone's flash had just started). Sent
+## by Combat.apply_damage() for every applied hit, whatever emit_damage_events says, but never in --sim-only runs (nothing is drawn
+## there). Only the HUD's hit markers (HitMarkers) listen; the simulation never does, and the emit writes no field.
+signal hit_landed(target: Node, info: RefCounted, hull_dmg: float, zone_broke: bool)
 ## Something happened that a team may want to hear about: `ev` is one record of
 ## the World's event stream (RtsEvents): {tick, kind, team, pos, uid, data}, for
 ## example an order carried out or refused, research done, a turret lost, a ship

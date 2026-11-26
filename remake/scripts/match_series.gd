@@ -27,7 +27,8 @@ extends Node
 ##   tr    per team the treasury (whole)
 ##   fly   per team how many pilot ships are in space
 ## The pilots counted are the pilots of the team, the Admiral's seat included; the ships a team
-## bought in the yard are not. An event is a Dictionary with t and k ("ship", "turret", "post",
+## bought in the yard are not. The value is worked out by team_value(), which the HUD's top bar calls
+## too (for the enemy team it counts only the ships the viewer can see). An event is a Dictionary with t and k ("ship", "turret", "post",
 ## "bay" or "mothership") and these fields: for a ship death team (the victim's), by (the scoring
 ## team, or -1 for none), pilot (a pilot landed the killing blow), victim and killer (callsigns;
 ## killer is "" when no pilot did it), hull, size (0 to 3), lost (the ship's bounty_value),
@@ -40,7 +41,8 @@ extends Node
 ## `save_path` (set by MatchRecorder; empty means no file).
 ##
 ## WHO USES IT: main.gd (makes it and hands it to the HUD); MatchRecorder (sets save_path);
-## EndScreen (reads samples and events, for the graph); tests/series_check.gd checks it.
+## EndScreen (reads samples and events, for the graph); the HUD's top bar (HudTopBar reads each team's
+## value through team_value()); tests/series_check.gd and tests/ahead_bar_check.gd check it.
 
 ## Seconds of match time between two samples.
 const EVERY := 10.0
@@ -184,7 +186,6 @@ func _event(ev: Dictionary) -> void:
 
 ## Take a sample of the match now.
 func _take() -> void:
-	var val := [[0.0, 0.0, 0.0], [0.0, 0.0, 0.0]]
 	var cr := [0.0, 0.0]
 	var fly := [0, 0]
 	for p: PilotProfile in world.profiles:
@@ -192,16 +193,9 @@ func _take() -> void:
 			continue
 		var t := p.team
 		cr[t] += p.credits
-		var s: Ship = p.ship if p.state == "flying" and p.ship != null and is_instance_valid(p.ship) and p.ship.alive else null
-		if s != null:
+		if _flying_ship(p) != null:
 			fly[t] += 1
-		var row: Array = val[t]
-		if p.state != "dead" and p.hull_id != "":
-			row[0] += float(Ships.HULLS[p.hull_id]["price"])
-			var mods: Array = s.modules if s != null else p.modules
-			for m: String in mods:
-				row[1] += Modules.price_for(m, p.hull_id)
-		row[2] += _gear_value(p)
+	var val := [team_value(world, 0), team_value(world, 1)]
 	var ms := [0.0, 0.0]
 	var sh := [0.0, 0.0]
 	var tr := [0, 0]
@@ -218,9 +212,49 @@ func _take() -> void:
 	})
 
 
+## Pilot `p`'s ship while it is in space (the pilot is flying and the ship is whole in the world and
+## alive), else null.
+static func _flying_ship(p: PilotProfile) -> Ship:
+	if p.state == "flying" and p.ship != null and is_instance_valid(p.ship) and p.ship.alive:
+		return p.ship
+	return null
+
+
+## Add pilot `p`'s value to `row` ([ships, modules, gear], list prices, unrounded): the hull the pilot
+## owns (nothing for a dead pilot or one with no hull), the modules on the flying ship (or the ones the
+## pilot has fitted while docked) and the pilot's gear. The same sums, in the same order, as the
+## series takes them, so the series and the top bar count a pilot alike.
+static func add_pilot_value(p: PilotProfile, row: Array) -> void:
+	var s: Ship = _flying_ship(p)
+	if p.state != "dead" and p.hull_id != "":
+		row[0] += float(Ships.HULLS[p.hull_id]["price"])
+		var mods: Array = s.modules if s != null else p.modules
+		for m: String in mods:
+			row[1] += Modules.price_for(m, p.hull_id)
+	row[2] += _gear_value(p)
+
+
+## What team `team` holds, [ships, modules, gear] in list prices (floats, not rounded): every pilot of
+## the team, the Admiral's seat included and bought crews left out. With a `viewer` team at or above 0
+## that is not `team`, a pilot counts only while the pilot's ship is in space and `viewer` can see it
+## (Unit.visible_to), so an enemy's value is only what the viewer sees; with the default -1 every
+## pilot counts. It does not know the No fog option: the caller decides whether there is a viewer.
+static func team_value(world: World, team: int, viewer: int = -1) -> Array:
+	var row := [0.0, 0.0, 0.0]
+	for p: PilotProfile in world.profiles:
+		if Squads.is_crew(p) or p.team != team:
+			continue
+		if viewer >= 0 and team != viewer:
+			var s: Ship = _flying_ship(p)
+			if s == null or not s.visible_to(viewer):
+				continue
+		add_pilot_value(p, row)
+	return row
+
+
 ## The list price of the gear in pilot `p`'s slots: each item at its price, a Mk II item at what it
 ## cost in all; repair kits are left out.
-func _gear_value(p: PilotProfile) -> float:
+static func _gear_value(p: PilotProfile) -> float:
 	var v := 0.0
 	for slot: Dictionary in p.inventory:
 		if slot.is_empty() or slot["id"] == Items.KIT["id"]:

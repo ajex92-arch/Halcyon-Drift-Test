@@ -126,6 +126,10 @@ func setup(w: World, t: int, at: Vector2, facing: float) -> void:
 	hull_max = base_hull_max
 	hull = hull_max
 	hull_resist = float(def["hull_resist"])
+	# Its row names no armour sections today (null: the flat resistance above
+	# works), and the row stays open to them.
+	armour = ArmourSections.make(def, hull_max)
+	spine_len = float(def.get("spine", 0.0))
 	base_shield = float(def["shield"])
 	base_regen = float(def["shield_regen"])
 	shields = ShieldZones.new()

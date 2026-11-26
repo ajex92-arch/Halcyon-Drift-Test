@@ -31,6 +31,12 @@ const TEXT_NO_TARGET := "No target under the reticle"
 const TEXT_NO_BIG := "No big ship under the reticle"
 ## The target or the ward is farther from the leader than the wing may go.
 const TEXT_FAR := "Too far for the wing"
+## A merge names a host of another ship type (starts with the mapped text of a bad value, so its code is "value").
+const TEXT_MERGE_HULL := "That order is not valid: only the same ship type can merge"
+## A merge names a host that has no room.
+const TEXT_MERGE_FULL := "That order is not valid: that squadron is full"
+## A merge names the donor itself as the host.
+const TEXT_MERGE_SELF := "That order is not valid: a squadron cannot merge into itself"
 
 ## An enemy this close (world units) to the reticle can be picked.
 const PICK_ENEMY_RADIUS := 300.0
@@ -43,11 +49,11 @@ const ROLE_LABELS := {"follow": "Form on me", "defend": "Cover me"}
 
 # --- registering ------------------------------------------------------------------------------
 
-## Hand the checker and the handler of the seven squad kinds, and of STOP (a bought squadron's order), to world
+## Hand the checker and the handler of the seven squad kinds, and of STOP, DEFEND, PUSH_LANE and MERGE (a bought squadron's orders), to world
 ## `w`'s order queue.
 static func register(w: World) -> void:
 	var kinds: Array = OrderKinds.SQUADRON_KINDS.duplicate()
-	kinds.append(OrderKinds.STOP)
+	kinds.append_array([OrderKinds.STOP, OrderKinds.DEFEND, OrderKinds.PUSH_LANE, OrderKinds.MERGE])
 	for kind: String in kinds:
 		w.orders.checkers[kind] = func(o: Dictionary) -> String: return check(w, o)
 		w.orders.handlers[kind] = func(o: Dictionary) -> String: return handle(w, o)
@@ -122,9 +128,11 @@ static func check(w: World, o: Dictionary) -> String:
 
 ## The rules for an order to bought squadrons (every record the order names is checked, not only the first): only
 ## OrderKinds.BOUGHT_KINDS are carried out (every other kind is "Comes with a later stage"); each record must be a
-## bought squadron of the order's own team that still has a ship alive; Move and Hold take a point, Stop none, Attack
+## bought squadron of the order's own team that still has a ship alive. Move and Hold take a point, Stop none, Attack
 ## a unit of another team that the order's team sees now (the enemy mothership too; there is no leash, a bought
-## squadron flies as far as the target is). Returns "" or the refusal text.
+## squadron flies as far as the target is). Defend takes a point, a unit of the order's own team or a lane; Escort
+## any friendly ship (a big one too) that is not in the squadron itself; Push lane a lane id. The stance and formation
+## orders take no target. Merge takes the host squadron (see _check_merge). Returns "" or the refusal text.
 static func check_bought(w: World, o: Dictionary) -> String:
 	var kind := str(o.get("kind", ""))
 	if not OrderKinds.BOUGHT_KINDS.has(kind):
@@ -139,34 +147,150 @@ static func check_bought(w: World, o: Dictionary) -> String:
 		if rec.team != team:
 			return OrderKinds.TEXT_SEAT
 	var target_kind := str(o.get("target_kind", "none"))
-	if kind == OrderKinds.STOP:
-		if target_kind != "none":
-			return OrderKinds.TEXT_VALUE
-	elif kind == OrderKinds.ATTACK:
-		if target_kind != "unit":
-			return OrderKinds.TEXT_VALUE
-		var t := w.orders.unit_by_uid(int(o.get("target", 0)))
-		if t == null or t.team == team:
-			return TEXT_NO_TARGET
-		if not t.visible_to(team):
-			return TEXT_NOT_SEEN
-	elif target_kind != "point":
-		return OrderKinds.TEXT_VALUE
+	match kind:
+		OrderKinds.STOP, OrderKinds.SET_STANCE, OrderKinds.SET_FORMATION:
+			if target_kind != "none":
+				return OrderKinds.TEXT_VALUE
+		OrderKinds.ATTACK:
+			if target_kind != "unit":
+				return OrderKinds.TEXT_VALUE
+			var t := w.orders.unit_by_uid(int(o.get("target", 0)))
+			if t == null or t.team == team:
+				return TEXT_NO_TARGET
+			if not t.visible_to(team):
+				return TEXT_NOT_SEEN
+		OrderKinds.DEFEND:
+			if target_kind == "unit":
+				var d := w.orders.unit_by_uid(int(o.get("target", 0)))
+				if d == null or not d.alive:
+					return OrderKinds.TEXT_GONE_UNIT
+				if d.team != team:
+					return OrderKinds.TEXT_VALUE
+			elif target_kind == "lane":
+				if not MapLayout.LANE_ORDER.has(str(o.get("target", ""))):
+					return OrderKinds.TEXT_VALUE
+			elif target_kind != "point":
+				return OrderKinds.TEXT_VALUE
+		OrderKinds.ESCORT:
+			if target_kind != "unit":
+				return OrderKinds.TEXT_VALUE
+			var c := w.orders.unit_by_uid(int(o.get("target", 0)))
+			if c == null or not c.alive:
+				return OrderKinds.TEXT_GONE_UNIT
+			if c.team != team or not (c is Ship or c is Mothership):
+				return OrderKinds.TEXT_VALUE
+			for sid in o.get("subjects", []):
+				if (w.squads.get(int(sid)) as Squad).member_uids.has(c.uid):
+					return OrderKinds.TEXT_VALUE
+		OrderKinds.PUSH_LANE:
+			if target_kind != "lane" or not MapLayout.LANE_ORDER.has(str(o.get("target", ""))):
+				return OrderKinds.TEXT_VALUE
+		OrderKinds.MERGE:
+			return _check_merge(w, o, team)
+		_:
+			if target_kind != "point":
+				return OrderKinds.TEXT_VALUE
 	return ""
 
 
-## Carry out a Move, Hold, Stop or Attack for every bought squadron the order names: each record's standing order is
-## written (the shape of a wing's, with no settings), and its move stance is hold (0) for Hold, manoeuvre (1)
-## otherwise. The stand-in brain (Standin.hold_point_of, Standin._attack) reads the order; a repeat is not looked for.
+## The merge rules: the host (the order's target) is a bought squadron of the order's team with a ship alive, no donor is
+## the host, every donor flies the host's hull, and the host has room (fewer ships than its maximum). Returns "" or the
+## refusal text.
+static func _check_merge(w: World, o: Dictionary, team: int) -> String:
+	if str(o.get("target_kind", "")) != "squadron":
+		return OrderKinds.TEXT_VALUE
+	var host: Squad = w.squads.get(int(o.get("target", 0)))
+	if host == null or host.member_uids.is_empty():
+		return OrderKinds.TEXT_GONE_SQUAD
+	if not is_bought(host):
+		return OrderKinds.TEXT_VALUE
+	if host.team != team:
+		return OrderKinds.TEXT_SEAT
+	for sid in o.get("subjects", []):
+		var donor: Squad = w.squads.get(int(sid))
+		if donor.id == host.id:
+			return TEXT_MERGE_SELF
+		if donor.hull_id != host.hull_id:
+			return TEXT_MERGE_HULL
+	if host.member_uids.size() >= host.max_members:
+		return TEXT_MERGE_FULL
+	return ""
+
+
+## Carry out an order for every bought squadron it names. Move, Hold and Attack write the squadron's standing order (the goal
+## is kept: a Hold pauses it, a Move or an Attack that ends gives the squadron back to it). Stop clears the goal and stands
+## still. Defend, Escort and Push lane write a new goal and clear the standing order and the old goal's notes. The stance
+## and formation orders write only the settings they carry. Merge moves ships from the donors to the host (see _merge). The
+## move stance is no longer overwritten by an order (it used to be set to hold by a Hold and to manoeuvre by every other order);
+## the brain treats a Hold order as the hold leash by the order itself. A repeat is not looked for.
 static func _handle_bought(w: World, o: Dictionary) -> String:
 	var kind := str(o["kind"])
+	if kind == OrderKinds.MERGE:
+		return _merge(w, o)
 	var apply_tick := int(o["apply_tick"])
+	var settings: Dictionary = o["settings"]
 	for sid in o["subjects"]:
 		var rec: Squad = w.squads.get(int(sid))
 		if rec == null:
 			return OrderKinds.TEXT_GONE_SQUAD
-		rec.order = {"kind": kind, "target_kind": str(o["target_kind"]), "target": o["target"], "tick": apply_tick, "settings": (o["settings"] as Dictionary).duplicate()}
-		rec.move_stance = 0 if kind == OrderKinds.HOLD else 1
+		match kind:
+			OrderKinds.SET_STANCE:
+				if settings.has("fire"):
+					rec.fire_stance = int(settings["fire"])
+				if settings.has("move"):
+					rec.move_stance = int(settings["move"])
+			OrderKinds.SET_FORMATION:
+				rec.formation = int(settings["formation"])
+			OrderKinds.DEFEND, OrderKinds.ESCORT, OrderKinds.PUSH_LANE:
+				rec.goal = {"kind": kind, "target_kind": str(o["target_kind"]), "target": o["target"], "tick": apply_tick, "settings": settings.duplicate(), "phase": ""}
+				rec.order = {}
+				_forget_goal_notes(rec)
+			OrderKinds.STOP:
+				rec.goal = {}
+				_forget_goal_notes(rec)
+				rec.order = {"kind": kind, "target_kind": str(o["target_kind"]), "target": o["target"], "tick": apply_tick, "settings": settings.duplicate()}
+			_:
+				rec.order = {"kind": kind, "target_kind": str(o["target_kind"]), "target": o["target"], "tick": apply_tick, "settings": settings.duplicate()}
+	return ""
+
+
+## Forget the private notes of the old goal in `rec`'s engine notes (the straggler count, the push point, the last
+## places, the blocked mark), so the next goal starts clean.
+static func _forget_goal_notes(rec: Squad) -> void:
+	for key: String in ["strag", "push_at", "push_t", "push_lane", "defend_last", "charge_last", "blocked_until", "blocked_at", "prog_t"]:
+		rec.engine.erase(key)
+
+
+## Merge: the ships of the donors (the order's subjects, in order, each in member order) fill the host (the order's target) up
+## to its maximum; the rest stay in their donor, short. A ship that moves has its crew's squadron number changed to the host's.
+## A donor left with no ship is kept as an idle record with no members (nothing removes a squadron record today); the event
+## "squadron_merged" is filed for each donor that gave ships. The host keeps its goal, stances and formation.
+static func _merge(w: World, o: Dictionary) -> String:
+	var host: Squad = w.squads.get(int(o["target"]))
+	if host == null:
+		return OrderKinds.TEXT_GONE_SQUAD
+	for sid in o["subjects"]:
+		var donor: Squad = w.squads.get(int(sid))
+		if donor == null:
+			return OrderKinds.TEXT_GONE_SQUAD
+		var keep: Array[int] = []
+		var moved := 0
+		for uid: int in donor.member_uids:
+			if host.member_uids.size() < host.max_members:
+				host.member_uids.append(uid)
+				var ship: Variant = w.by_uid.get(uid)
+				if ship != null and is_instance_valid(ship) and (ship as Ship).profile != null:
+					(ship as Ship).profile.squad_id = host.id
+				moved += 1
+			else:
+				keep.append(uid)
+		donor.member_uids = keep
+		if keep.is_empty():
+			donor.order = {}
+			donor.goal = {}
+			donor.state = 0
+		if moved > 0 and w.events_rts != null:
+			w.events_rts.push({"kind": "squadron_merged", "team": host.team, "uid": 0, "data": {"squad": host.id, "donor": donor.id, "moved": moved}})
 	return ""
 
 

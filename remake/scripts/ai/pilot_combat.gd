@@ -117,7 +117,8 @@ func steer(ship: Ship) -> void:
 			if not ship.is_small() and not ship.mounts.is_empty() and ship.mounts[0].mount_type == WeaponMount.FIXED:
 				arc_ok = absf(Util.ang_diff(ship.rotation, to_t.angle())) < 0.1
 			if to_t.length() < PilotTargeting.main_reach(ship) and arc_ok:
-				c.aim_point = brain.target.global_position
+				var pd := brain.targeting.part_delta(ship, brain.target)
+				c.aim_point = brain.target.global_position + pd if pd != Vector2.ZERO else brain.target.global_position
 				c.fire = true
 	# Step 3: a Bomber's run that this tick's decisions did not carry on is
 	# cancelled, not launched (PilotRun.settle()).
@@ -140,6 +141,25 @@ func target_far(ship: Ship) -> bool:
 	else:
 		d = ship.global_position.distance_to(target.global_position) - target.radius
 	return d > maxf(3500.0, PilotTargeting.main_reach(ship) * 2.5)
+
+
+## The point a big ship turns its hull toward to bring its guns to bear on `tp`: the point itself for
+## every hull but a ship of the line (its main guns sit on the beams), whose nearer beam is turned to
+## the target instead: a spot 400 units off, in the direction of the target turned a quarter turn away
+## on the side that needs the smaller turn from the nose.
+static func face_toward(ship: Ship, tp: Vector2) -> Vector2:
+	if not bool(ship.def.get("side_battery", false)):
+		return tp
+	var bearing := (tp - ship.global_position).angle()
+	var best := INF
+	var want := bearing
+	for side in [1.0, -1.0]:
+		var desired: float = bearing - float(side) * PI * 0.5
+		var turn := absf(Util.ang_diff(ship.rotation, desired))
+		if turn < best:
+			best = turn
+			want = desired
+	return ship.global_position + Vector2.from_angle(want) * 400.0
 
 
 ## Fly the attack on the brain's target (see HOW IT WORKS at the top).
@@ -172,10 +192,12 @@ func fight(ship: Ship) -> void:
 		lead = tp
 	var err := (1.0 - brain.skill) * 0.12 * sin(brain.world.time * 1.3 + float(brain.profile.slot))
 	var aim := ship.global_position + (lead - ship.global_position).rotated(err)
-	c.aim_point = aim
+	# A strike craft at a big ship with parts aims at the part it picked (PartAim), not at the middle.
+	var part_off := brain.targeting.part_delta(ship, target)
+	c.aim_point = aim + part_off if part_off != Vector2.ZERO else aim
 	if ship.size_class >= Rules.SIZE_MEDIUM:
 		# Big ships: turrets aim; the hull holds its station facing the enemy.
-		c.face_point = tp if d > 200.0 else ship.global_position + Vector2.from_angle(ship.rotation) * 400.0
+		c.face_point = face_toward(ship, tp) if d > 200.0 else ship.global_position + Vector2.from_angle(ship.rotation) * 400.0
 		# Where to hold: for a push, the standoff point (goal); if our goal
 		# is far from the target (more than 60% of our reach), the goal;
 		# otherwise a spot at 75% of our reach from the target, on our side.
@@ -187,14 +209,14 @@ func fight(ship: Ship) -> void:
 			hold = brain.goal
 		else:
 			hold = tp + (ship.global_position - tp).normalized() * reach * 0.75
-		brain.flight.travel(ship, hold, 200.0)
+		brain.flight.travel(ship, hold, 200.0, false)
 		# Far from the hold point (more than 500), keep the nose that travel()
 		# chose (its thrust was worked out for it) and let the turrets aim.
 		# The ion frigate's beam is fixed, so it turns to the target as soon as
 		# the target is in reach.
 		var far_hold := ship.global_position.distance_to(hold) > 500.0
-		if not (far_hold and (ship.hull_id != "ion" or d > reach + target.hit_radius())):
-			c.face_point = tp
+		if not (far_hold and (not Ships.has_role(ship.hull_id, "fixed_beam") or d > reach + target.hit_radius())):
+			c.face_point = face_toward(ship, tp)
 		c.fire = d < reach + target.hit_radius()
 		# A FIXED main gun (the ion frigate's burst beam) only starts when
 		# the nose points at the target: one trigger pull commits the ship to
@@ -209,7 +231,7 @@ func fight(ship: Ship) -> void:
 		# repair, which heals allies nearby, until its own hull is below
 		# 70%). With a fixed main gun it goes off together with the burst.
 		if ship.special_ready() and d < reach:
-			c.special = ship.hull_id != "logistics" or ship.hull_frac() < 0.7
+			c.special = String(ship.def.get("special", "")) != "emergency_repair" or ship.hull_frac() < 0.7
 			if fixed_main:
 				c.special = c.fire
 		return
@@ -223,7 +245,7 @@ func fight(ship: Ship) -> void:
 		brain.target = null
 		brain.lock_target = null
 		brain.flight.hidden_t = 0.0
-		brain.flight.travel(ship, brain.goal, 160.0)
+		brain.flight.travel(ship, brain.goal, 160.0, false)
 		c.aim_point = c.face_point
 		return
 	# A rock between us and a target that is not close: flying straight at it,
@@ -232,13 +254,13 @@ func fight(ship: Ship) -> void:
 	# stand-off point for a push or a hunt and our station otherwise. Close to
 	# the target the dogfight goes on, a rock that near can be flown round.
 	if hidden and d > HIDDEN_CLOSE:
-		brain.flight.travel(ship, brain.goal, 160.0)
+		brain.flight.travel(ship, brain.goal, 160.0, false)
 		c.aim_point = c.face_point
 		return
 	# How far (in radians) the nose is from the aim point.
 	var ang_err := absf(Util.ang_diff(ship.rotation, (aim - ship.global_position).angle()))
-	match ship.hull_id:
-		"bomber":
+	match Ships.has_role(ship.hull_id, "torpedo"):
+		true:
 			# Torpedo runs: fly to a launch distance well inside the torpedo's
 			# reach, line the nose up on the lead point, hold fire for the
 			# wind-up with the heading locked, then break off (PilotRun).
@@ -249,7 +271,7 @@ func fight(ship: Ship) -> void:
 			# 60% of the "desired" distance (55% of our reach, 60% in a
 			# lance), i.e. about a third of our reach.
 			c.face_point = aim
-			var desired := reach * (0.6 if ship.hull_id == "lance" else 0.55)
+			var desired := reach * (0.6 if Ships.has_role(ship.hull_id, "beam") else 0.55)
 			if d > reach * 0.9:
 				# Out of reach: full ahead (boost when far and lined up).
 				c.forward = 1.0
@@ -263,23 +285,23 @@ func fight(ship: Ship) -> void:
 				c.forward = 0.3
 				c.strafe = brain.orbit * 0.8
 			# The lance beam is cheap to hold (regen outpaces it), so sweep it on.
-			c.fire = d < reach + target.hit_radius() and ang_err < (0.2 if ship.hull_id == "lance" else 0.16)
+			c.fire = d < reach + target.hit_radius() and ang_err < (0.2 if Ships.has_role(ship.hull_id, "beam") else 0.16)
 			# Fighters snap-turn when the target is far off the nose (more
 			# than 1.2 rad) and within 600; scouts ping (reveal enemies)
 			# when within 1,500.
-			if ship.hull_id == "fighter" and ang_err > 1.2 and d < 600.0:
+			if String(ship.def.get("special", "")) == "snap" and ang_err > 1.2 and d < 600.0:
 				c.special = ship.special_ready()
-			if ship.hull_id == "scout":
+			if String(ship.def.get("special", "")) == "ping":
 				c.special = ship.special_ready() and d < 1500.0
 			# The lance uses Overload (+60% beam damage for 2.5 s) while its
 			# beam is on a target.
-			if ship.hull_id == "lance":
+			if String(ship.def.get("special", "")) == "overload":
 				c.special = c.fire and ship.special_ready()
 	# No shots into the rock between us and a hidden target (and no focus
 	# shot or Overload spent on it).
 	if hidden:
 		c.fire = false
-		if ship.hull_id == "bomber" or ship.hull_id == "lance":
+		if String(ship.def.get("special", "")) in ["focus", "overload"]:
 			c.special = false
 	# Step 4: don't fly into rocks while dogfighting (PilotFlight).
 	brain.flight.avoid_rocks(ship)

@@ -99,6 +99,25 @@ extends Node
 ##                                    Without them every match plays as always.
 ##                                    Read into Game.team_variants.
 ##                                    (FeatureRegistry.is_on_for())
+##   --admiral-profile=<team>:<name>  the computer Admiral's profile for a team: standard, v0
+##                                    (before RT5) or weak. <team> is 0, 1, aurelian, vhorr or
+##                                    both; pairs are joined with ";" and a repeated option adds
+##                                    its pairs. It equals the old --admiral-ai=weak for "1:weak".
+##   --admiral-set=<team>:<key>=<value>
+##                                    one number or switch of a team's computer Admiral (a key of
+##                                    AdmiralProfileData: a whole number in thousandths, "1500" is
+##                                    1.5, or a decimal "1.5"; a switch is 0 or 1). An unknown key,
+##                                    team or profile, or a value out of range, stops the match at
+##                                    its start (FeatureRegistry, exit code 3; Game.admiral_profile_error).
+##                                    Both go in the replay header's opts= word. (AdmiralProfile)
+##   --admiral-log=<file>             write the computer Admirals' decision log (both teams, one plain
+##                                    line for each order, each changed "not yet" and each change of a
+##                                    pilot's plan or target) to this file.
+##                                    Without it nothing is written. (AdmiralLog)
+##   --team-view-sees-all             TEST ONLY: every computer Admiral's team view sees every enemy unit all the
+##                                    time. With team_view on (--admiral-set=both:team_view=1) a match must then be
+##                                    identical to one with team_view off: it proves the plumbing. Changes no play
+##                                    while team_view is off. In the replay header's opts= word. (TeamView)
 ##   --preset=none|within|pick        the rules, for tests and research: a
 ##                                    named --variant string
 ##                                    (CouncilPresets). The preset is
@@ -145,6 +164,12 @@ extends Node
 ##                                    Computer pilots, the other team and the
 ##                                    computer Admirals play normally. Read into
 ##                                    Game.unlock_everything. (UnlockAll)
+##   --practice[=nobody|allies|both]  test option: start the match as a practice range
+##                                    (World.practice) with the given choice of who
+##                                    else is on the map; a bare switch means nobody.
+##                                    "=0" or "=false" leaves it off. Never remembered.
+##                                    Read into Game.practice_start and
+##                                    Game.practice_others. (PracticeRange)
 ##   --fog-off                        test option: the human's screen shows everything
 ##                                    (no fog of war, every enemy ship and building,
 ##                                    shots, explosions and sounds). Only the screen
@@ -153,6 +178,10 @@ extends Node
 ##                                    "=0" or "=false" turns it off even if the start
 ##                                    screen remembered it on. Read into Game.fog_off.
 ##                                    (FogOff)
+##   --show-ai-memory                 test option: the human's screen draws what each computer Admiral
+##                                    remembers of its enemy (MemoryRings: a ring per record of its team
+##                                    view). Only the screen changes. A bare switch; "=0" or "=false"
+##                                    turns it off. Never remembered. Read into Game.show_ai_memory.
 ##   --web-sim                        test option: the end screen acts as the browser
 ##                                    build does (no Quit button: a web page cannot
 ##                                    close itself). A bare switch. (EndScreen)
@@ -257,6 +286,14 @@ extends Node
 ##                                    match uses Rules.BIG_HULL_FLIGHT. Read
 ##                                    into Game.big_hull_flight.
 ##                                    (Rules.big_hull_flight())
+##   --drone-ore-steal                a mining drone shot down while it holds ore
+##                                    drops the ore to the killer's team, and the
+##                                    computer pilots rate a fuller drone a better
+##                                    target. A bare switch; "=0" or "=false" gives
+##                                    the old rule (the ore is lost). Without it the
+##                                    match uses Rules.DRONE_ORE_STEAL. Read into
+##                                    Game.drone_ore_steal.
+##                                    (Rules.drone_ore_steal())
 ##   --profile                       print the cost of each part of the
 ##                                    simulation every minute. (main.gd)
 ##   --report=<path>                  also write the end-of-match summary
@@ -282,6 +319,9 @@ extends Node
 ##                                    the player's real notes. (NoteWriter)
 ##   --test=<name>                    run the test script tests/<name>.gd.
 ##                                    (main.gd)
+##   --hold-case=<a to e>             which case tests/standin_hold_check.gd runs
+##                                    (a Hold order, b Move order, c no order, d Attack
+##                                    order, e a pilot's ship). (standin_hold_check)
 ##   --snap=<png>                     save one screenshot after 1.5 s and
 ##                                    quit. (main.gd)
 ##   --force-hud                      build the HUD even with no window, for
@@ -313,8 +353,9 @@ extends Node
 ##                                    Headless or in a window. (OrderQueue)
 ##   --admiral-replay=<file>          play the computer Admirals' orders of a
 ##                                    match log back instead of letting them
-##                                    think (use --no-admiral-field and the same
-##                                    seed). (OrderQueue)
+##                                    think, their field trips included (the
+##                                    log's f lines); use the same seed.
+##                                    (OrderQueue)
 ##   --det-extra                      tests/det_hash.gd prints one more line
 ##                                    after each hash line: orders carried
 ##                                    out, orders waiting, events, speed.
@@ -380,6 +421,10 @@ var team_variants_given := false
 ## FeatureRegistry.install() then refuses the match (exit code 3), so a typo
 ## never plays a night of matches without the switch.
 var team_variant_error := ""
+## Why --admiral-profile or --admiral-set could not be used: "" when they could (or were not given), else
+## one line naming the option and the pair (AdmiralProfile.option_error()). FeatureRegistry.install() then
+## refuses the match (exit code 3), so a typo never plays the standard Admiral by mistake.
+var admiral_profile_error := ""
 ## The preset (rule set) of this match: one of CouncilPresets.ORDER. "pick"
 ## (the standard rules) when --preset is not given, "none" for the old
 ## standard rules. "" only when --preset named something unknown (see
@@ -428,6 +473,12 @@ var damage_modifiers_removed := Rules.DAMAGE_MODIFIERS_REMOVED
 ## the option --big-hull-flight (or =0 / =false) overrides it. Read once by
 ## _parse_options(); everything else asks Rules.big_hull_flight().
 var big_hull_flight := Rules.BIG_HULL_FLIGHT
+## True when this run lets a shot-down mining drone drop its ore to the killer's
+## team (and the computer pilots rate a fuller drone a better target). It starts as
+## Rules.DRONE_ORE_STEAL, the default of the build, and the option --drone-ore-steal
+## (or =0 / =false) overrides it. Read once by _parse_options(); everything else
+## asks Rules.drone_ore_steal().
+var drone_ore_steal := Rules.DRONE_ORE_STEAL
 ## The difficulty of the next match: one of Difficulty.ORDER. It is Difficulty.DEFAULT
 ## (Medium) until --difficulty names a level, or the start screen shows the
 ## remembered pick or the player chooses one (choose_difficulty()). It is the one
@@ -473,6 +524,24 @@ var unlock_everything := false
 ## the start screen reading the remembered choice, or by a toggle. Only the start
 ## screen reads the settings file for it, like the difficulty.
 var _unlock_open := true
+## True when the next match is a practice range: WorldSetup then sets World.practice and
+## clears the seats the choice below leaves out. Only the start screen's Practice range
+## button (choose_practice()) or --practice turns it on; a normal seat button turns it
+## off. It is never remembered between runs.
+var practice_start := false
+## The start choice of a practice range, who else is on the map: "nobody" (the default),
+## "allies" (only the human's own team) or "both" (both teams, and the computer Admirals).
+## One of PracticeRange.OTHERS. Never remembered.
+var practice_others := PracticeRange.OTHERS_DEFAULT
+## The practice panel's state, remembered in the settings file and read by use_remembered_hud() (a
+## test never depends on what was picked on this computer): whether the panel is open (true) or its
+## tab (false), and the two toggles, Freeze waves and No cooldowns. A practice match sends the two
+## toggles as orders on its first tick when they are on.
+var practice_panel_open := true
+## Freeze waves was left on for the next practice range.
+var practice_frozen := false
+## No cooldowns was left on for the next practice range.
+var practice_no_cd := false
 ## True when the test option "No fog" is on for this run: the human's screen then shows everything (FogOff is the one
 ## place that asks). Only the screen changes: what each team can see, the computer pilots and the Admiral's placing rules are
 ## exactly as before. It is off until --fog-off turns it on, or the start screen shows the remembered choice or the player
@@ -481,6 +550,44 @@ var fog_off := false
 ## True until the No fog option has been settled: by --fog-off, by the start screen reading the remembered choice, or by a
 ## toggle. Only the start screen reads the settings file for it, like Unlock everything.
 var _fog_off_open := true
+## True when the test option "Show the computer's memory" is on for this run: the human's screen then draws a ring for each
+## record of the computer Admirals' team views (MemoryRings is the one place that draws them). Only the screen changes. Off
+## until --show-ai-memory or the start screen's toggle (choose_show_ai_memory()) turns it on; never written to the settings file.
+var show_ai_memory := false
+## T-125: "Flash my ship when the camera returns" (pause menu): On by default. CameraRig.pulse_return() asks it. A setting, remembered in
+## the settings file; the start screen reads it (use_remembered_hud()), so a test never depends on what was picked on this computer.
+var return_flash := true
+## The win-odds mark on the Admiral's army cards (pause menu, "Win odds on the army cards"): OFF by default, an option the player turns
+## on. ArmyCards asks it. A setting, remembered in the settings file and read by use_remembered_hud() like return_flash.
+var win_odds := false
+## T-125: the minimap's size in percent (MINIMAP_PCT_MIN to MINIMAP_PCT_MAX in steps of MINIMAP_PCT_STEP; 100 = the size at the 1280 x 720
+## base). Minimap reads it. A setting, remembered like return_flash, not part of a saved game. When T-24 adds a HUD size it must not
+## multiply this one.
+var minimap_pct := MINIMAP_PCT_DEFAULT
+## The smallest minimap size (percent).
+const MINIMAP_PCT_MIN := 80
+## The biggest minimap size (percent).
+const MINIMAP_PCT_MAX := 140
+## The step of the minimap size slider (percent).
+const MINIMAP_PCT_STEP := 10
+## The default minimap size (percent).
+const MINIMAP_PCT_DEFAULT := 100
+## S1: which preset of the pilot's own ship ring set is shown: 0 Full, 1 Compact, 2 Minimal (ShipRingParts). A setting, remembered
+## like return_flash; the start screen reads it (use_remembered_hud()), so a test never depends on what was picked on this computer.
+var ring_preset := ShipRingParts.PRESET_FULL
+## S1: the ring parts the player switched off one by one (ShipRingParts ids), whatever the preset shows. Remembered like ring_preset.
+var ring_parts_off := PackedStringArray()
+## The words of the target card's three presets, by number (0 Full, 1 Compact, 2 Minimal).
+const CARD_PRESETS := ["Full", "Compact", "Minimal"]
+## Which preset of the target card is shown (an index into CARD_PRESETS). A setting, remembered like ring_preset.
+var card_preset := 0
+## S1: does a pilot's camera start in follow mode (the leaning camera)? It starts as CameraRig.PILOT_FOLLOW_DEFAULT (false: the free
+## camera). The pause menu's Camera row sets and remembers it (choose_pilot_follow()); CameraRig.setup() reads it. The C key changes the
+## camera for the match only.
+var pilot_follow := CameraRig.PILOT_FOLLOW_DEFAULT
+## S1: the speed zoom (the view backs out a little as a pilot's ship speeds up): On by default. CameraRig reads it. A setting,
+## remembered like return_flash (use_remembered_hud()); the pause menu's Speed zoom button switches it.
+var speed_zoom := true
 ## True when the human pilot's seat gets the test wing (a Scout, a Fighter and a Bomber). Off until
 ## --test-wing turns it on or the start screen shows the remembered choice or the player toggles it
 ## (choose_test_wing()). Off, a match has no wing for the human.
@@ -494,8 +601,6 @@ var cpu_wings := false
 var _test_wing_open := true
 ## True until the computer pilots' wings switch has been settled (same ways).
 var _cpu_wings_open := true
-## The wing the two switches give: a Scout, a Fighter and a Bomber.
-const TEST_WING := ["scout", "fighter", "bomber"]
 ## True until the player's own key changes have been read from the settings file. Only
 ## the start screen reads them (use_remembered_keys()), so a test or a run without a
 ## start screen always has the standard keys, whatever this computer remembers.
@@ -523,7 +628,12 @@ func _parse_options() -> void:
 		if eq < 0:
 			options[body] = true
 		else:
-			options[body.substr(0, eq)] = body.substr(eq + 1)
+			var opt_key := body.substr(0, eq)
+			# --admiral-profile and --admiral-set may be given more than once: their pairs add up.
+			if (opt_key == "admiral-profile" or opt_key == "admiral-set") and options.has(opt_key) and not (options[opt_key] is bool):
+				options[opt_key] = str(options[opt_key]) + ";" + body.substr(eq + 1)
+			else:
+				options[opt_key] = body.substr(eq + 1)
 	# Step 1a: --replay=<file> brings the settings its log was made with (the seed, the seat, the
 	# team, the rules, the test switches) for every option the command line did not give.
 	var typed_rules := options.has("variant") or options.has("preset")
@@ -544,6 +654,11 @@ func _parse_options() -> void:
 	if options.has("big-hull-flight"):
 		var bf: String = str(options["big-hull-flight"])
 		big_hull_flight = bf != "false" and bf != "0"
+	# Step 1c3: --drone-ore-steal (a bare switch; "=0" or "=false" turns the steal
+	# off) overrides the build's default.
+	if options.has("drone-ore-steal"):
+		var ds: String = str(options["drone-ore-steal"])
+		drone_ore_steal = ds != "false" and ds != "0"
 	# Step 1d: --difficulty=<level> (one of Difficulty.ORDER) chooses the level of
 	# a single-player match. An unknown word leaves the level alone and sets
 	# difficulty_error, which FeatureRegistry turns into a refusal.
@@ -570,12 +685,23 @@ func _parse_options() -> void:
 		_unlock_open = false
 		var ua: String = str(options["unlock-all"])
 		unlock_everything = ua != "false" and ua != "0"
+	# Step 1e1: --practice[=nobody|allies|both] starts the match as a practice range (a bare switch means
+	# nobody; "=0" or "=false" leaves it off; a word that is not a choice means nobody). Never remembered.
+	if options.has("practice"):
+		var pv: String = str(options["practice"])
+		practice_start = pv != "false" and pv != "0"
+		practice_others = pv if PracticeRange.OTHERS.has(pv) else PracticeRange.OTHERS_DEFAULT
 	# Step 1e2: --fog-off (a bare switch; "=0" or "=false" turns it off) settles the test option "No fog" for this run, like
 	# --unlock-all. It only changes what the human's screen draws: nothing in the match reads it.
 	if options.has("fog-off"):
 		_fog_off_open = false
 		var fo: String = str(options["fog-off"])
 		fog_off = fo != "false" and fo != "0"
+	# Step 1e3: --show-ai-memory (a bare switch; "=0" or "=false" turns it off): the test option that draws the computer's
+	# memory. It only changes what the human's screen draws: nothing in the match reads it.
+	if options.has("show-ai-memory"):
+		var sm: String = str(options["show-ai-memory"])
+		show_ai_memory = sm != "false" and sm != "0"
 	# Step 1f: --test-wing and --cpu-wings (bare switches; "=0" or "=false" turns them off)
 	# settle the two wing switches for this run, like --unlock-all.
 	if options.has("test-wing"):
@@ -601,6 +727,8 @@ func _parse_options() -> void:
 	# in `team_variants`. An unknown name sets team_variant_error, which
 	# FeatureRegistry turns into a refusal.
 	_read_team_variants()
+	# Step 4: the computer Admiral's profile options (--admiral-profile, --admiral-set).
+	admiral_profile_error = AdmiralProfile.option_error(options)
 
 
 ## Build `variants`: start from Rules.VARIANT_DEFAULTS, then apply the pairs
@@ -775,6 +903,113 @@ func use_remembered_fog_off() -> void:
 	fog_off = typeof(saved) == TYPE_BOOL and saved
 
 
+## T-125: put the two HUD settings last made on this computer into `return_flash` and `minimap_pct`. The start screen calls it when it
+## is built, so only a game with a start screen reads the settings file for them. A missing file or an entry that is not valid keeps the
+## defaults (the flash on, the minimap at 100%). It also puts the win-odds mark's choice into `win_odds` (off unless saved as on).
+func use_remembered_hud() -> void:
+	var cfg := ConfigFile.new()
+	if cfg.load(SETTINGS_FILE) != OK:
+		return
+	var flash: Variant = cfg.get_value("game", "return_flash", true)
+	return_flash = not (typeof(flash) == TYPE_BOOL and not flash)
+	var pct: Variant = cfg.get_value("game", "minimap_pct", MINIMAP_PCT_DEFAULT)
+	minimap_pct = clamp_minimap_pct(int(pct)) if typeof(pct) == TYPE_INT else MINIMAP_PCT_DEFAULT
+	# The win-odds mark: only a real yes turns it on; a missing or damaged entry leaves it off.
+	var odds: Variant = cfg.get_value("game", "win_odds", false)
+	win_odds = typeof(odds) == TYPE_BOOL and odds
+	# S1: the speed zoom is on unless the file holds a real no.
+	var speed: Variant = cfg.get_value("game", "speed_zoom", true)
+	speed_zoom = not (typeof(speed) == TYPE_BOOL and not speed)
+	# S1: the pilot's camera mode: only a real yes or no counts (a damaged entry keeps the default).
+	var follow: Variant = cfg.get_value("game", "pilot_follow", CameraRig.PILOT_FOLLOW_DEFAULT)
+	pilot_follow = follow if typeof(follow) == TYPE_BOOL else CameraRig.PILOT_FOLLOW_DEFAULT
+	# S1: the ring set's preset and the parts switched off one by one. A bad entry (not a whole number in range, not a list of
+	# known part names) keeps the default: Full, nothing switched off.
+	var preset: Variant = cfg.get_value("game", "ring_preset", ShipRingParts.PRESET_FULL)
+	ring_preset = int(preset) if typeof(preset) == TYPE_INT and int(preset) >= 0 and int(preset) < ShipRingParts.PRESETS.size() else ShipRingParts.PRESET_FULL
+	var card: Variant = cfg.get_value("game", "card_preset", 0)
+	card_preset = int(card) if typeof(card) == TYPE_INT and int(card) >= 0 and int(card) < CARD_PRESETS.size() else 0
+	# The practice panel: open or its tab, and the two toggles. Only a real yes or no counts (a missing or
+	# damaged entry keeps the default: open, nothing frozen, cooldowns as they are).
+	var panel_open: Variant = cfg.get_value("game", "practice_panel_open", true)
+	practice_panel_open = not (typeof(panel_open) == TYPE_BOOL and not panel_open)
+	var frozen: Variant = cfg.get_value("game", "practice_frozen", false)
+	practice_frozen = typeof(frozen) == TYPE_BOOL and frozen
+	var no_cd: Variant = cfg.get_value("game", "practice_no_cd", false)
+	practice_no_cd = typeof(no_cd) == TYPE_BOOL and no_cd
+	var off: Variant = cfg.get_value("game", "ring_parts_off", [])
+	ring_parts_off = PackedStringArray()
+	if typeof(off) == TYPE_ARRAY:
+		for part: Variant in off as Array:
+			if typeof(part) == TYPE_STRING and ShipRingParts.is_part(String(part)) and not ring_parts_off.has(String(part)):
+				ring_parts_off.append(String(part))
+
+
+## S1: the player switched the speed zoom on or off (`on`) in the pause menu: use it now and remember it.
+func choose_speed_zoom(on: bool) -> void:
+	speed_zoom = on
+	_remember("speed_zoom", on, "The speed zoom")
+
+
+## S1: the player chose the pilot's camera mode `follow` (true = follow, false = free) in the pause menu: remember it for the next match.
+func choose_pilot_follow(follow: bool) -> void:
+	pilot_follow = follow
+	_remember("pilot_follow", follow, "The pilot camera")
+
+
+## S1: the player chose ring preset `preset` (ShipRingParts.PRESET_FULL, _COMPACT or _MINIMAL): use it now and remember it. A number
+## out of range is ignored.
+func choose_ring_preset(preset: int) -> void:
+	if preset < 0 or preset >= ShipRingParts.PRESETS.size():
+		return
+	ring_preset = preset
+	_remember("ring_preset", ring_preset, "The ring preset")
+
+
+## The player chose target card preset `preset` (an index into CARD_PRESETS): use it now and remember it. A number out of range is
+## ignored.
+func choose_card_preset(preset: int) -> void:
+	if preset < 0 or preset >= CARD_PRESETS.size():
+		return
+	card_preset = preset
+	_remember("card_preset", card_preset, "The card preset")
+
+
+## S1: the player switched ring part `part` on (`on` true) or off: use it now and remember it. An unknown part is ignored.
+func choose_ring_part(part: String, on: bool) -> void:
+	if not ShipRingParts.is_part(part):
+		return
+	var at := ring_parts_off.find(part)
+	if on and at >= 0:
+		ring_parts_off.remove_at(at)
+	elif not on and at < 0:
+		ring_parts_off.append(part)
+	_remember("ring_parts_off", Array(ring_parts_off), "The ring parts")
+
+
+## T-125: `p` percent kept inside the minimap's range and rounded to a step.
+func clamp_minimap_pct(p: int) -> int:
+	return clampi(int(round(float(p) / float(MINIMAP_PCT_STEP))) * MINIMAP_PCT_STEP, MINIMAP_PCT_MIN, MINIMAP_PCT_MAX)
+
+
+## T-125: the player switched "Flash my ship when the camera returns" on or off (`on`) in the pause menu: use it now and remember it.
+func choose_return_flash(on: bool) -> void:
+	return_flash = on
+	_remember("return_flash", on, "The ship flash")
+
+
+## T-125: the player chose minimap size `pct` in the pause menu: use it now and remember it (the Minimap reads it again at once).
+func choose_minimap_pct(pct: int) -> void:
+	minimap_pct = clamp_minimap_pct(pct)
+	_remember("minimap_pct", minimap_pct, "The minimap size")
+
+
+## The player switched the win-odds mark on the army cards on or off (`on`) in the pause menu: use it now and remember it.
+func choose_win_odds(on: bool) -> void:
+	win_odds = on
+	_remember("win_odds", on, "The win-odds mark")
+
+
 ## Put the two wing switches last made on this computer into `test_wing` and `cpu_wings`, unless a
 ## switch is already settled (its option was given, or this ran before). The start screen calls it
 ## when it is built, so only a game with a start screen reads the settings file for them. A
@@ -812,7 +1047,7 @@ func choose_cpu_wings(on: bool) -> void:
 
 ## Write `key` = `value` in the settings file's [game] section, keeping everything else; `what` names
 ## the setting in the warning when the file cannot be written.
-func _remember(key: String, value: bool, what: String) -> void:
+func _remember(key: String, value: Variant, what: String) -> void:
 	var cfg := ConfigFile.new()
 	cfg.load(SETTINGS_FILE)
 	cfg.set_value("game", key, value)
@@ -841,7 +1076,7 @@ func wing_hulls_for(is_human_seat: bool) -> PackedStringArray:
 				out.append(id)
 		return out
 	if (test_wing if is_human_seat else cpu_wings):
-		out.append_array(PackedStringArray(TEST_WING))
+		out.append_array(PackedStringArray(Ships.TEST_WING))
 	return out
 
 
@@ -873,12 +1108,69 @@ func choose_unlock(on: bool) -> void:
 		push_warning("settings: cannot write %s (error %d); Unlock everything will not be remembered" % [SETTINGS_FILE, err])
 
 
+## The player picked the Practice range on the start screen with `others` as who else is on the
+## map ("nobody", "allies" or "both", one of PracticeRange.OTHERS; any other word counts as
+## "nobody"): the coming match is a practice range. It starts nothing (the start screen sends
+## the seat next) and remembers nothing: every range starts from the screen's own button.
+func choose_practice(others: String) -> void:
+	practice_start = true
+	practice_others = others if PracticeRange.OTHERS.has(others) else PracticeRange.OTHERS_DEFAULT
+
+
+## The player opened (`open` true) or closed the practice panel: remember it for the next range.
+func choose_practice_panel(open: bool) -> void:
+	practice_panel_open = open
+	_remember("practice_panel_open", open, "The practice panel's open or closed state")
+
+
+## The player switched the practice toggle `key` (a switch word of PracticeSwitches: "freeze" or
+## "cd_auto") to `on`: remember it for the next range. Any other word does nothing.
+func choose_practice_toggle(key: String, on: bool) -> void:
+	if key == PracticeSwitches.FREEZE:
+		practice_frozen = on
+		_remember("practice_frozen", on, "Freeze waves in the practice range")
+	elif key == PracticeSwitches.CD_AUTO:
+		practice_no_cd = on
+		_remember("practice_no_cd", on, "No cooldowns in the practice range")
+
+
+## The player picked a normal seat: the coming match is not a practice range.
+func clear_practice() -> void:
+	practice_start = false
+	practice_others = PracticeRange.OTHERS_DEFAULT
+
+
 ## The player switched No fog on or off (`on`) on the start screen: use it for the coming match and remember it in the settings
 ## file for the next run. A file that cannot be written only costs the memory (a warning).
 func choose_fog_off(on: bool) -> void:
 	fog_off = on
 	_fog_off_open = false
 	_remember("fog_off", on, "No fog")
+
+
+## The player picked the computer Admirals' profile `p_name` (a name of AdmiralProfileData.PROFILES) on the start screen:
+## use it for both teams' computer Admirals in the coming match, as --admiral-profile=both:<name> would (the standard profile
+## is the option left out, so a match with it is exactly the normal game). Not written to the settings file. A name that is not
+## a profile changes nothing but admiral_profile_error, which then holds the refusal (the start screen shows it); a good pick
+## reads the error again from all the options. Returns true when the match can start with the Admiral options as they now are.
+func choose_admiral_profile(p_name: String) -> bool:
+	var asked := "both:%s" % p_name
+	var err := AdmiralProfile.option_error({"admiral-profile": asked})
+	if err != "":
+		admiral_profile_error = err
+		return false
+	if p_name == "standard":
+		options.erase("admiral-profile")
+	else:
+		options["admiral-profile"] = asked
+	admiral_profile_error = AdmiralProfile.option_error(options)
+	return admiral_profile_error == ""
+
+
+## The player switched "Show the computer's memory" on or off (`on`) on the start screen: use it for the coming match. It is a
+## test option of this run only: nothing is written to the settings file.
+func choose_show_ai_memory(on: bool) -> void:
+	show_ai_memory = on
 
 
 ## Start the match again in seat `role` (the pause menu's Restart): the same

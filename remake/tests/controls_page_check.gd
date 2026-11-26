@@ -290,8 +290,10 @@ func _page() -> void:
 	_check("a key a rule variant that is on reads gives Keep only", not page.pending.is_empty() and not page._swap_button.visible and page._warn_text.text.contains("surrender"), page._warn_text.text)
 	page.choose_keep()
 	Game.variants["surrender"] = "off"
+	KeyMap.reset_all()
 	_choose(page, "flying", "use_kit", 0, "F10")
-	_check("the same key is free while that variant is off", _key("flying", "use_kit") == "F10")
+	_check("the same key stays taken while the standard rules carry that variant", not page.pending.is_empty() and page._warn_text.text.contains("surrender"), page._warn_text.text)
+	page.choose_keep()
 	KeyMap.reset_all()
 	page.rebuild()
 	# Step 7: fixed rows refuse a capture.
@@ -362,9 +364,9 @@ func _page() -> void:
 	_no_clashes("after the layouts")
 	# Step 11: a link row edits the pilot's key, in one place.
 	page.show_mode("flying_board")
-	_choose(page, "flying_board", "camera_up", 0, "O")
-	_check("changing the board's camera key changes the flying key", _key("flying", "thrust_forward") == "O" and _key("flying_board", "camera_up") == "O" and _key("home", "camera_up") == "O")
-	_check("the InputMap follows (thrust_forward is O)", int((InputMap.action_get_events("thrust_forward")[0] as InputEventKey).physical_keycode) == KEY_O)
+	_choose(page, "flying_board", "camera_up", 0, "K")
+	_check("changing the board's camera key changes the flying key", _key("flying", "thrust_forward") == "K" and _key("flying_board", "camera_up") == "K" and _key("home", "camera_up") == "K")
+	_check("the InputMap follows (thrust_forward is K)", int((InputMap.action_get_events("thrust_forward")[0] as InputEventKey).physical_keycode) == KEY_K)
 	_no_clashes("after the camera key")
 	KeyMap.reset_all()
 	# Step 12: the settings file round trip and bad entries.

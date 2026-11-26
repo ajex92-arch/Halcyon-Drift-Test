@@ -100,8 +100,10 @@ func _brains() -> void:
 func _damage(target: Unit, info: DamageInfo, amount: float) -> float:
 	if info.kind != Rules.W_LANCE or target.kind != Unit.K_SHIP or target.size_class < Rules.SIZE_LARGE:
 		return amount
-	# Which zone takes the hit: the attacker's place in the target's own frame.
-	var local := (info.from_pos - target.global_position).rotated(-target.rotation)
+	# Which zone takes the hit: the point the beam touched, in the target's own
+	# frame (the same point Unit.take_hit() picks the shield zone from; for a
+	# circle target that is the muzzle).
+	var local := ArmourSections.from_spine((info.impact_point() - target.global_position).rotated(-target.rotation), target.spine_len, target.spine_off)
 	if ShieldZones.zone_for_local(local) != Rules.ZONE_REAR:
 		return amount
 	Game.count_usage("rear_lance_hits")
@@ -146,7 +148,7 @@ func find_prey(ship: Ship) -> Ship:
 ## the pilot is a healthy Lance with nothing better to do.
 static func hunt(brain: PilotAI, ship: Ship) -> void:
 	var feat = brain.world.features.get(KEY)
-	if feat == null or ship.hull_id != "lance" or ship.hull_frac() < MIN_HULL:
+	if feat == null or not Ships.has_role(ship.hull_id, "beam") or ship.hull_frac() < MIN_HULL:
 		return
 	# Only while on the lane or in the jungle, and not falling back, evading
 	# or already fighting another pilot.
@@ -175,7 +177,7 @@ static func hunt(brain: PilotAI, ship: Ship) -> void:
 static func steer_behind(brain: PilotAI, ship: Ship) -> void:
 	var feat = brain.world.features.get(KEY)
 	var prey := brain.target as Ship
-	if feat == null or ship.hull_id != "lance" or brain.intent != "prey" or prey == null or not prey.alive or prey.size_class < Rules.SIZE_LARGE:
+	if feat == null or not Ships.has_role(ship.hull_id, "beam") or brain.intent != "prey" or prey == null or not prey.alive or prey.size_class < Rules.SIZE_LARGE:
 		return
 	if not (feat as LanceRoleFeature).is_isolated(prey):
 		return

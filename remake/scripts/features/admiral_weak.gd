@@ -23,18 +23,13 @@ extends RefCounted
 ## command line (tests/fun_probe.gd matches via run_batch.ps1).
 
 ## Seconds between two plan steps of a weak admiral.
-const WEAK_PLAN_GAP := 90.0
+const WEAK_PLAN_GAP := AdmiralProfileData.TABLE["plan_gap_s"][2] / 1000.0
 
 
-## Is team `team`'s AI admiral the weak one in this match? True only when the
-## --admiral-ai option names that team (see HOW IT WORKS).
+## Is team `team`'s AI admiral the weak one in this match? True when the --admiral-ai option names that
+## team (see HOW IT WORKS) or --admiral-profile gives it the weak profile (AdmiralProfile.for_team).
 static func is_weak(team: int) -> bool:
-	var v := str(Game.opt("admiral-ai", ""))
-	if v == "weakboth":
-		return true
-	if v == "weak0":
-		return team == Rules.HALCYON
-	return (v == "weak" or v == "weak1") and team == Rules.CINDER
+	return AdmiralProfile.for_team(team, Game.options).on("is_weak")
 
 
 ## Does team `team` have a computer admiral that is NOT the weak one? The
@@ -44,3 +39,22 @@ static func is_weak(team: int) -> bool:
 static func ai_acts(world: World, team: int) -> bool:
 	var ai: AdmiralAI = world.admiral_ai[team]
 	return ai != null and not ai.weak
+
+
+## Does team `team` have a computer admiral that acts in the hooks that are the human seat's own buttons and calls (the
+## command assets, Fortify, the smart composition calls)? A computer admiral does; a deputy (the computer admiral that helps
+## a human Admiral) does only while the human is away, never while the human is present.
+static func ai_acts_seat(world: World, team: int) -> bool:
+	if not ai_acts(world, team):
+		return false
+	var ai: AdmiralAI = world.admiral_ai[team]
+	return ai.deputy == null or ai.deputy.away
+
+
+## Does team `team` have a computer admiral that is no deputy? Only such an admiral acts in the hooks that a deputy never
+## runs, present or away (the bounties, which steer the pilots).
+static func ai_acts_solo(world: World, team: int) -> bool:
+	if not ai_acts(world, team):
+		return false
+	var ai: AdmiralAI = world.admiral_ai[team]
+	return ai.deputy == null

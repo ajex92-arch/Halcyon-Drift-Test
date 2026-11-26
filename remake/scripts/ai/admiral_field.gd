@@ -77,16 +77,23 @@ extends RefCounted
 ## the admiral in space for its worst-case runs; tests/seats_probe.gd).
 ## World.end_field_trips() closes a running trip at the end of a match.
 ## The option --no-admiral-field switches the trips off.
+##
+## THE MATCH LOG (F461): every decision made here that changes the match is
+## written to the match log as an `f` line on its tick (_note(): "launch" with
+## the reason and the lane to cover, "recall", "resume", "end" with how, and
+## "reason" for a further reason during a trip). A replay of the computer
+## Admirals (--admiral-replay) does not think, so update() never runs there:
+## OrderQueue.replay_ai() calls replay() with each logged line instead.
 
 ## This many dead pilots (waiting to respawn) call the admiral out.
-const MIN_DOWN := 2
+const MIN_DOWN := AdmiralProfileData.TABLE["field_min_down"][0] / 1000.0
 ## A trip lasts at least this long (seconds) before the admiral is recalled,
 ## so that a trigger that flickers does not make it launch and dock again
 ## and again.
-const MIN_TRIP := 20.0
+const MIN_TRIP := AdmiralProfileData.TABLE["field_min_trip_s"][0] / 1000.0
 ## After a trip ends the admiral waits this long (seconds) before it may
 ## launch for a new one.
-const COOLDOWN := 15.0
+const COOLDOWN := AdmiralProfileData.TABLE["field_cooldown_s"][0] / 1000.0
 
 ## The game world (the admiral's seat, the team's pilots and the clock).
 var world: World
@@ -95,6 +102,10 @@ var team := 0
 ## The admiral's seat (World.admiral_profile[team]); null if there is none,
 ## and then update() does nothing.
 var profile: PilotProfile
+## The admiral's numbers (AdmiralProfile); the constants above are its standard values.
+var prof: AdmiralProfile
+## What our team knows (our own pilots and mothership exactly: TeamView).
+var view: TeamView
 ## The pilot brain that flies the admiral's ship (World.pilot_ai).
 var brain: PilotAI
 ## False with the option --no-admiral-field: the admiral never takes the
@@ -123,12 +134,14 @@ var cooldown_until := 0.0
 ## Remember the world and our team, and find the admiral's seat and brain
 ## (WorldSetup made them just before the admiral). AdmiralAI makes this part
 ## once.
-func _init(w: World, t: int) -> void:
+func _init(w: World, t: int, p: AdmiralProfile = null) -> void:
 	world = w
 	team = t
+	prof = p if p != null else AdmiralProfile.for_team(t, Game.options)
+	view = TeamView.of(w, t, prof)
 	profile = w.admiral_profile[t]
 	brain = w.pilot_ai.get(profile) if profile != null else null
-	enabled = not Game.opt("no-admiral-field", false)
+	enabled = not Game.opt("no-admiral-field", false) and prof.on("field")
 
 
 ## One look at the admiral's seat (see HOW IT WORKS). AdmiralAI calls it
@@ -151,17 +164,67 @@ func update(ts: TeamState) -> void:
 				# Docked in the middle of a trip. With a trigger still on it
 				# was a repair stop: out again (if it cannot launch, the trip
 				# is over). Otherwise the trip is over.
-				if reason != "" and not chair and _launch():
-					trip["resupplies"] = int(trip["resupplies"]) + 1
+				if reason != "" and not chair:
+					_launch_step(reason)
 				else:
+					_note("end", "docked")
 					_end("docked")
 			elif reason != "" and not chair and (force_reason != "" or now >= cooldown_until):
-				var ms := world.mothership(team)
-				if ms != null and ms.alive and _launch():
-					_begin(reason)
+				var ms := view.own_ms()
+				if ms != null and ms.alive:
+					_launch_step(reason)
 		"dead":
 			if on_trip:
+				_note("end", "destroyed")
 				_end("destroyed")
+
+
+## Try to launch, for `reason`, and book what came of it: a new trip, or (in
+## the middle of a trip) one more resupply; a launch that fails in the middle of
+## a trip ends it. update() calls it when it has decided to launch, and
+## replay() for a logged "launch" line. `lane` is the lane to cover as the log
+## has it ("" for none); null (a live match) lets _launch() work it out.
+func _launch_step(reason: String, lane: Variant = null) -> void:
+	var ok := _launch(lane)
+	if lane == null:
+		_note("launch", reason, brain.cover_lane if ok else "")
+	if on_trip:
+		if ok:
+			trip["resupplies"] = int(trip["resupplies"]) + 1
+		else:
+			_end("docked")
+	elif ok:
+		_begin(reason)
+
+
+## Write one decision to the match log (an `f` line, OrderQueue.record_field),
+## so that a replay of the computer Admirals can make it again. Does nothing
+## when no log is open.
+func _note(op: String, a: String = "", b: String = "") -> void:
+	if world.orders != null:
+		world.orders.record_field(team, op, a, b)
+
+
+## A replay of the computer Admirals (--admiral-replay) calls this for each
+## `f` line of the match log, on the line's tick, in place of update(): the
+## decision `op` ("launch", "recall", "resume" or "end") is carried out as the
+## log has it, with its words `a` and `b`. Nothing is decided here.
+func replay(op: String, a: String, b: String) -> void:
+	if not enabled or profile == null or brain == null:
+		return
+	match op:
+		"launch":
+			_launch_step(a, b)
+		"recall":
+			brain.recalled = true
+			brain.home_reason = "recall"
+		"resume":
+			_resume()
+		"end":
+			_end(a)
+		"reason":
+			if on_trip and not (trip["reasons"] as Array).has(a):
+				(trip["reasons"] as Array).append(a)
 
 
 ## Which reason the admiral should be in the field for right now: the forced
@@ -172,7 +235,7 @@ func trigger(ts: TeamState) -> String:
 		return force_reason
 	if ts.defending(world.time):
 		return "defend"
-	if pilots_down() >= MIN_DOWN:
+	if pilots_down() >= prof.i("field_min_down"):
 		return "pilots_down"
 	return ""
 
@@ -182,17 +245,18 @@ func trigger(ts: TeamState) -> String:
 ## hull and more than 2,000 from home) and the order needs a docked admiral.
 ## A weak admiral (test option) never moves the mothership, so it never does.
 func chair_needed() -> bool:
-	if AdmiralWeak.is_weak(team) or not bool(Rules.tune("mothership_move_needs_dock", true)):
+	if not prof.on("mover") or not bool(Rules.tune("mothership_move_needs_dock", true)):
 		return false
-	return AdmiralMothershipMover.fallback_due(world, team)
+	return AdmiralMothershipMover.fallback_due(world, team, prof)
 
 
 ## How many of our pilots are dead and waiting to respawn (the admiral's own
-## seat does not count).
+## seat does not count, and neither does an empty seat: a profile that is not the
+## human's and has no pilot brain, as in a practice range that cleared the seat).
 func pilots_down() -> int:
 	var n := 0
-	for p: PilotProfile in world.profiles:
-		if p.team == team and p.role != "admiral" and p.state == "dead":
+	for p: PilotProfile in view.own_profiles():
+		if p.role != "admiral" and p.state == "dead" and (p.is_human or world.pilot_ai.has(p)):
 			n += 1
 	return n
 
@@ -202,8 +266,8 @@ func pilots_down() -> int:
 ## jungler is down.
 func cover_lane() -> String:
 	var best: PilotProfile = null
-	for p: PilotProfile in world.profiles:
-		if p.team == team and p.role != "admiral" and p.state == "dead" and (best == null or p.slot < best.slot):
+	for p: PilotProfile in view.own_profiles():
+		if p.role != "admiral" and p.state == "dead" and (best == null or p.slot < best.slot):
 			best = p
 	if best != null and best.role in ["top", "mid", "bot"]:
 		return best.role
@@ -228,42 +292,55 @@ func _while_flying(reason: String, now: float, chair: bool) -> void:
 	if reason != "" and not (trip["reasons"] as Array).has(reason):
 		# Keep a list of every reason that held (the trip's "reasons").
 		(trip["reasons"] as Array).append(reason)
+		_note("reason", reason)
 	if chair:
 		if not brain.recalled:
+			_note("recall")
 			brain.recalled = true
 			brain.home_reason = "recall"
 	elif reason == "":
-		if not brain.recalled and now - float(trip["start"]) >= MIN_TRIP:
+		if not brain.recalled and now - float(trip["start"]) >= prof.f("field_min_trip_s"):
+			_note("recall")
 			brain.recalled = true
 			brain.home_reason = "recall"
 	elif brain.recalled:
-		# Back to work: the ship leaves the "home" state it was in. A ship that
-		# is retreating (hurt on its way home) keeps its retreat, which ends at
-		# 85% hull like every pilot's.
-		brain.recalled = false
-		brain.home_reason = ""
-		if brain.state == "home":
-			brain.state = "lane"
+		_note("resume")
+		_resume()
+
+
+## Cancel a recall: the ship goes back to work.
+func _resume() -> void:
+	# Back to work: the ship leaves the "home" state it was in. A ship that
+	# is retreating (hurt on its way home) keeps its retreat, which ends at
+	# 85% hull like every pilot's.
+	brain.recalled = false
+	brain.home_reason = ""
+	if brain.state == "home":
+		brain.state = "lane"
 
 
 ## Shop with the seat's own credits and launch the admiral's ship. Returns
 ## false if it could not launch (no mothership and no repair bay). A
 ## "pilots_down" trip sets the lane to cover; every other trip holds the mid
-## lane (and the defend call sends the ship to the base anyway).
-func _launch() -> bool:
+## lane (and the defend call sends the ship to the base anyway). A replay
+## gives the lane the log has (`lane`, a String); null works it out.
+func _launch(lane: Variant = null) -> bool:
 	var ts := world.teams[team]
 	# Step 1: buy a hull the same way an AI pilot does at the hangar; with
 	# the mothership offline, only a free scout.
-	var ms := world.mothership(team)
+	var ms := view.own_ms()
 	if ms != null and ms.available():
 		brain.shopping.shop()
 	if profile.hull_id == "":
-		profile.buy_hull("scout", ts)
+		profile.buy_hull(Ships.FREE_HULL, ts)
 	# Step 2: launch. A fresh ship starts a fresh plan, on the right lane.
 	if world.launch(profile) == null:
 		return false
 	brain._reset_after_launch()
-	brain.cover_lane = cover_lane() if trigger(ts) == "pilots_down" else ""
+	if lane != null:
+		brain.cover_lane = str(lane)
+	else:
+		brain.cover_lane = cover_lane() if trigger(ts) == "pilots_down" else ""
 	return true
 
 
@@ -288,7 +365,7 @@ func _end(result: String) -> void:
 	on_trip = false
 	trip["end"] = world.time
 	trip["ended"] = result
-	cooldown_until = world.time + COOLDOWN
+	cooldown_until = world.time + prof.f("field_cooldown_s")
 	Events.admiral_field.emit(team, false, result)
 	print("FIELD_TRIP t=%.1f team=%d reason=%s dur=%.1f result=%s hull=%s resupplies=%d" % [float(trip["start"]), team, trip["reason"],
 		world.time - float(trip["start"]), result, trip["hull"], int(trip["resupplies"])])

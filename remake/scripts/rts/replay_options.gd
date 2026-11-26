@@ -24,7 +24,7 @@ extends RefCounted
 ## WHO USES IT: Game._parse_options() (fill); OrderQueue.configure() (parse_until).
 
 ## The test options that change the simulation and that the header lists in `opts=`.
-const SIM_OPTIONS := ["no-pilots", "no-jungle", "no-admiral-ai", "no-admiral-field", "no-tail-gun", "skill-jitter", "admiral-ai"]
+const SIM_OPTIONS := ["no-pilots", "no-jungle", "no-admiral-ai", "no-admiral-field", "no-tail-gun", "skill-jitter", "admiral-ai", "admiral-profile", "admiral-set", "team-view-sees-all"]
 ## The header words that name a team's own rule variants: this text plus the team (0 or 1), for
 ## example "variants_team0".
 const TEAM_KEY := "variants_team"
@@ -190,7 +190,7 @@ static func _sim_options(options: Dictionary, word: String) -> void:
 static func _wing_options(options: Dictionary, wings: String, cwings: String) -> void:
 	if wings == "off" or wings == "":
 		_give(options, "test-wing", "0")
-	elif wings == ",".join(PackedStringArray(Game.TEST_WING)):
+	elif wings == ",".join(PackedStringArray(Ships.TEST_WING)):
 		_give(options, "test-wing", "1")
 	else:
 		_give(options, "wingmen", wings)

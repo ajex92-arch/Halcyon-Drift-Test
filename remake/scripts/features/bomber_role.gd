@@ -8,7 +8,7 @@ extends RefCounted
 ##   seats  the pilots in seats 6 and 10 (the two Bomber seats besides seat
 ##          2) fly Fighters instead of Bombers, on both teams. Seat 2 keeps
 ##          the Bomber. Hull choice is scripted per seat in
-##          PilotShopping.HULL_PREF, so this changes the wish list of those
+##          Ships.HULL_PREF, so this changes the wish list of those
 ##          two seats to just the Fighter (BomberRoleShopping).
 ##   torp   the Bomber pilots, who normally leave small craft alone in the
 ##          lane (PilotTargeting.pick_target), also fire at a small enemy PILOT

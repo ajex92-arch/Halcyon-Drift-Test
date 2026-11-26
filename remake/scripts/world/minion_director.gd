@@ -27,6 +27,12 @@ extends RefCounted
 ##     post (PostSite.launch_point), picked at random. A wave that has already
 ##     been queued launches even if the post falls meanwhile.
 ##
+##   - The practice range (and nothing else) may hold the waves: set_frozen() empties the queue,
+##     quietly removes every minion marked `free_wave` (the ones tick() launched; an Admiral's bought
+##     minions stay) and keeps the time left to the next wave in `held_left`; send_one_wave() queues one
+##     wave for both teams through _queue_wave() (refused at 63 live free-wave minions or inside 60 ticks
+##     of the last send). Both are PracticeActions' calls.
+##
 ## WHO USES IT: World makes one (World.minion_director) in WorldSetup and
 ## calls tick() every tick. The HUD's top bar reads next_wave.
 ## EscortWingFeature sets
@@ -49,6 +55,14 @@ var queue: Array = []
 ## wave. true ("upgrade") = waves keep their size, and while the team has
 ## Escort Wing the first corvette of each lane's wave launches upgraded.
 var escort_upgrade := false
+## True while the practice range holds the free waves (set_frozen): no wave is due, the queue is
+## empty and the clock is kept in `held_left`. Always false outside a practice range.
+var frozen := false
+## The time (seconds) that was left to the next wave when the waves were frozen (INF when no
+## wave was due ever again).
+var held_left := 0.0
+## The tick of the last Send one wave press that went through (a long way back at the start).
+var last_send_tick := -100000
 
 
 ## Remember the world. WorldSetup makes this once per match.
@@ -84,6 +98,7 @@ func tick(_dt: float) -> void:
 			var m := _spawn(int(q[1]), q[2], q[3], true)
 			# Tell the feature modules that listen (nobody does by default).
 			if m != null:
+				m.free_wave = true
 				Events.minion_launched.emit(m, next_wave)
 			if q.size() > 4 and m != null:
 				EscortWingFeature.upgrade(m)
@@ -136,3 +151,59 @@ func _spawn(team: int, type_id: String, lane: String, from_post: bool = false) -
 	var slot := randi() % 5
 	var at := world.defense_posts.site_of(team, lane).launch_point(slot) if from_post else ms.launch_point(slot)
 	return world.spawn_minion(team, type_id, lane, at)
+
+
+# --- the practice range's two switches (only a practice range calls these) ---------------
+
+## How many live free-wave minions `team` has (the minions the waves launched, not the ones an
+## Admiral bought).
+func free_wave_count(team: int) -> int:
+	var n := 0
+	for m: Minion in world.minions:
+		if m.team == team and m.alive and m.free_wave:
+			n += 1
+	return n
+
+
+## Hold the free waves (`on` true) or let them run again. Holding empties the launch queue,
+## removes every live free-wave minion of both teams quietly (no pay, no kill message; minions an
+## Admiral bought stay), keeps the time left to the next wave and sets the clock to never.
+## Letting them run again puts the next wave the kept time away, but never less than
+## PracticeSwitches.UNFREEZE_FLOOR seconds (a clock that was never due stays never).
+func set_frozen(on: bool) -> void:
+	if on == frozen:
+		return
+	frozen = on
+	if on:
+		held_left = next_wave - world.time
+		next_wave = INF
+		queue.clear()
+		for m: Minion in world.minions.duplicate():
+			if m.free_wave and m.alive:
+				world.combat.kill_silently(m)
+	elif not is_inf(held_left):
+		next_wave = world.time + maxf(held_left, PracticeSwitches.UNFREEZE_FLOOR)
+
+
+## Why Send one wave may not go now: a team already has PracticeSwitches.WAVE_REFUSE_AT or more
+## free-wave minions alive, or the last send was less than PracticeSwitches.SEND_GAP_TICKS ticks
+## ago. "" when it may.
+func wave_refusal() -> String:
+	if free_wave_count(0) >= PracticeSwitches.WAVE_REFUSE_AT or free_wave_count(1) >= PracticeSwitches.WAVE_REFUSE_AT:
+		return PracticeSwitches.TEXT_WAVES_FULL
+	if world.tick_count - last_send_tick < PracticeSwitches.SEND_GAP_TICKS:
+		return PracticeSwitches.TEXT_WAIT
+	return ""
+
+
+## Queue one free wave for both teams now, the way the clock does (the same mix, the same spacing,
+## the same launch spots), whether the waves are running or held. Returns "" or the reason it was
+## refused (wave_refusal).
+func send_one_wave() -> String:
+	var why := wave_refusal()
+	if why != "":
+		return why
+	last_send_tick = world.tick_count
+	for team in 2:
+		_queue_wave(team)
+	return ""

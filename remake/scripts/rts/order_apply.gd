@@ -42,6 +42,8 @@ static func call_built_in(w: World, o: Dictionary) -> String:
 			return cmd.move_mothership(team, Vector2(target))
 		OrderKinds.SIEGE:
 			return cmd.set_siege(team, str(target) if str(o["target_kind"]) == "lane" else "", str(s["phase"]))
+		OrderKinds.DRONE_SEND:
+			return cmd.send_drone(team, int(target), str(s["node"]))
 	return OrderKinds.TEXT_UNBUILT
 
 

@@ -44,6 +44,12 @@ extends Control
 ## wingmen)" (off the first time; a Scout, a Fighter and a Bomber fly with the human pilot) and
 ## "Computer pilots' wings" (on the first time; every computer pilot gets the same three).
 ## --test-wing and --cpu-wings set them at launch.
+## Under the wing row, _build_computer() adds the COMPUTER row: one button per profile of the computer
+## Admiral (AdmiralProfileData.PROFILES: Standard, V0, Weak), which calls Game.choose_admiral_profile()
+## (both teams' computer Admirals; never remembered), and at its right end, under No fog, the test toggle
+## "Show the computer's memory (test)" (Game.choose_show_ai_memory(); off at every launch unless
+## --show-ai-memory is given; MemoryRings draws it). A profile option that cannot be used
+## (Game.admiral_profile_error) shows as a line under the row, and the seat buttons wait.
 ## Below the difficulty row, _build_team() adds the team row (also made in code):
 ## the heading TEAM with two buttons, Aurelian and Vhorr (each in its team's
 ## colour), and the chosen team's one-line description. A button calls
@@ -55,12 +61,19 @@ extends Control
 ## Vhorr's red (Palette.accent()), so the chosen buttons, the two seat buttons and
 ## the top line change colour the moment a team button is pressed. (The two team
 ## buttons keep their own team colours.)
+## Under the two seat cards, _build_practice() adds the PRACTICE row: three toggle buttons for who else is
+## on a practice range's map (Nobody else, Allies only, Both teams; PracticeRange.OTHERS) and two buttons
+## that start a practice range, in the pilot or the Admiral seat. A start button calls
+## Game.choose_practice() with the picked choice and then sends the seat as the seat cards do; the two
+## seat cards call Game.clear_practice() first, so a normal match never inherits an earlier range. The
+## choice is not remembered, and the buttons wait while a launch option was not understood.
 ##
 ## WHO USES IT: main.gd shows it from scenes/ui/start_screen.tscn and
 ## connects `chosen` to its start(role). The launch line reads
 ## Game.preset_error; the difficulty row reads Difficulty and calls
 ## Game.choose_difficulty(); the team row calls Game.choose_team(); the No fog toggle
-## calls Game.choose_fog_off() and shows Game.fog_off.
+## calls Game.choose_fog_off() and shows Game.fog_off. HudTopBar and NoteWriter ask profile_choice()
+## for the profile's name (their tag and the note's entry).
 
 ## Sent once the player picks a seat: role is "admiral" or "pilot".
 signal chosen(role: String)
@@ -98,6 +111,12 @@ var _fog_button: Button = null
 var _test_wing_button: Button = null
 ## The "Computer pilots' wings" toggle, next to it. Made by _build_difficulty().
 var _cpu_wings_button: Button = null
+## The computer Admiral's profile buttons, by profile name (AdmiralProfileData.PROFILES). Made by _build_computer().
+var _profile_buttons := {}
+## The "Show the computer's memory (test)" toggle, at the right end of the COMPUTER row. Made by _build_computer().
+var _memory_button: Button = null
+## The line under the COMPUTER row that shows Game.admiral_profile_error; hidden while there is none.
+var _profile_note: Label = null
 ## The one-line description of each team the human can play for, by team number.
 const TEAM_BLURBS := {
 	Rules.HALCYON: "Aurelian: you play the amber team and start at its mothership on the left of the map. The computer plays Vhorr.",
@@ -108,6 +127,23 @@ const TEAM_BLURBS := {
 var _team_buttons := {}
 ## The chosen team's description, under its buttons.
 var _team_blurb: Label = null
+## The words of the three choices of who else is on a practice range's map, by choice (PracticeRange.OTHERS).
+const PRACTICE_LABELS := {"nobody": "Nobody else", "allies": "Allies only", "both": "Both teams"}
+## What each choice means, shown under the practice row.
+const PRACTICE_BLURBS := {
+	"nobody": "Practice range: the real map with no other pilots and no computer Admirals. Every ship class is open to you (prices stay) and target drones wait in the lanes.",
+	"allies": "Practice range: the real map with your own team's computer pilots only, and no computer Admirals. Every ship class is open to you (prices stay).",
+	"both": "Practice range: the real map with the computer pilots and Admirals of both teams. Every ship class is open to you (prices stay).",
+}
+## The practice row's three choices, by choice (PracticeRange.OTHERS). Made by _build_practice().
+var _practice_choice_buttons := {}
+## The two buttons that start a practice range, by seat ("pilot" and "admiral"). Made by _build_practice().
+var _practice_start_buttons := {}
+## The choice of who else is on a practice range's map that the row shows (the screen's own pick:
+## it reaches Game only when a start button is pressed).
+var _practice_pick := PracticeRange.OTHERS_DEFAULT
+## The line under the practice row that says what the picked choice means.
+var _practice_blurb: Label = null
 
 
 ## Called once when the node joins the scene: take up the difficulty, the team, the
@@ -122,14 +158,16 @@ func _ready() -> void:
 	Game.use_remembered_unlock()
 	Game.use_remembered_fog_off()
 	Game.use_remembered_wings()
+	Game.use_remembered_hud()
 	Game.use_remembered_keys()
 	_use_team_accent()
 	$Cover.color = Palette.with_alpha(Palette.VOID, 0.82)
-	$Scroll/Center/Card/Col/Seats/Admiral/Col/Pick.pressed.connect(func() -> void: chosen.emit("admiral"))
-	$Scroll/Center/Card/Col/Seats/Pilot/Col/Pick.pressed.connect(func() -> void: chosen.emit("pilot"))
+	$Scroll/Center/Card/Col/Seats/Admiral/Col/Pick.pressed.connect(func() -> void: _pick_seat("admiral"))
+	$Scroll/Center/Card/Col/Seats/Pilot/Col/Pick.pressed.connect(func() -> void: _pick_seat("pilot"))
 	_build_launch_note()
 	_build_difficulty()
 	_build_team()
+	_build_practice()
 	resized.connect(_layout)
 	_layout()
 
@@ -240,6 +278,85 @@ func _build_difficulty() -> void:
 	col.add_child(wing_row)
 	col.move_child(wing_row, at)
 	_show_wings()
+	# Step 5: the COMPUTER row (the computer Admiral's profile and the memory toggle) under the wing row;
+	# its error line wraps, so it joins _wide_texts.
+	_build_computer(col, at + 1)
+	_wide_texts.append(_profile_note)
+
+
+## Add the COMPUTER row to the column `col` at place `at`, and its error line under it: the heading, one
+## toggle button per profile of the computer Admiral (the chosen one pressed), a gap, and the test toggle
+## "Show the computer's memory (test)". It uses nothing else of the screen, so a check can build it alone.
+func _build_computer(col: VBoxContainer, at: int) -> void:
+	var row := UiKit.hbox(8)
+	var heading := UiKit.label("COMPUTER", 12, Palette.MIST)
+	heading.custom_minimum_size = Vector2(100, 0)
+	heading.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	row.add_child(heading)
+	for p_name: String in AdmiralProfileData.PROFILES:
+		var pn := p_name
+		var b := UiKit.button(profile_label(pn), func() -> void: _choose_profile(pn))
+		b.toggle_mode = true
+		b.tooltip_text = "A test option: the computer Admirals of both teams play the %s profile in the coming match (Standard is the normal game). It is not remembered for the next run." % profile_label(pn)
+		row.add_child(b)
+		_profile_buttons[pn] = b
+	var gap := Control.new()
+	gap.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	row.add_child(gap)
+	_memory_button = UiKit.button("", func() -> void: _toggle_memory())
+	_memory_button.toggle_mode = true
+	_memory_button.tooltip_text = "A test option. On: your screen draws a ring where a computer Admiral last saw each enemy ship or building it remembers; the ring fades as the memory does and shows its age in seconds. Rings only show for an Admiral that plays from memory (the team view switch). Only your screen changes. It is not remembered for the next run."
+	row.add_child(_memory_button)
+	_profile_note = UiKit.label("", 13, UiKit.accent(), true)
+	for node: Control in [row, _profile_note]:
+		col.add_child(node)
+		col.move_child(node, at)
+		at += 1
+	_show_computer()
+
+
+## The word a profile button shows for the profile `p_name`: its name with a capital ("Standard", "V0", "Weak").
+static func profile_label(p_name: String) -> String:
+	return p_name.substr(0, 1).to_upper() + p_name.substr(1)
+
+
+## The computer Admiral's profile as the start screen would show it, from the launch options `options`
+## (Game.options): "standard" when --admiral-profile is not there, the name when it is "both:<name>" (what a
+## profile button sets), else "custom" (a launch line that gives the teams different profiles).
+static func profile_choice(options: Dictionary) -> String:
+	var text := str(options.get("admiral-profile", ""))
+	if text == "":
+		return "standard"
+	if text.begins_with("both:") and AdmiralProfileData.PROFILES.has(text.substr(5)):
+		return text.substr(5)
+	return "custom"
+
+
+## Profile `p_name` was picked: use it for the coming match (Game.choose_admiral_profile()), and show it.
+func _choose_profile(p_name: String) -> void:
+	Game.choose_admiral_profile(p_name)
+	_show_computer()
+
+
+## The memory toggle was pressed: switch it the other way for the coming match, and show it.
+func _toggle_memory() -> void:
+	Game.choose_show_ai_memory(not Game.show_ai_memory)
+	_show_computer()
+
+
+## Show the COMPUTER row as Game holds it: the chosen profile's button pressed (none for a custom launch
+## line), the memory toggle pressed when on with ON or off in its text, and under the row the refusal
+## Game.admiral_profile_error when there is one (the match would refuse to start, so the seat buttons wait
+## until a profile button clears it; an error in --admiral-set stays until the game is launched again).
+func _show_computer() -> void:
+	var chosen_name := profile_choice(Game.options)
+	for p_name: String in _profile_buttons:
+		(_profile_buttons[p_name] as Button).set_pressed_no_signal(p_name == chosen_name and Game.admiral_profile_error == "")
+	_memory_button.set_pressed_no_signal(Game.show_ai_memory)
+	_memory_button.text = "Show the computer's memory (test): %s" % ("ON" if Game.show_ai_memory else "off")
+	_profile_note.visible = Game.admiral_profile_error != ""
+	_profile_note.text = ("The computer Admiral's options cannot be used: %s. Pick a profile above before you choose a seat." % Game.admiral_profile_error) if _profile_note.visible else ""
+	_refresh_seats()
 
 
 ## The "Test wing" toggle was pressed: switch it the other way for the coming match and remember it.
@@ -379,15 +496,86 @@ func _show_team() -> void:
 		_team_blurb.text = String(TEAM_BLURBS[Game.human_team])
 
 
+## A seat button was pressed: this is a normal match (a range, if one was picked earlier, is off), so
+## send the seat.
+func _pick_seat(role: String) -> void:
+	Game.clear_practice()
+	chosen.emit(role)
+
+
+## Add the practice row right under the two seat cards: the heading PRACTICE, three toggle buttons for
+## who else is on the map (Nobody else, Allies only, Both teams: PracticeRange.OTHERS), a gap and the two
+## buttons that start a practice range, one for each seat the human can take (pilot and Admiral), then
+## what the picked choice means (a wrapping label, so it joins _wide_texts). A start button sets the
+## choice (Game.choose_practice()) and then sends the seat as the seat buttons do; the choice is not
+## remembered. The buttons wait while a launch option was not understood, like the seat buttons.
+func _build_practice() -> void:
+	var col: VBoxContainer = $Scroll/Center/Card/Col
+	var at: int = $Scroll/Center/Card/Col/Seats.get_index() + 1
+	var row := UiKit.hbox(8)
+	var heading := UiKit.label("PRACTICE", 12, Palette.MIST)
+	heading.custom_minimum_size = Vector2(100, 0)
+	heading.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	row.add_child(heading)
+	for other: String in PracticeRange.OTHERS:
+		var pick := other
+		var b := UiKit.button(String(PRACTICE_LABELS[pick]), func() -> void: _choose_practice_others(pick))
+		b.toggle_mode = true
+		b.tooltip_text = String(PRACTICE_BLURBS[pick])
+		row.add_child(b)
+		_practice_choice_buttons[pick] = b
+	var gap := Control.new()
+	gap.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	row.add_child(gap)
+	for seat: String in ["pilot", "admiral"]:
+		var role := seat
+		var b := UiKit.button("Practice range: %s" % ("Pilot" if role == "pilot" else "Admiral"), func() -> void: _start_practice(role))
+		b.tooltip_text = "Starts a practice match on the real map, in the %s seat, with the choice picked to the left. It is not remembered: every range starts from this button." % ("pilot" if role == "pilot" else "Admiral")
+		row.add_child(b)
+		_practice_start_buttons[role] = b
+	_practice_blurb = UiKit.label("", 13, Palette.MIST, true)
+	for node: Control in [row, _practice_blurb]:
+		col.add_child(node)
+		col.move_child(node, at)
+		at += 1
+	_wide_texts.append(_practice_blurb)
+	_show_practice()
+
+
+## Choice `other` of who else is on the practice map was picked: show it.
+func _choose_practice_others(other: String) -> void:
+	_practice_pick = other
+	_show_practice()
+
+
+## A practice start button was pressed for seat `role`: the choice goes to Game, then the seat is sent.
+func _start_practice(role: String) -> void:
+	Game.choose_practice(_practice_pick)
+	chosen.emit(role)
+
+
+## Show the picked choice of the practice row: its button pressed, the others not, its meaning under
+## the row.
+func _show_practice() -> void:
+	for other: String in _practice_choice_buttons:
+		(_practice_choice_buttons[other] as Button).set_pressed_no_signal(other == _practice_pick)
+	_practice_blurb.text = String(PRACTICE_BLURBS[_practice_pick])
+	_refresh_seats()
+
+
 ## Enable the two seat buttons, unless a launch option was not understood (an
 ## unknown --preset, --variant, --difficulty or --team): the match would refuse
 ## to start, so both stay off. A level above clears an unknown --difficulty and
 ## a team above clears an unknown --team; an unknown --preset or --variant stays
 ## until the game is launched again.
 func _refresh_seats() -> void:
-	var blocked: bool = Game.preset_error != "" or Game.variant_error != "" or Game.difficulty_error != "" or Game.team_error != ""
+	if not is_inside_tree():
+		return   # a check built one row alone: there are no seat buttons
+	var blocked: bool = Game.preset_error != "" or Game.variant_error != "" or Game.difficulty_error != "" or Game.team_error != "" or Game.admiral_profile_error != ""
 	$Scroll/Center/Card/Col/Seats/Admiral/Col/Pick.disabled = blocked
 	$Scroll/Center/Card/Col/Seats/Pilot/Col/Pick.disabled = blocked
+	for seat: String in _practice_start_buttons:
+		(_practice_start_buttons[seat] as Button).disabled = blocked
 
 
 ## Fit the card to the window. The layout is made at full size: the window size

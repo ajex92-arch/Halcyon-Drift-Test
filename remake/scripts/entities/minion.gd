@@ -91,6 +91,9 @@ var lane_half := 900.0
 var target: Unit = null
 ## Seconds until its next "think" (target choice and rock check).
 var think_t := 0.0
+## True for a minion the free waves launched (MinionDirector sets it where it launches a queued
+## minion): the practice range's Freeze waves removes these and no others.
+var free_wave := false
 
 # --- how it flies and fights (filled in from Minions.TYPES) ----------------------------
 

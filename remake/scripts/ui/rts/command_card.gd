@@ -3,11 +3,13 @@ extends Control
 ## WHAT THIS IS: the command card at the bottom left of the command view: the grid of orders, ships and base tools the
 ## Admiral clicks (or presses the key of), in the AoE and StarCraft way. Three pages, Orders, Build and Base, a tab row
 ## to switch, the grid of the home layout in force (B and C: 3x3, R T Y / F G H / V B N; A: 4x3, Q W E R / A S D F /
-## Z X C V), a fixed extra row of three buttons and More (a pop-out of up to 8 entries), and a result line.
+## Z X C V), a fixed extra row of three buttons and More (a pop-out of up to 8 entries), and a result line. A page may also
+## have a pick list of its own that a cell opens in the same pop-out: Build's Capitals and Orders' Position.
 ##
-## HOW IT WORKS: a Control with a pool of 12 grid cells, 3 extra cells, a More button, 8 pop-out entries and 3 tab
-## buttons (CardCell is the cell; CardPages is the table of what goes where; CardState says what each cell shows and
-## which of the four looks it wears; CardActions does what a click does). The page follows the selection (squadrons:
+## HOW IT WORKS: a Control with a pool of 12 grid cells, 3 extra cells, a More button, 8 pop-out entries (they serve the
+## More list and the page's own pick list) and 3 tab buttons (CardCell is the cell; CardPages is the table of what goes
+## where; CardState says what each cell shows and which of the four looks it wears; CardActions does what a click does).
+## The page follows the selection (squadrons:
 ## Orders; the mothership alone: Base; nothing: Build; squadrons and the mothership: RtsUiCalls.MIXED_SELECTION_PAGE)
 ## whenever the selection changes, and a click on a tab switches by hand. Every 0.25 s refresh() writes each shown
 ## cell's snapshot (only what changed is set). The cell labels show the key from the key map in force (KeyMap), so a
@@ -174,13 +176,16 @@ func _draw() -> void:
 	draw_style_box(RtsTheme.look("cell"), Rect2(Vector2.ZERO, size))
 
 
-## Choose page `p` by hand (a click on a tab).
+## Choose page `p` by hand (a click on a tab). The pick holds until the selection changes: the selection's signature is noted
+## here, so a card that never refreshed (the command view's slim display in field mode skips it) does not take the selection's
+## own page at its first refresh and throw the pick away.
 func set_page(p: String) -> void:
 	if p == page:
 		return
 	page = p
 	_open = ""
 	_layout_sig = ""
+	_sel_sig = "%s|%s" % [str(view.overlay.sel_squads), view.overlay.sel_base]
 	relayout()
 	refresh()
 
@@ -288,7 +293,7 @@ func _entry_pressed(idx: int) -> void:
 			CommandOrdersUi.press(view, str(ids[idx]).substr(5))
 			after_action()
 			return
-		CardActions.run(self, page if _open == "more" else "build", str(ids[idx]), shift, alt)
+		CardActions.run(self, page, str(ids[idx]), shift, alt)
 
 
 ## Rewrite the card from the match (the view's beat calls this): the page, the cells' snapshots, the pop-out.
@@ -330,7 +335,7 @@ func refresh() -> void:
 		var shown := i < ids.size()
 		_entries[i].visible = shown
 		if shown:
-			var epage := page if _open == "more" else "build"
+			var epage := page
 			if str(ids[i]).begins_with("feat:"):
 				for e: Dictionary in CommandOrdersUi.entries(view.world, view.team):
 					if "feat:" + str(e["id"]) == str(ids[i]):

@@ -223,7 +223,7 @@ func destination(brain: PilotAI) -> Vector2:
 	var p := brain.profile
 	var ts := world.teams[p.team]
 	# Step 1: a siege, for big ships and bombers.
-	if ts.siege_lane != "" and (Ships.size_of(p.hull_id) != Rules.SIZE_SMALL or p.hull_id == "bomber"):
+	if ts.siege_lane != "" and (Ships.size_of(p.hull_id) != Rules.SIZE_SMALL or Ships.has_role(p.hull_id, "siege")):
 		if ts.siege_phase == "gather":
 			return ts.siege_stage_point(ts.siege_lane)
 		return ts.siege_assault_point(ts.siege_lane)

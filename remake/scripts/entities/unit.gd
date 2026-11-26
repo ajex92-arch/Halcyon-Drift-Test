@@ -20,7 +20,8 @@ extends CharacterBody2D
 ##     hull (the unit's body, its "health"). Combat scales the hit (and
 ##     multiplies it by this unit's incoming_mults, which feature modules
 ##     may fill), then calls take_hit() here: the shield zone facing the
-##     attacker soaks what it can, and the hull takes the rest.
+##     attacker soaks what it can, then the armour section at the point of
+##     impact thins what is left, and the hull takes the rest.
 ##   - Death: when the hull reaches 0, Combat.kill() pays the bounties, calls
 ##     on_killed() and then World.remove_unit(), which frees the node.
 ##   - Moving: pilot ships use Godot's move_and_slide() (a CharacterBody2D
@@ -77,10 +78,13 @@ const K_EXTRACTOR := 10
 ## Kind number: a lane defense post (DefensePost), the unarmed station from
 ## which a lane's minion waves launch.
 const K_POST := 11
+## Kind number: a practice range's target drone (PracticeDrone), a neutral target that
+## belongs to neither team and pays nothing when it is destroyed.
+const K_PRACTICE_DRONE := 12
 ## A readable name for each kind number, in the same order as the K_*
 ## numbers above (KIND_NAMES[K_TURRET] is "turret"). The HUD, World's speed
 ## measurements and some tests print these.
-const KIND_NAMES := ["ship", "minion", "mining drone", "repair drone", "ward", "turret", "repair bay", "mothership", "derelict", "snub fighter", "extractor", "defense post"]
+const KIND_NAMES := ["ship", "minion", "mining drone", "repair drone", "ward", "turret", "repair bay", "mothership", "derelict", "snub fighter", "extractor", "defense post", "practice drone"]
 
 # --- who and what this unit is ---------------------------------------------------------
 
@@ -107,9 +111,30 @@ var radius := 10.0
 var hull := 100.0
 ## Hull points when fully repaired.
 var hull_max := 100.0
-## The fraction (0..1) of hull damage it shrugs off (armour). take_hit()
-## never lets it go above 0.9.
+## The fraction (0..1) of hull damage it shrugs off, whatever hits it (gear and
+## the structures' own rows; a pilot hull's own armour is its sections instead).
+## take_hit() never lets it go above 0.9.
 var hull_resist := 0.0
+## Its armour sections (see ArmourSections), or null for a unit with none: a
+## null unit takes hull hits with only its hull_resist, as hull damage always
+## worked for it.
+var armour: ArmourSections = null
+## Its parts (guns, engine pods, sensor; see ShipSystems), or null for a unit with none: a
+## null unit takes hits exactly as before. Only a big pilot hull gets one, while Rules.parts_on().
+## (Named `parts`, not `systems`: Ship.systems_off() already means the overload.)
+var parts: ShipSystems = null
+## The length of its hull's spine, in world units: the line along the ship that
+## the point of impact is measured from when the shield zone and the armour
+## section are picked. 0 = the hull is a circle.
+var spine_len := 0.0
+## The radius of its capsule hit shape, in world units: rounds, beams and blasts
+## see its spine (length spine_len, middle spine_off ahead of the centre) with a
+## round end at each end and this radius. 0 = no capsule: it is hit as a circle
+## of hit_radius().
+var hit_r := 0.0
+## How far the middle of its spine sits ahead of its centre, along the hull, in
+## world units (negative = astern). 0 where the drawing is centred.
+var spine_off := 0.0
 ## Its shields (see ShieldZones), or null for units without shields.
 var shields: ShieldZones = null
 ## How far it can see, in world units. 0 means it lights up no fog.
@@ -231,6 +256,13 @@ func shield_total() -> float:
 	return shields.total() if shields != null else 0.0
 
 
+## The states of this unit's armour sections for the hull's damage art, one
+## ArmourSections state (0 undamaged to 3 broken through) per section in section
+## order, or an empty list for a unit with no sections. The drawing code reads this.
+func armour_states() -> PackedInt32Array:
+	return armour.states() if armour != null else PackedInt32Array()
+
+
 ## Hull plus shields left as a 0..1 fraction of their maximum together
 ## (1 = undamaged). Unlike hull_frac(), which stays at 1 until the shields
 ## are gone, this one falls as soon as the shields do. 0 if the unit has
@@ -259,7 +291,8 @@ func visible_to(viewer_team: int) -> bool:
 ## fast round can't skip past us. Returns where along that line it first
 ## touches us, as a 0..1 fraction (0 = at a, 1 = at b), or -1 for a miss.
 ## `pad` (world units) makes us a little bigger. A circle of hit_radius() by
-## default; the mothership overrides this with its long hull.
+## default; the mothership overrides this with its long hull, and a ship with a
+## capsule hit shape (hit_r above 0) with its capsule (Ship.hit_t()).
 func hit_t(a: Vector2, b: Vector2, pad: float) -> float:
 	return Util.seg_circle_t(a, b, global_position, hit_radius() + pad)
 
@@ -267,52 +300,108 @@ func hit_t(a: Vector2, b: Vector2, pad: float) -> float:
 ## The size, as a circle radius in world units, that rounds, beams and blasts
 ## see, and that the AI aims and fires against: the body's `radius` for every
 ## unit, except that a small pilot ship overrides it (Ship.hit_radius()).
-## Every hit test and every "is it in reach of my gun?" test of a target asks
-## this; spacing, rocks, walls, docking and vision keep using `radius`.
+## Every "is it in reach of my gun?" test of a target asks this, and so does the hit
+## test of every unit with a circle hit shape; a capsule hull's own hit test reads its
+## capsule instead (hit_t(), hit_reach()), and spacing, rocks, walls, docking and
+## vision keep using `radius`.
 func hit_radius() -> float:
 	return radius
 
 
+## How far from its centre the shape that rounds, beams and blasts hit reaches,
+## in world units: hit_radius() for a circle; for a capsule hull (hit_r above 0)
+## the farthest point of its spine from the centre plus the capsule's radius. The
+## search for what a round could hit (the cheap reject and the hash a unit is
+## filed in) reads this, never the circle's size.
+func hit_reach() -> float:
+	if hit_r <= 0.0:
+		return hit_radius()
+	return absf(spine_off) + spine_len * 0.5 + hit_r
+
+
+## The middle point of the capsule hit shape, in world units (the centre moved
+## spine_off along the hull). Only meaningful when hit_r is above 0.
+func capsule_centre() -> Vector2:
+	return global_position + Vector2.from_angle(rotation) * spine_off
+
+
+## How far point `p` is from the edge of the shape rounds, beams and blasts hit,
+## in world units: the distance to the centre minus hit_radius() for a circle,
+## the distance to the capsule's edge for a capsule hull. Negative inside; it is
+## the number a blast measures its reach from.
+func edge_dist(p: Vector2) -> float:
+	if hit_r <= 0.0:
+		return p.distance_to(global_position) - hit_radius()
+	return Util.capsule_edge_dist(p, capsule_centre(), Vector2.from_angle(rotation), spine_len * 0.5, hit_r)
+
+
 ## Take a hit that Combat has already scaled. The shield zone facing the
-## attacker soaks first; the hull takes what is left after its resistance.
+## attacker soaks first; then the armour section at the point of impact and
+## the hull take what is left.
 ## The share of the hit that the weapon pierces (info.pierce) skips the
 ## shield and goes to the hull. An ion hit only ever loads the shield: what
 ## the shield cannot hold is lost, never reaching the hull (Rules.ION_SHIELD_ONLY).
+## The order of a hit is: the shield zone, then a part hit directly at the point of impact
+## (a light part: ShipSystems.direct_hit()), then the armour section and the hull, and last
+## the share of what got through the section that the parts behind it take (ShipSystems.share()).
 ## Returns the damage the hull took.
 func take_hit(info: DamageInfo, amount: float) -> float:
 	if not alive:
 		return 0.0
 	# Step 1: special effects (e.g. Brace) change the size of the hit, and
-	# we start the hit flash.
+	# we start the hit flash. The shot's strength against armour is its own
+	# strength, or else the size of the hit as it arrived.
+	var strength := info.strength if info.strength > 0.0 else amount
 	amount *= incoming_mult()
 	flash = 0.09
 	var raw := amount
-	# Step 2: work out where the attacker is "in our own frame" (as if we
-	# always faced right), pick the shield zone on that side, and let it
-	# soak the hit. `raw` becomes what got past the shield. A weapon with
+	# Step 2: work out where the hit touched us "in our own frame" (as if we
+	# always faced right and our spine ran along the x axis), pick the shield zone
+	# on that side, and let it soak the hit. `raw` becomes what got past the shield. A weapon with
 	# "pierce" sends that share of the hit past the shields to the hull; with
 	# a full pierce (the pilots' torpedo) the shields are not touched at all (they do
 	# not even restart their refill wait).
-	if shields != null and shields.max_total > 0.0:
+	var has_shield := shields != null and shields.max_total > 0.0
+	var local := Vector2.ZERO
+	var raw_local := Vector2.ZERO
+	if has_shield or armour != null:
+		raw_local = (info.impact_point() - global_position).rotated(-rotation)
+		local = ArmourSections.from_spine(raw_local, spine_len, spine_off)
+	if has_shield:
 		var through := amount * info.pierce
 		if through < amount:
-			var local := (info.from_pos - global_position).rotated(-rotation)
 			var zone := ShieldZones.zone_for_local(local)
-			raw = shields.absorb(zone, amount - through, shield_resist_bonus()) + through
+			raw = shields.absorb(zone, amount - through, shield_resist_bonus(), info.kind != Rules.W_ION) + through
 		else:
 			raw = through
 	# An ion hit loads the shield and nothing else: whatever the shield could
 	# not hold is lost, and a unit with no shield takes nothing from it.
 	if Rules.ION_SHIELD_ONLY and info.kind == Rules.W_ION:
 		raw = 0.0
-	# Step 3: armour lowers what reaches the hull, then the hull takes it.
+	# Step 3: the armour section at the point of impact thins what reaches the
+	# hull (it wears as it does); a unit with no sections, or a point where no
+	# section is found, passes the hit on whole. Then the flat resistance, and
+	# the hull takes it.
+	# A capsule hull sorts a hit on its flank by where it is along the hull; every
+	# other unit (the mothership included) picks by the angle only.
+	var section := -1
+	if armour != null and raw > 0.0:
+		section = armour.section_on_spine(raw_local, spine_len, spine_off) if hit_r > 0.0 else armour.section_at(local)
+	# A part that sits at the point of impact takes the hit first (a light part hit directly);
+	# what it cannot hold goes on to the armour.
+	if parts != null and raw > 0.0:
+		raw = parts.direct_hit(raw_local, section, armour, strength, raw)
+	if armour != null and raw > 0.0:
+		if section >= 0:
+			raw = armour.hit(section, strength, raw, _now())
+			if parts != null:
+				parts.share(section, raw, armour.last_glance, armour)
 	var hull_dmg := raw * (1.0 - clampf(hull_resist, 0.0, 0.9))
 	if hull_dmg > 0.0:
 		hull -= hull_dmg
 		last_hull_damage_time = _now()
 	last_damage_time = _now()
 	return hull_dmg
-
 
 ## Repair the hull by `amount` points (never above hull_max). Returns how
 ## much was actually repaired. Dead units can't be healed, and neither can

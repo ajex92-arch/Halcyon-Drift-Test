@@ -68,7 +68,11 @@ var order: Dictionary = {}
 ## exists. Set by the order path.
 var order_list: Array = []
 
-## The goal a squadron is working towards, as a Dictionary. Empty until goals exist.
+## The goal a bought squadron is working towards, as a Dictionary: {kind, target_kind, target, tick, settings, phase}. kind is
+## Defend, Escort or Push lane (the order words), target_kind and target are the order's (a whole-number point, a unit
+## id or a lane id), tick the tick it applied, settings {} and phase a short word the think may note. Empty means no goal.
+## A Hold keeps it and pauses it, a one-off Move or Attack goes back to it when it ends, a Stop or a new goal clears it. Set by
+## the goal order path (SquadOrders); read by SquadronThink.
 var goal: Dictionary = {}
 
 ## Where new or regrouping ships go, as a whole-number point in world units. Set by
@@ -79,7 +83,8 @@ var rally: Vector2i = Vector2i.ZERO
 ## 5 refitting, 6 launching. Set by the brain that flies it.
 var state: int = 0
 
-## Which brain flies it: "standin", "squad" or "wingman". Set by the maker.
+## Which brain flies it: "standin" (the old stand-in), "squad" (the new brain, SquadronBrain) or "wingman". The yard writes
+## "squad" while SquadronRules.use_squad_brain is true. Set by the maker.
 var brain: String = ""
 
 ## The World tick count on which the record was made. Set by the maker.
@@ -93,7 +98,8 @@ var wing_id: int = -1
 ## For any other kind: -1. Set by the maker.
 var slot_index: int = -1
 
-## The squad engine's private notes: smoothed heading, straggler, re-form, regroup
+## The squad engine's and the new brain's private notes (the plan SquadronThink writes: mode, anchor, target, leash and more,
+## see its header): smoothed heading, straggler, re-form, regroup
 ## and six-second skip timers (in ticks), and the record of the last order it took
 ## (kind, target, tick) so it can drop a repeat. Empty for the stand-in brain. It is
 ## not hashed and uses no dice. Set by the squad engine.

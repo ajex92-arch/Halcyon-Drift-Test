@@ -27,8 +27,28 @@ extends Node
 ## question before a restart and Look around), both
 ## motherships in trouble, the dead screen with the hangar open over it,
 ## the end screen (with a pop-up hint shown just before the match ends)
-## and the start screen; for an admiral the board's five tabs, the map
+## and the start screen; for an admiral the board's four tabs, the map
 ## tool, the help, the pause menu and the hangar.
+##
+## PAGE MODE (--page=<name>[:<variant>], optionally --at=<seconds>): instead of
+## the whole tour, take ONE picture of ONE page at one moment of a live match,
+## so someone who changed a page can look at that page alone. The match plays
+## for real until its clock reads --at (0 to 1800 seconds, default 0; the mode
+## only reads the clock, never sets it; a pilot is launched in a Fighter the
+## way the tour does it, an admiral stays at the bridge), then the page is
+## opened with the same HUD call the tour uses, the HUD gets 8 frames to lay
+## itself out, and one picture is taken (_shot) before the run ends. The pages
+## are the keys of PAGES: play (nothing opened), feed (the busy HUD), help
+## (variants: the help page names and Keys), controls, pause, hangar (variants
+## Ships, Gear, Modules, Kits), trouble, and for a pilot only scoreboard and
+## dead, for an admiral only board (variants Research, Build, Mothership,
+## Pilots). A name, variant or --at that is not valid, or a page that the seat
+## does not have, prints one "FAIL ui_tour: ...; pages: ..." line (with the
+## pages the seat has), takes no picture, prints no "done" line and quits. A
+## seat other than the pilot's or the admiral's (--all-ai gives the spectator
+## seat, or a mistyped --role) is refused the same way. A pilot shot down before
+## --at is launched again (one line says so) and the run fails with no "done"
+## line when there is still no ship (the page dead is exempt).
 ##
 ## HOW TO RUN IT ("godot" is the Godot console program, started from the
 ## folder that holds remake/):
@@ -37,6 +57,7 @@ extends Node
 ##   godot --headless --path remake -- --auto --role=pilot --bot=tour --force-hud --test=ui_tour
 ##   godot --headless --path remake --fixed-fps 60 -- --auto --role=pilot --bot=tour --force-hud --test=ui_tour --dump
 ##   godot --headless --path remake --fixed-fps 60 -- --auto --role=pilot --bot=tour --force-hud --test=ui_tour --dump-layout --ui-size=1366x657
+## (--minimap-pct=140 gives the minimap that size: T-125.)
 ## The first two run in a window and save pictures in the folder given by
 ## --shots (default: Godot's user data folder). The third runs with no
 ## window (--headless); --bot=tour stops main.gd from buying and launching
@@ -53,6 +74,10 @@ extends Node
 ## dump every picture step at each size in turn, resizing the window
 ## between the dumps the way a player resizing the browser does; that is
 ## the quick way to test many sizes, one run per role.
+## The page mode (see PAGE MODE above), one windowed and one headless line:
+##   godot --path remake --fixed-fps 60 --resolution 1280x720 -- --auto --role=pilot --bot=tour --test=ui_tour --page=help:Keys --at=60 --shots=<dir>
+##   godot --headless --path remake --fixed-fps 60 -- --auto --role=pilot --bot=tour --force-hud --test=ui_tour --page=help:Keys --at=60 --speed=4 --dump-layout --ui-size=1280x720
+## (--role=admiral for the Admiral's pages, such as --page=board:Build.)
 ##
 ## HOW TO READ THE OUTPUT: windowed, one "shot <path>" line per picture
 ## (p01_hangar_ships.png ... p10_start.png for a pilot, a01_start.png ...
@@ -60,6 +85,27 @@ extends Node
 ## line per picture step instead, plus the UIDUMP lines with --dump. The
 ## run ends with "ui_tour: done (pilot)" or "ui_tour: done (admiral)". Any
 ## SCRIPT ERROR line from Godot means a UI script broke.
+## The page mode's picture is named page_<name>[_<variant>]_t<--at as four
+## digits>.png (page_help_keys_t0120.png: the Keys help page at 120 s; the
+## variant is in lower case). It prints "ui_tour: page <name>[:<variant>] at
+## match time <seconds>" (the match clock when the picture is taken, a little
+## after --at), then the picture's "shot <path>" line windowed or the
+## "ui_tour step <file name>" line headless (plus the UIDUMP lines with --dump
+## or --dump-layout), and ends "ui_tour: done (page <name> at <seconds>)". The
+## real-time limit is 60 s plus 1.5 x --at divided by --speed; past it the run
+## prints "ui_tour: timeout".
+##
+## USE NOTES for the page mode: pick the page by its name above (a wrong name
+## lists the right ones). To see something that only exists later (a minion
+## wave is on the map from about 45 s, a mothership in trouble does not
+## depend on time) give --at; a high --at is slow, so add --speed=4 (headless
+## or windowed; the last second before --at runs at normal speed, so the
+## picture is taken within a fraction of a second of --at). Windowed, add
+## --position and --disable-vsync to park the window out of sight if needed.
+## A headless run prints no picture, only the step line and the dump: use
+## --dump-layout --ui-size=WxH and read the UIDUMP lines of that step, or
+## feed the output to tools/ui_layout_check.py. Two runs with --fixed-fps 60
+## and the same --seed print the same dump (leave the "build:" line out).
 ##
 ## WHO USES IT: main.gd loads it for --test=ui_tour (for --test=<name> it
 ## loads tests/<name>.gd, adds it after the World and calls setup()), and
@@ -90,6 +136,25 @@ const FEED_LINES := [
 ]
 ## The reasons of four earnings lines (HudMePanel keeps four).
 const EARN_REASONS := ["kill", "assist", "turret", "ore"]
+## The pages the page mode (--page=<name>[:<variant>]) can take a picture of, in the order an error message lists them: each name maps to
+## "seats" (the human roles it works in) and "opens" (the HUD call that opens it, in plain words). A page not in this table is refused.
+const PAGES := {
+	"play": {"seats": ["pilot", "admiral"], "opens": "nothing (the pilot flying, the Admiral at the bridge)"},
+	"feed": {"seats": ["pilot", "admiral"], "opens": "_busy_hud(): the full kill feed, earnings log and a pop-up hint"},
+	"help": {"seats": ["pilot", "admiral"], "opens": "Hud._toggle_help() then HelpPanel._show(variant)"},
+	"controls": {"seats": ["pilot", "admiral"], "opens": "Hud._toggle_controls()"},
+	"pause": {"seats": ["pilot", "admiral"], "opens": "Hud._toggle_pause_menu()"},
+	"hangar": {"seats": ["pilot", "admiral"], "opens": "Hud._open_hangar() then Hangar._set_tab(variant)"},
+	"trouble": {"seats": ["pilot", "admiral"], "opens": "_trouble(true): both motherships in trouble"},
+	"scoreboard": {"seats": ["pilot"], "opens": "Hud._show_scoreboard(true)"},
+	"dead": {"seats": ["pilot"], "opens": "Combat.kill() on the human's ship (the dead screen)"},
+	"board": {"seats": ["admiral"], "opens": "Hud._toggle_board() then AdmiralBoard._set_tab(variant)"},
+}
+## The variants of page "hangar" (the hangar's four tabs).
+const HANGAR_TABS := ["Ships", "Gear", "Modules", "Kits"]
+## The variants of page "board": the tabs AdmiralBoard._set_tab() builds (its Build and Mothership buttons are hidden, the tabs are
+## still reachable by name). The variants of page "help" are the keys of HelpPanel.PAGES and "Keys".
+const BOARD_TABS := ["Research", "Build", "Mothership", "Pilots"]
 
 ## The running match (set by setup()).
 var world: World
@@ -119,6 +184,20 @@ var sizes: Array[Vector2i] = [Vector2i(1280, 720)]
 ## True while a step is still running (a dump at several sizes takes a few
 ## frames), so the next step waits for it.
 var busy := false
+## True with --page: the run is the page mode (one picture of one page at one match time) instead of a tour.
+var page_mode := false
+## The page asked (a key of PAGES).
+var page_name := ""
+## The variant of the page asked ("" for none).
+var page_variant := ""
+## The match time the page is wanted at, in seconds (--at).
+var page_at := 0.0
+## True once the page mode has started its run (it runs once).
+var page_started := false
+## True when the page mode's options were refused (the run prints a FAIL line and quits).
+var page_failed := false
+## Engine.time_scale as --speed set it (read in setup()), which the page mode's time limit scales with.
+var page_speed := 1.0
 
 
 ## main.gd calls this once, right after the World is built. Remember the
@@ -134,14 +213,55 @@ func setup(w: World) -> void:
 		Input.action_press("center_on_ship")
 	layout = Game.opt("dump-layout", false) == true
 	dump = layout or Game.opt("dump", false) == true
+	# T-125: --minimap-pct=N gives the minimap that size (70 to 140) for the pictures and the layout dump; without it the size is the
+	# default 100%, whatever the settings file holds (only the start screen reads the file).
+	if Game.opt("minimap-pct") != null:
+		Game.minimap_pct = Game.clamp_minimap_pct(int(str(Game.opt("minimap-pct"))))
 	# A headless window is only 64 x 64 pixels; give the dump the real
 	# window size, so text wraps and panels sit as they do on screen.
 	sizes = _ui_sizes()
 	if DisplayServer.get_name() == "headless" and (dump or Game.opt("ui-size") != null):
 		get_tree().root.size = sizes[0]
+	_print_size(sizes[0], true)
 	dir = str(Game.opt("shots", OS.get_user_data_dir()))
 	DirAccess.make_dir_recursive_absolute(dir)
 	process_mode = Node.PROCESS_MODE_ALWAYS
+	# --page: the page mode (one picture of one page at one match time). Without it the tours run as before.
+	if Game.opt("page") != null:
+		page_mode = true
+		page_speed = maxf(Engine.time_scale, 0.001)
+		var problem := _page_parse()
+		if problem != "":
+			var names := _page_names()
+			print("FAIL ui_tour: %s%s" % [problem, "; pages: " + ", ".join(names) if not names.is_empty() else ""])
+			fails += 1
+			page_failed = true
+			get_tree().quit()
+
+
+## Print the size the tour runs at (F460): the size asked (--ui-size, `asked`), the window's real size, and the size
+## of the layout the HUD is laid out in. The last one is what the UIVIEW lines and tools/ui_layout_check.py name: the
+## project stretches a 1280 x 720 layout to the window (stretch mode canvas_items, aspect expand), so a 1366 x 657
+## window is a 1496 x 720 layout drawn at 0.9125 of its size, and every 16:9 window is the 1280 x 720 layout. A
+## window that is not the size asked prints a FAIL line and counts as a failed check. `first` is the tour's opening
+## line (it also lists every size of the run).
+func _print_size(asked: Vector2i, first: bool) -> void:
+	var win := get_tree().root
+	var lay := win.get_visible_rect().size
+	# Only a headless dump sets the window's size (setup()); any other run keeps the window it has.
+	var sized := DisplayServer.get_name() == "headless" and (dump or Game.opt("ui-size") != null)
+	var ok := win.size == asked or not sized
+	var all := ""
+	if first and sizes.size() > 1:
+		var names: Array = []
+		for sz in sizes:
+			names.append("%dx%d" % [sz.x, sz.y])
+		all = " sizes=" + ",".join(names)
+	print("ui_tour: size asked=%dx%d window=%dx%d layout=%dx%d scale=%.4f%s" % [asked.x, asked.y, win.size.x, win.size.y,
+		roundi(lay.x), roundi(lay.y), win.get_final_transform().get_scale().x, all])
+	if not ok:
+		print("FAIL ui_tour: the window is %dx%d, not the %dx%d asked" % [win.size.x, win.size.y, asked.x, asked.y])
+		fails += 1
 
 
 ## The window sizes for a headless dump: --ui-size=WxH (such as 1366x657),
@@ -162,11 +282,15 @@ func _ui_sizes() -> Array[Vector2i]:
 ## Godot calls this every drawn frame; `dt` is the frame's length in
 ## seconds. Find the HUD, then run each step when its time comes.
 func _process(dt: float) -> void:
-	if world == null:
+	if world == null or page_failed:
 		return
 	# Safety net: quit after 60 s of real time since the program started
-	# (for each window size of a headless dump at several sizes).
-	if Time.get_ticks_msec() > 60000 * sizes.size():
+	# (for each window size of a headless dump at several sizes). The page mode adds the real time its match
+	# time takes: 1.5 x --at seconds, divided by --speed.
+	var limit_ms := 60000.0 * sizes.size()
+	if page_mode:
+		limit_ms += 1500.0 * page_at / page_speed
+	if Time.get_ticks_msec() > limit_ms:
 		print("ui_tour: timeout")
 		get_tree().quit()
 	# Wait until the HUD exists (it is a node named "Hud" somewhere in the
@@ -175,9 +299,22 @@ func _process(dt: float) -> void:
 		hud = get_tree().root.find_child("Hud", true, false) as Hud
 		if hud == null:
 			return
+		## setup() runs after the minimap's _ready() has taken its size, so --minimap-pct has to be applied again here, once the
+		## HUD exists (the way feed_fit_check does), and the layout asked to place the panels against the new minimap.
+		if Game.opt("minimap-pct") != null:
+			hud.minimap.apply_size()
+			hud.layout.apply()
 	# Run the next step once its time has come, and wait for it to finish
 	# ("await": a picture step waits for the frame to be drawn).
 	t += dt
+	# The page mode runs its one page instead of a step list (once, as a coroutine).
+	if page_mode:
+		if not page_started:
+			page_started = true
+			busy = true
+			await _page_run()
+			busy = false
+		return
 	var steps: Array = _pilot_steps() if role == "pilot" else _admiral_steps()
 	if step >= steps.size() or busy:
 		return
@@ -187,6 +324,142 @@ func _process(dt: float) -> void:
 		busy = true
 		await (s[1] as Callable).call()
 		busy = false
+
+
+## The names of the pages that this run's seat (role) has, in PAGES order (what a FAIL line lists); none for a seat that is
+## neither the pilot's nor the Admiral's.
+func _page_names() -> Array[String]:
+	var out: Array[String] = []
+	if role != "pilot" and role != "admiral":
+		return out
+	for n: String in PAGES:
+		if (PAGES[n]["seats"] as Array).has(role):
+			out.append(n)
+	return out
+
+
+## The variants page `n` takes: the hangar's tabs, the Admiral board's tabs, or (help) the keys of HelpPanel.PAGES and "Keys".
+## An empty list means the page has no variants.
+func _page_variants(n: String) -> Array[String]:
+	var out: Array[String] = []
+	match n:
+		"hangar":
+			out.assign(HANGAR_TABS)
+		"board":
+			out.assign(BOARD_TABS)
+		"help":
+			for k: String in HelpPanel.PAGES:
+				out.append(k)
+			out.append("Keys")
+	return out
+
+
+## Read --page=<name>[:<variant>] and --at=<seconds> into page_name, page_variant and page_at. Returns "" when they are good, else
+## what was wrong (the FAIL line's text): a seat that is neither the pilot's nor the Admiral's (the spectator seat of --all-ai, or a
+## mistyped --role), a page that is not in PAGES, a page this seat does not have, a variant the page does not
+## take, or an --at that is not a number from 0 to 1800. A variant matches whatever its letter case.
+func _page_parse() -> String:
+	if role != "pilot" and role != "admiral":
+		return "the page mode works in the pilot and admiral seats only, not '%s' (--role=pilot or --role=admiral, without --all-ai)" % role
+	var raw: String = str(Game.opt("page"))
+	var bits := raw.split(":", true, 1)
+	var asked := bits[0].strip_edges()
+	var variant := bits[1].strip_edges() if bits.size() > 1 else ""
+	if not PAGES.has(asked):
+		return "no page named '%s'" % raw
+	if not _page_names().has(asked):
+		return "page '%s' does not work in the %s seat" % [asked, role if role == "pilot" else "admiral"]
+	page_name = asked
+	if variant != "":
+		var found := ""
+		for v: String in _page_variants(asked):
+			if v.to_lower() == variant.to_lower():
+				found = v
+		if found == "":
+			var all := _page_variants(asked)
+			return "page '%s' has no variant '%s' (%s)" % [asked, variant, ", ".join(all) if not all.is_empty() else "it takes none"]
+		page_variant = found
+	var at_text := "0" if Game.opt("at") == null else str(Game.opt("at"))
+	if not at_text.is_valid_float() or not is_finite(at_text.to_float()):
+		return "--at=%s is not a number of seconds" % at_text
+	page_at = at_text.to_float()
+	if page_at < 0.0 or page_at > 1800.0:
+		return "--at=%s is outside 0 to 1800 seconds" % at_text
+	return ""
+
+
+## The page mode's whole run: launch the human's ship (a pilot; the Admiral stays at the bridge), let the match play until its
+## time reaches `page_at` (real play: the clock is only read, never set), open the page, wait 8 frames for the HUD to lay itself
+## out, print the "page ... at match time" line, take the one picture and end the run. With a high --speed the last second of the
+## wait runs at normal speed, so the match time of the picture is within a frame or two of --at.
+func _page_run() -> void:
+	if role == "pilot" and _tour_launch() == null:
+		print("FAIL ui_tour: the pilot's ship could not be launched")
+		fails += 1
+		_finish("page %s" % page_name)
+		return
+	while world.time < page_at:
+		if world.time >= page_at - 1.0 and Engine.time_scale > 1.0:
+			Engine.time_scale = 1.0
+		await get_tree().process_frame
+	Engine.time_scale = minf(Engine.time_scale, 1.0)
+	# A pilot shot down before --at (--bot=tour gives no relaunch) would show the dead screen on every page but "dead": launch again
+	# (_tour_launch() does nothing while the ship is alive), and fail when there is still no ship.
+	if role == "pilot" and page_name != "dead" and _pilot_ship_gone():
+		print("ui_tour: the pilot's ship was gone at match time %.1f; launched again" % world.time)
+		_tour_launch()
+		if _pilot_ship_gone():
+			print("FAIL ui_tour: the pilot's ship was shot down before --at")
+			fails += 1
+			_finish("page %s" % page_name)
+			return
+	hud._close_others(null)
+	_page_open()
+	await _wait_frames(8)
+	var label := page_name if page_variant == "" else "%s:%s" % [page_name, page_variant]
+	print("ui_tour: page %s at match time %.1f" % [label, world.time])
+	var file := "page_" + page_name
+	if page_variant != "":
+		file += "_" + page_variant.to_lower().replace(" ", "_")
+	await _shot("%s_t%04d" % [file, roundi(page_at)])
+	_finish("page %s at %s" % [label, String.num(page_at)])
+
+
+## True when the human has no living ship (none yet, freed, or dead).
+func _pilot_ship_gone() -> bool:
+	var s: Ship = world.human.ship
+	return s == null or not is_instance_valid(s) or not s.alive
+
+
+## Open the page asked (page_name, page_variant) with the same HUD calls the tours use.
+func _page_open() -> void:
+	match page_name:
+		"feed":
+			_busy_hud()
+		"help":
+			hud._toggle_help()
+			if page_variant != "":
+				hud.help._show(page_variant)
+		"controls":
+			hud._toggle_controls()
+		"pause":
+			hud._toggle_pause_menu()
+		"hangar":
+			hud._open_hangar()
+			if page_variant != "":
+				hud.hangar._set_tab(page_variant)
+		"trouble":
+			_trouble(true)
+		"scoreboard":
+			hud._show_scoreboard(true)
+		"dead":
+			var s := world.human.ship
+			if s != null:
+				world.combat.kill(s, DamageInfo.new())
+		"board":
+			hud._toggle_board()
+			if page_variant != "":
+				hud.board._set_tab(page_variant)
 
 
 ## Take the picture `name`: windowed, wait for the frame to be drawn and
@@ -299,6 +572,7 @@ func _dump_sizes(name: String) -> void:
 		get_tree().root.size = sz
 		for i in 8:
 			await get_tree().process_frame
+		_print_size(sz, false)
 		UiDump.dump(hud, name, layout)
 	get_tree().root.size = sizes[0]
 	for i in 3:
@@ -404,11 +678,16 @@ func _pilot_steps() -> Array:
 		[10.4, func() -> void: await _shot("p06a_pause")],
 		[10.45, func() -> void: hud.pause_menu.ask(PauseMenu.VIEW_RESTART)],
 		[10.48, func() -> void: await _shot("p06b_pause_ask")],
+		# The pause menu's ring and card view (its third button's page), then back to the buttons.
+		[10.482, func() -> void: hud.pause_menu.ask(PauseMenu.VIEW_PARTS)],
+		[10.484, func() -> void: await _shot("p06b1_pause_parts")],
 		# Back to the buttons, then Look around: the card goes, the game stays paused, the big message names the keys.
 		[10.485, func() -> void: hud.pause_menu.show_card()],
 		[10.49, func() -> void: hud.pause_menu.look_around()],
 		[10.495, func() -> void: await _shot("p06c_look")],
 		[10.5, func() -> void: hud._toggle_pause_menu()],
+		# After the pause menu: the ring round the ship and the card on the target: a held target, a torpedo coming in, and each preset in turn.
+		[11.0, func() -> void: await _ring_tour()],
 		[14.5, func() -> void: await _shot("p07_wave")],
 		# Both motherships in trouble: the longest top bar and banner text.
 		[14.7, func() -> void: _trouble(true)],
@@ -426,6 +705,9 @@ func _pilot_steps() -> Array:
 			hud._open_hangar()],
 		[17.1, func() -> void: await _shot("p08a_dead_hangar")],
 		[17.3, func() -> void: hud.hangar.visible = false],
+		# The death card in each state: a crash, a kill by a pilot (both pages, collapsed), a watch (with the hangar over it, the
+		# watched ship shot down), the launch, and a kill by a turret with minions.
+		[17.35, func() -> void: await _death_tour()],
 		# The end screen, shown the way the HUD shows it when a match ends
 		# (Hud._on_match_over). The match itself goes on: a real ending
 		# closes headless test runs at once (main.gd), before the picture.
@@ -457,7 +739,7 @@ func _admiral_steps() -> Array:
 		[2.0, func() -> void: await _shot("a02_board_research")],
 		# Order the research facility and the repair bay research (the
 		# admiral's order desk queues them), and visit the Build,
-		# Mothership, Fleet and Pilots tabs.
+		# Mothership and Pilots tabs.
 		[2.5, func() -> void:
 			world.command.build_facility(0, "research")
 			world.command.research(0, "repairBays")
@@ -519,6 +801,9 @@ func _admiral_steps() -> Array:
 		[12.26, func() -> void: await _shot("a08c_pause_ask")],
 		[12.27, func() -> void: hud.pause_menu.show_card()],
 		[12.28, func() -> void: hud.pause_menu.look_around()],
+		# The feed's lines are a few seconds old by now and fade after 9: put them in again, so the picture and the dump always
+		# measure the full feed, whatever the speed of the run.
+		[12.285, func() -> void: _busy_hud(false)],
 		[12.29, func() -> void: await _shot("a08d_look")],
 		[12.3, func() -> void:
 			hud._toggle_pause_menu()
@@ -528,6 +813,8 @@ func _admiral_steps() -> Array:
 			hud.hangar.visible = false
 			_trouble(true)],
 		[13.4, func() -> void: await _shot("a09a_trouble")],
+		# The Admiral's death card (it shows for 10 seconds, with no teammate row).
+		[13.5, func() -> void: await _admiral_death_tour()],
 		[13.6, func() -> void:
 			_trouble(false)
 			_finish("admiral")],
@@ -582,3 +869,221 @@ func _tour_orders() -> void:
 	if not hud.board.visible:
 		hud._toggle_board()
 	await _shot("a05c_orders_done")
+
+
+## The ring round the pilot's ship and the card on its target, on screen (the pilot's tour): a held enemy (put close to the ship so the
+## team sees it), a torpedo coming in on a crossing path, and each preset of the ring and the card in turn, with a picture of each.
+## Game's fields are set directly (no choose_ call, so the settings file is never written) and put back.
+func _ring_tour() -> void:
+	var ship := world.human.ship if world.human != null else null
+	if ship == null or not is_instance_valid(ship) or not ship.alive:
+		return
+	var other := Rules.CINDER if world.human_team == Rules.HALCYON else Rules.HALCYON
+	var foe: Unit = null
+	for s: Ship in world.ships:
+		if s.team == other and s.alive:
+			foe = s
+			break
+	if foe == null:
+		for m: Minion in world.minions:
+			if m.team == other and m.alive:
+				foe = m
+				break
+	if foe != null:
+		foe.global_position = ship.global_position + Vector2(650.0, -300.0)
+		ship.controls.target_id = foe.uid
+	var from := ship.global_position + Vector2(-900.0, 200.0)
+	world.projectiles.spawn(from, (ship.global_position - from).normalized() * 250.0, 9.0, 5.0, Rules.W_TORP, {"radius": 5.0, "arm": 0.0}, foe, null)
+	var was_ring := Game.ring_preset
+	var was_card := Game.card_preset
+	for p in 3:
+		Game.ring_preset = p
+		Game.card_preset = p
+		await _wait_frames(8)
+		await _shot("p04c_ring_card_%s" % ShipRingParts.preset_name(p).to_lower())
+	Game.ring_preset = was_ring
+	Game.card_preset = was_card
+	ship.controls.target_id = -1
+
+
+## A made ship of pilot `name` of team `team` in hull `hull`, launched, still and seen by the human's team (the death tour's attackers and
+## teammates).
+func _tour_ship(name: String, team: int, hull: String) -> Ship:
+	var p := PilotProfile.new(name, team, 60 + world.profiles.size(), false)
+	p.hull_id = hull
+	world.profiles.append(p)
+	var s := world.launch(p)
+	if s != null:
+		s.velocity = Vector2.ZERO
+		s.controller = null
+		s.visible_mask |= 1 << world.human_team
+	return s
+
+
+## The human in a live Fighter: the ship they have, or a new one (the dead pilot is let out of the wait, given the price and launched).
+func _tour_launch() -> Ship:
+	var h := world.human
+	if h.ship == null or not is_instance_valid(h.ship) or not h.ship.alive:
+		h.credits = 3000.0
+		if h.state == "dead":
+			h.state = "docked"
+		h.respawn_t = 0.0
+		h.buy_hull("fighter", world.teams[world.human_team])
+		world.launch(h)
+	return h.ship
+
+
+## One hit of weapon kind `kind` on `target` from `src` at `angle` (radians from the target's nose), `amount` of it final and `hull` of it
+## on the hull: logged in the target's own damage log and announced the way Combat announces it.
+func _tour_hit(target: Ship, src: Unit, kind: int, angle: float, amount: float, hull: float) -> void:
+	var d := DamageInfo.from_unit(src, amount, kind, target.global_position + Vector2.from_angle(target.rotation + angle) * 600.0)
+	target.log_damage(d, amount)
+	Events.damage_applied.emit(target, d, amount, hull)
+
+
+## Let the dead pilot's card settle: two refreshes of the HUD and of the card.
+func _death_refresh() -> void:
+	for i in 2:
+		await _wait_frames(6)
+		hud.death_card.refresh(true)
+	await _wait_frames(2)
+
+
+## Check that the death card is `shown` (and print a PASS or FAIL line for `what`).
+func _death_check(shown: bool, what: String) -> void:
+	var ok := hud.death_card.visible == shown
+	print("%s ui_tour: death card %s: %s" % ["PASS" if ok else "FAIL", "shown" if shown else "gone", what])
+	if not ok:
+		fails += 1
+
+
+## The death card's pictures on the pilot's tour (the dead pilot's screen in each state): a crash with nothing logged (Row 1 only),
+## a kill by a pilot (the Summary page, the Attackers page, collapsed), a watch (the hangar open over it, the watched ship shot down),
+## the launch (the card gone) and a kill by a turret with minions (grouped lines). A dead pilot stays dead until the next launch, and the
+## Space hold of this tour is let go while watching (Space ends a watch).
+func _death_tour() -> void:
+	var h := world.human
+	var card := hud.death_card
+	var cam := world.camera
+	var foe := Rules.CINDER if world.human_team == Rules.HALCYON else Rules.HALCYON
+	# Park the pointer in the middle (a window's pointer at the corner pans the camera and ends a watch).
+	var park := InputEventMouseMotion.new()
+	park.position = get_viewport().get_final_transform() * (get_viewport().get_visible_rect().size * 0.5)
+	park.global_position = park.position
+	Input.parse_input_event(park)
+	# The crash: the pilot is dead already (the p08 step) and nothing was logged, so the card has Row 1 only.
+	h.respawn_t = 500.0
+	await _death_refresh()
+	_death_check(true, "a crash (Row 1 only)")
+	await _shot("p08b_death_crash")
+	# A kill by a pilot: bolts from the rear, a torpedo from the front.
+	var atlas := _tour_ship("Atlas", foe, "lance")
+	var boreas := _tour_ship("Boreas", foe, "fighter")
+	var ship := _tour_launch()
+	if ship == null or atlas == null or boreas == null:
+		print("FAIL ui_tour: the death tour could not make its ships")
+		fails += 1
+		return
+	await _wait_frames(4)
+	for i in 3:
+		_tour_hit(ship, atlas, Rules.W_BOLT, PI, 120.0, 30.0)
+	_tour_hit(ship, boreas, Rules.W_TORP, 0.0, 500.0, 500.0)
+	world.combat.kill(ship, DamageInfo.from_unit(boreas, 500.0, Rules.W_TORP, ship.global_position + Vector2(600.0, 0.0)))
+	h.respawn_t = 500.0
+	await _death_refresh()
+	_death_check(true, "killed by a pilot")
+	await _shot("p08c_death_pilot")
+	card._set_page(1)
+	await _death_refresh()
+	await _shot("p08d_death_attackers")
+	card._set_page(0)
+	card._toggle_collapse()
+	await _death_refresh()
+	await _shot("p08e_death_collapsed")
+	card._toggle_collapse()
+	# Watching a teammate: C once, the hangar over the card, then the watched ship shot down.
+	Input.action_release("center_on_ship")
+	hud.router._camera_key()
+	await _death_refresh()
+	await _wait_frames(20)
+	_death_check(true, "watching a teammate")
+	print("%s ui_tour: death card: the watch label shows (%s)" % ["PASS" if card._watch_label.visible else "FAIL", card._watch_label.text])
+	if not card._watch_label.visible:
+		fails += 1
+	await _shot("p08f_death_watch")
+	hud._open_hangar()
+	await _death_refresh()
+	await _shot("p08g_death_watch_hangar")
+	hud.hangar.visible = false
+	if cam.watched != null:
+		world.combat.kill(cam.watched, DamageInfo.new())
+	await _death_refresh()
+	await _shot("p08h_death_watch_lost")
+	# The launch: the card and the watch are gone.
+	cam.watch_clear()
+	ship = _tour_launch()
+	await _death_refresh()
+	_death_check(false, "after the launch")
+	await _shot("p08i_death_launch")
+	# A kill by a turret with minions: grouped lines.
+	var turret: Unit = null
+	for t: Turret in world.turrets:
+		if t.team == foe and t.alive:
+			turret = t
+			break
+	var minions: Array[Unit] = []
+	for m: Minion in world.minions:
+		if m.team == foe and m.alive and minions.size() < 3:
+			m.visible_mask |= 1 << world.human_team
+			minions.append(m)
+	if ship != null and turret != null:
+		turret.visible_mask |= 1 << world.human_team
+		_tour_hit(ship, turret, Rules.W_BOLT, PI * 0.5, 300.0, 60.0)
+		for m: Unit in minions:
+			_tour_hit(ship, m, Rules.W_BOLT, -PI * 0.5, 90.0, 20.0)
+		world.combat.kill(ship, DamageInfo.from_unit(turret, 300.0, Rules.W_BOLT, ship.global_position + Vector2(0.0, 600.0)))
+		h.respawn_t = 500.0
+		await _death_refresh()
+		card._set_page(1)
+		await _death_refresh()
+		_death_check(true, "killed by a turret with minions")
+		await _shot("p08j_death_turret")
+	# Back to the pilot's tour: a live ship, the card gone, Space held again.
+	ship = _tour_launch()
+	await _death_refresh()
+	card._set_page(0)
+	Input.action_press("center_on_ship")
+
+
+## The Admiral's death card: the Admiral flies a Fighter, is shot down and the card shows (no teammate row) for 10 seconds.
+func _admiral_death_tour() -> void:
+	var h := world.human
+	var card := hud.death_card
+	var foe := Rules.CINDER if world.human_team == Rules.HALCYON else Rules.HALCYON
+	# The motherships' trouble of the step before ends here: a mothership in trouble launches nobody.
+	_trouble(false)
+	h.credits = 3000.0
+	h.buy_hull("fighter", world.teams[world.human_team])
+	var ship := world.launch(h)
+	var atlas := _tour_ship("Atlas", foe, "lance")
+	if ship == null or atlas == null:
+		print("FAIL ui_tour: the Admiral's death tour could not make its ships")
+		fails += 1
+		return
+	await _wait_frames(4)
+	for i in 3:
+		_tour_hit(ship, atlas, Rules.W_BOLT, PI, 120.0, 30.0)
+	world.combat.kill(ship, DamageInfo.from_unit(atlas, 120.0, Rules.W_BOLT, ship.global_position + Vector2(-600.0, 0.0)))
+	await _death_refresh()
+	_death_check(true, "the Admiral's ship shot down")
+	var no_row := not card._mine_btn.visible
+	print("%s ui_tour: death card: the Admiral's card has no teammate row" % ("PASS" if no_row else "FAIL"))
+	if not no_row:
+		fails += 1
+	await _shot("a09b_death_admiral")
+
+
+## Wait `n` drawn frames (a step of the tour that has to let the HUD draw before its picture).
+func _wait_frames(n: int) -> void:
+	for i in n:
+		await get_tree().process_frame

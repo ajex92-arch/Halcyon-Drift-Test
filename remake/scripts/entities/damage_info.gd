@@ -7,8 +7,8 @@ extends RefCounted
 ## Combat.apply_damage(). `amount` is the raw damage BEFORE the damage table
 ## (Rules.damage_mult; not applied at all while the damage modifiers are
 ## removed), the shield zones and the resistances; Combat works those out.
-## The note then travels on: Unit.take_hit() reads `from_pos` to
-## pick the shield zone that was hit, Unit.log_damage() reads the source
+## The note then travels on: Unit.take_hit() reads `from_pos` (or `impact`) to
+## pick the shield zone and the armour section that were hit, and `strength` for the armour, Unit.log_damage() reads the source
 ## fields to remember the attacker, and on a kill the same note goes to
 ## Economy and to the victim's on_killed().
 ##
@@ -67,6 +67,20 @@ var blast_size := 0
 var blast_speed := 0
 ## Which lookup table of BlastScale the weapon uses.
 var blast_curve := 0
+## The strength of the shot against armour, in damage points: how hard the weapon
+## hits (a beam counts half its damage per second). 0 = not set, and the hit's own
+## amount is its strength. Only Unit.take_hit() reads it.
+var strength := 0.0
+## Where the hit touched the target (world position): the armour section is picked
+## from it. Vector2.INF = not set, and from_pos is used (the point the shield zone
+## is picked from).
+var impact := Vector2.INF
+
+
+## The point the armour section and the shield zone are picked from: impact when it
+## is set, else from_pos.
+func impact_point() -> Vector2:
+	return impact if impact.is_finite() else from_pos
 
 
 ## Build a DamageInfo for a hit by unit `src` (which may be null, e.g. for
@@ -78,6 +92,7 @@ static func from_unit(src: Unit, amount_value: float, kind_value: int, from: Vec
 	d.amount = amount_value
 	d.kind = kind_value
 	d.from_pos = from
+	d.impact = from
 	# Copy who fired, if the attacker still exists.
 	if src != null and is_instance_valid(src):
 		d.source = src

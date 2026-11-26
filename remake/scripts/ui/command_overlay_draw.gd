@@ -42,6 +42,8 @@ static func draw(ov: CommandOverlay) -> void:
 		return
 	# 2. The Admiral's own marks.
 	_draw_admiral_marks(ov, px)
+	# 2b. The answer to an order click: the order ring and the grey x (OrderFeedback).
+	OrderFeedback.for_overlay(ov).draw(ov, px)
 	if ov.tool == "":
 		return
 	# 3. The armed tool's preview at the mouse.

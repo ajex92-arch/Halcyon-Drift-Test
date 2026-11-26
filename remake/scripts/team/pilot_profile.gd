@@ -95,6 +95,10 @@ var monster_kills := 0
 var streak := 0
 ## Their longest streak this match.
 var best_streak := 0
+## The match time of each pilot-ship kill of the current streak, oldest first.
+## Emptied when their ship is destroyed. Economy counts a kill in the bounty
+## on them once it is old enough (Economy.grown_kills).
+var kill_times: Array[float] = []
 ## All credits earned this match, after income_mult: pay through earn() and
 ## earn_quietly() (the passive trickle too), not refunds, sales or insurance.
 var earned := 0.0
@@ -189,6 +193,25 @@ func gear_stats() -> StatBlock:
 			else:
 				_gear_stats.add_dict(Items.ITEMS[s["id"]]["stats"])
 	return _gear_stats
+
+
+## The "hull_resist" of each gear item the pilot carries that has one, as a list of shares
+## (0.08 = 8%, a Mk II item counting GearMk2Feature.STAT_MULT times as much), one entry
+## per item. The armour sections turn each into armour points of its own
+## (ArmourSections.gear_a), so two items add their points, not their shares.
+func gear_resists() -> Array:
+	var out: Array = []
+	for s: Dictionary in inventory:
+		if s.is_empty() or s["id"] == Items.KIT["id"]:
+			continue
+		var st: Dictionary = Items.ITEMS[s["id"]]["stats"]
+		if not st.has("hull_resist"):
+			continue
+		var g := float(st["hull_resist"])
+		if s.has("mk"):
+			g *= GearMk2Feature.STAT_MULT
+		out.append(g)
+	return out
 
 
 ## The gear changed: add up the gear stats again next time, and make the

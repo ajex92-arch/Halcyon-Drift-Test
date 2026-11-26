@@ -27,21 +27,32 @@ var world: World
 var team := 0
 ## The admiral's lane helper (push lane, front, points along a lane).
 var lanes: AdmiralLanes
+## This admiral's numbers (AdmiralProfile).
+var prof: AdmiralProfile
+## What our team knows (the siege points are worked out on the enemy mothership it has seen: TeamView).
+var view: TeamView
+## The fleet layer of the same Admiral (RT8 build 8b), set by AdmiralAI when it is made (null while fleet_play is off): its goal
+## lane replaces the push lane as the lane the waypoint goes down.
+var fleet: AdmiralFleet
 
 
 ## Remember the world, our team and the lane helper. AdmiralAI makes this
 ## part once.
-func _init(w: World, t: int, l: AdmiralLanes) -> void:
+func _init(w: World, t: int, l: AdmiralLanes, p: AdmiralProfile = null) -> void:
 	world = w
 	team = t
 	lanes = l
+	prof = p if p != null else AdmiralProfile.for_team(t, Game.options)
+	view = TeamView.of(w, t, prof)
 
 
 ## Set the team waypoint for the next while (see the notes at the top).
 ## `ts` is our team's shared state.
 func place(ts: TeamState) -> void:
 	var cmd := world.command
-	var lane := lanes.push_lane()
+	# The lane to push: the fleet's goal lane when the fleet layer is on and has chosen one, else where our minions are furthest.
+	var goal_lane := fleet != null and fleet.influence.goal != ""
+	var lane := fleet.influence.goal if goal_lane else lanes.push_lane()
 	if ts.siege_lane != "":
 		# Siege: rally at the staging point, then just short of the enemy
 		# mothership (use the point for the current phase). The first false
@@ -49,18 +60,21 @@ func place(ts: TeamState) -> void:
 		# so placing the marker must not start, change or call off a siege.
 		# The second false says it is the AI's marker, not a human's (in
 		# the opening only a human's pulls AI pilots off their anchors).
-		cmd.set_waypoint(team, ts.siege_assault_point(ts.siege_lane) if ts.siege_phase == "assault" else ts.siege_stage_point(ts.siege_lane), false, false)
+		AdmiralLog.of(world).expect(team, "WAYPOINT", "waypoint.siege", "puts the waypoint at the %s point of the %s siege" % [ts.siege_phase, ts.siege_lane], "the pushed lane", "the siege is on")
+		cmd.set_waypoint(team, view.assault_point(ts.siege_lane) if ts.siege_phase == "assault" else view.stage_point(ts.siege_lane), false, false)
 	elif lane != "":
 		# No siege: rally part-way down the lane we're pushing. Late on,
 		# rally at the enemy's inner node once our wave is past the middle
 		# (enemy inner nodes sit at about 0.7 of a lane).
-		var frac := 0.55
-		if world.time > 1200.0 and lanes.front_frac(lane) > 0.6:
-			frac = 0.66
+		var frac := prof.f("waypoint_frac")
+		if world.time > prof.f("waypoint_late_s") and lanes.front_frac(lane) > prof.f("waypoint_late_front"):
+			frac = prof.f("waypoint_late_frac")
 		# Again "just move the marker" (false), and not a human's (false).
 		# Bug fixed 2026-10-15: this point can land within 6,000 of an enemy
 		# mothership that has moved up the lane, and a human-style waypoint
 		# there declares an "assault" siege. AdmiralSiege then called that
 		# accidental siege off within a second and started its 60 s cooldown,
 		# over and over, which blocked our real sieges.
+		AdmiralLog.of(world).expect(team, "WAYPOINT", "waypoint.lane", "puts the waypoint %d%% down the %s lane" % [roundi(frac * 100.0), lane], "the other lanes",
+			"it is the fleet's goal lane" if goal_lane else "our minions have got furthest on it")
 		cmd.set_waypoint(team, lanes.lane_point(lane, frac), false, false)

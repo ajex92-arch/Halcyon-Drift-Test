@@ -45,6 +45,10 @@ const TEXTS := [
 	["Too late", "late"], ["Against the computer only", "online"], ["Not yours to order", "seat"],
 	["Replaying a recorded match", "seat"], ["Comes with a later stage", "unbuilt"], ["Unknown order", "unknown"],
 	["Same order again", "duplicate"],
+	["Only in the practice range", "seat"], ["Purse full", "room"], ["Treasury full", "room"],
+	["Too many minions on the lanes", "room"], ["Wait a second", "time"],
+	["No camp near the centre of the screen", "place"], ["No jungle camps in this match", "gone"],
+	["Nothing to reset", "gone"],
 ]
 
 
@@ -152,6 +156,16 @@ static func sample_records() -> Array:
 	out.append(Order.make(OrderKinds.SET_RALLY, 0, 5, true, {"rally": "lane"}, [], "squadron", 12))
 	out.append(Order.make(OrderKinds.PING, 0, 3, true, {}, [], "point", p))
 	out.append(Order.make(OrderKinds.DEPUTY, 0, 5, true, {"preset": "balanced"}))
+	# One record per practice switch (the toggles carry `on`, the nearest camp its id).
+	out.append(Order.make(OrderKinds.PRACTICE, 0, 5, true, {"switch": "freeze", "on": 1}))
+	out.append(Order.make(OrderKinds.PRACTICE, 0, 0, true, {"switch": "freeze", "on": 0}))
+	out.append(Order.make(OrderKinds.PRACTICE, 0, 0, true, {"switch": "wave"}))
+	out.append(Order.make(OrderKinds.PRACTICE, 0, 0, true, {"switch": "camps"}))
+	out.append(Order.make(OrderKinds.PRACTICE, 0, 0, true, {"switch": "camp_near"}, [], "id", "camp_3"))
+	out.append(Order.make(OrderKinds.PRACTICE, 0, 0, true, {"switch": "money"}))
+	out.append(Order.make(OrderKinds.PRACTICE, 0, 5, true, {"switch": "treasury"}))
+	out.append(Order.make(OrderKinds.PRACTICE, 0, 0, true, {"switch": "cd_reset"}))
+	out.append(Order.make(OrderKinds.PRACTICE, 1, 5, true, {"switch": "cd_auto", "on": 1}))
 	return out
 
 

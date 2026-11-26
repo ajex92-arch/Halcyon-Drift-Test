@@ -401,6 +401,10 @@ func _ship_cases() -> void:
 	b = _pilot("B", 0)
 	v.damage_log.clear()
 	v.profile.streak = 4
+	# The bounty counts a kill of the streak once it is old enough: four kills
+	# made long ago.
+	for i in 4:
+		v.profile.kill_times.append(world.time - 100.0)
 	_paid.clear()
 	_hit(v, a, 50.0)
 	_hit(v, b, 50.0)
@@ -410,6 +414,7 @@ func _ship_cases() -> void:
 	_check("pilot kill: the streak ended and the death counted", v.profile.streak == 0 and v.profile.deaths > 0, "streak %d deaths %d" % [v.profile.streak, v.profile.deaths])
 	_counts("pilot kill: counters, killer streak", a, 1, 0, 0, 0)
 	_check("pilot kill: killer's streak is 1", a.streak == 1, "streak %d" % a.streak)
+	v.profile.kill_times.clear()
 
 	# Finished by a turret: the helpers share the whole bounty, equally.
 	a = _pilot("A", 0)

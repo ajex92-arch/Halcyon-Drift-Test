@@ -241,7 +241,7 @@ func _ai_think(ship: Ship, brain: PilotAI) -> void:
 		return
 	if ship.velocity.length() >= 0.4 * ship.f_max or ship.hull_frac() < 0.5 or brain.fallback_t > 0.0 or brain.evade_t > 0.0:
 		return
-	if ts.defending(world.time) or (ts.siege_lane != "" and (not ship.is_small() or ship.hull_id == "bomber")):
+	if ts.defending(world.time) or (ts.siege_lane != "" and (not ship.is_small() or Ships.has_role(ship.hull_id, "siege"))):
 		return
 	if world.any_enemy_ship_near(ship.global_position, ENEMY_RANGE, ship.team):
 		return

@@ -33,6 +33,8 @@ extends RefCounted
 ##     banner_width() how wide the hint and the big message may be, so they
 ##     do not run into the ship readout, the gear slots, the minimap, the
 ##     kill feed, the "me" panel or the text of an open panel.
+## The death card (HudDeathCard) takes the ship readout's place while the pilot has no ship: its right edge is the readout's
+## (_place_death_card()), the hangar and the help stop above it (panel_bottom()) and the pop-up hint rides above it (toast_spot()).
 ## The kill feed sits under the top bar (hud_feed.tscn) and is moved down
 ## when the bar, which is taller with the difficulty tag, reaches over its ground
 ## (_place_feed()), so those two never meet. apply() runs 10 times a second (Hud._refresh), when the window is
@@ -42,7 +44,7 @@ extends RefCounted
 ## HudPanels asks panel_top() and panel_bottom() to place the big panels;
 ## HudToast asks toast_spot() and toast_width(), HudBanner banner_width().
 ## It reads the HUD's pieces (hud.top_bar, me_panel, feed, banner, status,
-## minimap, slots).
+## minimap, slots, death_card).
 
 ## The space (pixels) kept between two pieces, and between a piece and the
 ## edge of the window.
@@ -95,7 +97,8 @@ func apply() -> void:
 	var table := hud.scoreboard != null and hud.scoreboard.visible
 	hud.feed.visible = not panel
 	hud.banner.visible = not panel
-	hud.minimap.visible = not panel
+	# T-125: the pause menu's Minimap size row keeps the minimap on screen while it is in use.
+	hud.minimap.visible = not panel or (hud.pause_menu != null and hud.pause_menu.minimap_peek)
 	hud.slots.visible = not table
 	hud.me_panel.earn_box.visible = not panel
 	hud.seat_bar.visible = hud.seat_bar.wanted() and not panel
@@ -108,11 +111,14 @@ func apply() -> void:
 	hud.me_panel.visible = not view_on and (hud.world.human_role != "spectator")
 	_place_top_bar(vp)
 	_place_feed(vp)
-	# Step 3: the bottom row: gear slots, ship readout, minimap.
+	# Step 3: the bottom row: gear slots, ship readout, minimap; the death card in the readout's place.
 	_place_bottom_row(vp)
+	_place_death_card(vp)
 	# Step 3b: the Admiral's command view puts its pieces in the corners, now that the bottom row is placed.
 	if hud.command_view != null:
 		hud.command_view.layout(vp)
+	# Step 3c (F460): the kill feed's column ends above the minimap (and the seat bar, when that sits above the minimap).
+	_fit_feed(vp)
 	# Step 4: the big panels sit under the top bar and "me" panel.
 	hud.panels.relayout()
 
@@ -142,6 +148,9 @@ func panel_bottom(strip: bool) -> float:
 		return GAP
 	if is_instance_valid(hud.status.ship):
 		return READOUT_ROOM
+	# The death card stands in the readout's place while the pilot has no ship: the panels stop above it.
+	if hud.death_card != null and hud.death_card.visible:
+		return maxf(hud.death_card.lift() + GAP, maxf(KEYBAR_ROOM, hud.slots.get_combined_minimum_size().y + 2.0 * GAP))
 	return maxf(KEYBAR_ROOM, hud.slots.get_combined_minimum_size().y + 2.0 * GAP)
 
 
@@ -162,8 +171,12 @@ func toast_spot(panel_open: bool) -> Vector2:
 		# The Admiral's command view has its selection panel in the middle of the bottom edge: the hint rides above it.
 		if hud.command_view != null and hud.command_view.is_showing():
 			lift = maxf(lift, hud.get_viewport_rect().size.y - hud.command_view.sel_top_open() + 10.0)
+		# The death card is taller than the readout: the hint rides above it and the watch label over it.
+		if hud.death_card != null and hud.death_card.visible:
+			lift = maxf(lift, hud.death_card.lift() + TOAST_LIFT)
 		return Vector2(0.0, lift)
-	if not hud.status.visible:
+	var card_on := hud.death_card != null and hud.death_card.visible
+	if not hud.status.visible and not card_on:
 		return Vector2(0.0, TOAST_LIFT)
 	# The corner runs from GAP right of the readout to GAP in from the edge,
 	# so its middle is half the readout's right edge right of the window's.
@@ -180,7 +193,7 @@ func toast_spot(panel_open: bool) -> Vector2:
 func toast_width(panel_open: bool) -> float:
 	var vp := hud.get_viewport_rect().size
 	if panel_open:
-		if hud.status.visible:
+		if hud.status.visible or (hud.death_card != null and hud.death_card.visible):
 			return maxf(MIN_TEXT_W, vp.x - _readout_right(vp) - 2.0 * GAP)
 		if not hud.slots.visible:
 			return maxf(MIN_TEXT_W, vp.x - 2.0 * GAP)
@@ -238,6 +251,20 @@ func _place_feed(vp: Vector2) -> void:
 		hud.feed.offset_top = top
 
 
+## Keep the kill feed above the pieces under its column: the minimap in the bottom-right corner, and the seat bar when
+## it stands in the feed's column (above the minimap in a narrow window). The feed starts lower in the command view
+## (under the production panel), so a full feed would reach over the minimap (F460): the feed shows only the newest
+## lines that fit above them, GAP clear (HudFeed.fit()).
+func _fit_feed(vp: Vector2) -> void:
+	var floor_y := vp.y
+	if hud.minimap.visible:
+		floor_y = vp.y - GAP - hud.minimap.get_combined_minimum_size().y
+	var feed_left := vp.x + hud.feed.offset_right - hud.feed.get_combined_minimum_size().x
+	if hud.seat_bar.visible and hud.seat_bar.position.x + SeatBar.W > feed_left:
+		floor_y = minf(floor_y, hud.seat_bar.position.y)
+	hud.feed.fit(floor_y - GAP - hud.feed.offset_top)
+
+
 ## Place the gear slots, the ship readout and the minimap along the bottom.
 ## The minimap and the gear slots stay in their corners. The ship readout is
 ## centred, then kept between them. If the three do not fit in one row, the
@@ -260,6 +287,21 @@ func _place_bottom_row(vp: Vector2) -> void:
 	if left + SeatBar.W > vp.x - map_w - 2.0 * GAP + 0.5:
 		spot = Vector2(vp.x - GAP - SeatBar.W, vp.y - 2.0 * GAP - hud.minimap.get_combined_minimum_size().y - SeatBar.H)
 	hud.seat_bar.place(spot)
+
+
+## Put the death card in the ship readout's place: its right edge where the readout's right edge is (so the seat bar still has its room),
+## GAP above the bottom edge. Does nothing while the card is hidden.
+func _place_death_card(vp: Vector2) -> void:
+	var c := hud.death_card
+	if c == null or not c.visible:
+		return
+	c.fit()
+	# The Admiral's selection panel and group chips stand at the bottom while the command view shows: the card rides above them.
+	var raise := 0.0
+	if hud.command_view != null and hud.world.human_role == "admiral" and (hud.command_view.is_showing() or hud.command_view.is_slim()):
+		raise = maxf(0.0, vp.y - GAP - (hud.command_view.sel_top_open() - GAP))
+	c.raise = raise
+	c.place_at(Vector2(_readout_right(vp) - c.size.x, vp.y - GAP - raise - c.size.y))
 
 
 ## Move control `c`, which is anchored to the middle of an edge and `w`

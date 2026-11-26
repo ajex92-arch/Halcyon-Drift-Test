@@ -13,7 +13,10 @@ extends RefCounted
 ##   Hold Ctrl: lock the hull's heading (for example to keep your strongest
 ##     shield facing a threat) while the turrets keep tracking the mouse.
 ##   W / S: thrust forward / brake and reverse.
-##   A / D (or Q / E): strafe (slide) left / right.
+##   A / D (or Q / E): on a ship of the line (a corvette, frigate, destroyer or
+##     battlecruiser flying the ships-of-the-line model) they kick the stern: the
+##     nose turns left / right while the key is held, and comes back to the mouse
+##     when it is let go; on every other ship they strafe (slide) left / right.
 ##   Shift: boost.
 ##   Left click: fire. Right click or G: the hull's special ability. On a
 ##     Bomber's torpedo run (the hold, and the wait for the release) a right
@@ -21,10 +24,11 @@ extends RefCounted
 ##     (Space is not a flying key: it centers the camera, see CameraRig.)
 ##   Arrow keys: shield focus (put more shield on one side). Pressing the
 ##     side that is already focused goes back to balanced.
-##   1-4: energy routing (weapons, shields, thrusters, balanced).
+##   1-4: energy routing (weapons, shields, thrusters, balanced); not while the X wheel is held.
+##   In mode 3 (the command view or board open) the aim holds like it does for the wheel, and clicks fire nothing.
 ##   R: repair kit. F: dock. V: flight assist on/off.
-## An Admiral who flies with the Admiral board open does not steer: at the end
-## of update() BoardHold switches the engines off, holds the heading and
+## An Admiral who flies in mode 3 (the command view or the Admiral board open) does not steer: at the end
+## of update() CoastController switches the engines off, holds the heading and
 ## brakes before a rock, a turret, a derelict or a mothership.
 ## The match recorder: when a match log is open, update() ends by writing down the controls the ship
 ## will use this tick (a `c` line, only when they changed). In a replay of a recorded match the same
@@ -58,6 +62,9 @@ var _holding := false
 var _hold_aim := Vector2.ZERO
 ## The held face point as an offset from the ship (world units), while _holding.
 var _hold_face := Vector2.ZERO
+## How many main (battery) guns could turn to the reticle on the last tick (ArcView.cue_tick()
+## compares it with this tick's count to start the arcs cue).
+var _bearing_prev := 0
 
 
 ## World makes this and passes itself in.
@@ -68,6 +75,11 @@ func _init(w: World) -> void:
 ## Read the keyboard and mouse and fill in `ship`'s controls for this tick.
 ## `_dt` (seconds since the last tick) isn't needed here.
 func update(ship: Ship, _dt: float) -> void:
+	# A and D are a stern kick, not a strafe, on this ship while its human pilot flies
+	# it (ShipLineFlight reads the flag). The Admiral in mode 3 coasts, and the strafe
+	# the coast writes is its brake, not a key. Set before the replay branch, so a
+	# replayed match reads the recorded strafe the same way.
+	ship.kick_keys = ship.f_line and not CoastController.holding(world)
 	# A replay of a recorded match flies the ship from the recording: the controls the player's
 	# ship used on this tick go in as they were, and no key or mouse is read.
 	if world.orders.replay_controls(ship):
@@ -108,7 +120,9 @@ func update(ship: Ship, _dt: float) -> void:
 	# and a world point held still would pull the hull round toward it as the ship passes, whatever key is down).
 	# (ui_hold is set by the HUD each frame, after the tick, so the hold starts one tick after the pointer enters a
 	# control or is on course for the readout, and ends within one tick of the pointer leaving.)
-	if not world.wheel_hold and not world.ui_hold:
+	# In mode 3 (the ship coasts) the aim holds too: the mouse works the command view then, so big ships' turrets stop
+	# tracking it.
+	if not world.wheel_hold and not world.ui_hold and not CoastController.holding(world):
 		_holding = false
 		c.aim_point = world.mouse_world()
 		if Input.is_physical_key_pressed(KEY_CTRL):
@@ -122,6 +136,9 @@ func update(ship: Ship, _dt: float) -> void:
 			_hold_face = c.face_point - ship.global_position
 		c.aim_point = ship.global_position + _hold_aim
 		c.face_point = ship.global_position + _hold_face
+	# The arcs cue: when the reticle leaves every main arc of a ship of the line, its wedges show for 1 s.
+	if bool(ship.def.get("side_battery", false)):
+		_bearing_prev = ArcView.cue_tick(ship, c.aim_point, _bearing_prev)
 	# Step 6: shield focus (arrow keys). Pressing the side already focused
 	# asks for balanced shields instead.
 	var focus_keys := [["shield_front", Rules.FOCUS_FRONT], ["shield_rear", Rules.FOCUS_REAR],
@@ -129,15 +146,18 @@ func update(ship: Ship, _dt: float) -> void:
 	for fk: Array in focus_keys:
 		if world.speed.just_pressed(fk[0]):
 			c.focus_request = Rules.FOCUS_BALANCED if ship.shields.focus == int(fk[1]) else int(fk[1])
-	# Step 7: energy routing (keys 1-4).
+	# Step 7: energy routing (keys 1-4). Not while the X wheel is held: the digits are the wheel's then.
 	var energy_keys := [["energy_weapons", Rules.ENERGY_WEAPONS], ["energy_shields", Rules.ENERGY_SHIELDS],
 		["energy_thrusters", Rules.ENERGY_THRUSTERS], ["energy_balanced", Rules.ENERGY_BALANCED]]
 	for ek: Array in energy_keys:
-		if world.speed.just_pressed(ek[0]):
+		if world.speed.just_pressed(ek[0]) and not world.wheel_hold:
 			c.energy_request = int(ek[1])
 	# Step 8: repair kit (R).
 	if world.speed.just_pressed("use_kit"):
 		c.use_kit = true
+	# Step 8b: vent the energy (Z; Shift+Z in key layout C).
+	if world.speed.just_pressed("vent"):
+		c.vent = true
 	# Step 9: dock (F). Ignored for half a second after launch, because the
 	# same F press that launched the ship from the hangar must not dock it
 	# again straight away.
@@ -149,8 +169,8 @@ func update(ship: Ship, _dt: float) -> void:
 		ship.assist = not ship.assist
 		Events.toast.emit("Flight assist %s" % ("on" if ship.assist else "off"))
 	c.assist = ship.assist
-	# Step 11: an Admiral flying with the board open coasts (BoardHold).
-	BoardHold.hold(world, ship)
+	# Step 11: an Admiral flying in mode 3 (the command view or the board open) coasts (CoastController).
+	CoastController.coast(world, ship)
 	# Step 12: the match log (if one is open) writes down the controls as the ship will use them
 	# this tick, when they differ from the last line (OrderQueue.record_controls). Nothing here
 	# changes the controls or the match.

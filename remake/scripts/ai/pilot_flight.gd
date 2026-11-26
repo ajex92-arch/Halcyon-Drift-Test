@@ -134,6 +134,17 @@ var _gap_t := 0
 var _replan_t := 0.0
 ## The breadcrumb trail of recent free spots (see PilotTrail).
 var trail := PilotTrail.new()
+## Game time (seconds) of the last time a ship of the line that could not stop
+## short of a rock went back along its trail (see LINE_REPLAN_GAP).
+var _line_replan_at := -999.0
+## Calls until a ship of the line looks again for the ships of its group.
+var _group_t := 0
+## The speed limit the last look for the group found (INF = no group, no limit).
+var _group_cap := INF
+## The middle of the group ships the last look found (world position).
+var _group_centre := Vector2.ZERO
+## A reusable list that the ship search fills (read only).
+var _group_scratch: Array = []
 ## Seconds the ship has asked for forward thrust in a fight without moving.
 var _pin_t := 0.0
 ## Route dots that the ship's routes go round for a while: dot number -> game
@@ -153,6 +164,37 @@ const LINE_STUCK_SPEED := 30.0
 const LINE_REACH_SHARE := 0.8
 ## ...but never farther than this many world units.
 const LINE_REACH_MAX := 1100.0
+## A ship of the line looks for rocks as far ahead as it needs to stop (never
+## less than the 0.6 seconds every ship looks ahead), but never farther than
+## this many world units.
+const LINE_LOOK_MAX := 1200.0
+## A ship of the line that cannot stop short of a rock goes back along its own
+## trail and plans its way again, but at most once in this many seconds (the
+## backing off takes a second, so a ship must not do it on every look).
+const LINE_REPLAN_GAP := 3.0
+## The turning circle that decides a ship of the line's corner speed fits half
+## of the shorter of the two legs at the corner, but never more than this many
+## world units of it (a long leg does not make a fast corner safe).
+const LINE_CORNER_R_MAX := 900.0
+## A ship of the line is never held below this speed (world units per second)
+## by a corner, so the slowest hulls still get round it.
+const LINE_CORNER_MIN := 40.0
+## A group of ships of the line counts the ships of its team within this many
+## world units of each other.
+const LINE_GROUP_R := 1500.0
+## The group's speed limit is this times the top speed of its slowest ship.
+const LINE_GROUP_FACTOR := 1.1
+## A ship of the line this near (world units) to the enemy mothership's hull
+## no longer waits for its group: the fight is on.
+const LINE_GROUP_FREE := 4500.0
+## A ship of the line is on a long trip, and waits for its group, when its goal
+## is farther than this many world units.
+const LINE_GROUP_LONG := 2500.0
+## Calls between two looks for the group (about 4 a second).
+const LINE_GROUP_EVERY := 15
+## A ship of the line counts as heading somewhere only above this speed (world
+## units per second): a ship at rest has no direction to compare.
+const LINE_GROUP_MOVING := 20.0
 ## The ail_c4_flak fix: a gap between two structures counts as shut to a ship
 ## when it is narrower than the ship's width plus this (world units).
 const GAP_MARGIN := 30.0
@@ -341,8 +383,10 @@ func target_hidden(ship: Ship, to: Vector2) -> bool:
 ## Fly to a point and arrive slow (as in version 1 of the game): brake when
 ## the stopping distance would overshoot; kill sideways drift while lined
 ## up. Long trips follow the route graph (jungle paths for strike craft).
-## `arrive` is how close (world units) counts as "there".
-func travel(ship: Ship, to: Vector2, arrive: float) -> void:
+## `arrive` is how close (world units) counts as "there". `may_replan` is handed
+## on to avoid_rocks(): the fight's own trips pass false, so a ship of the line
+## that cannot stop short of a rock does not back off and drop its fight.
+func travel(ship: Ship, to: Vector2, arrive: float, may_replan := true) -> void:
 	var brain := ai
 	var world := brain.world
 	var c := ship.controls
@@ -537,6 +581,10 @@ func travel(ship: Ship, to: Vector2, arrive: float) -> void:
 		var v_cap := INF
 		if turn > 0.7 or to_jungle or to_lane:
 			v_cap = maxf(120.0, ship.f_max * (0.28 if (turn > 1.2 or to_jungle or to_lane) else 0.45))
+			# A ship of the line rounds a plain corner at the speed whose turning
+			# circle fits it (the gate cases above keep their own cap).
+			if _line_rules(ship) and not (to_jungle or to_lane):
+				v_cap = line_corner_cap(ship, dist, (after - waypoint).length())
 		if gate_d < 1000.0:
 			v_cap = minf(v_cap, ship.f_max * 0.38)
 		var v_now := ship.velocity.length()
@@ -549,7 +597,14 @@ func travel(ship: Ship, to: Vector2, arrive: float) -> void:
 				c.forward = minf(c.forward, -0.8 if v_now > v_cap * 1.3 else 0.0)
 				c.boost = false
 	# Step 9: steer around mothership hulls and rocks just ahead.
-	avoid_rocks(ship)
+	avoid_rocks(ship, may_replan)
+	# Step 9b: a ship of the line on a long trip does not run far ahead of the
+	# slower ships of its group.
+	if _line_rules(ship):
+		if p.distance_to(to) > LINE_GROUP_LONG:
+			_hold_for_group(ship, p)
+		else:
+			_group_cap = INF
 	# Step 10: the siege_fix:full feature holds a siege ship back that runs far
 	# ahead of its fleet, so the slow capital ships arrive together
 	# (SiegeFixFeature.throttle). Nothing happens unless that feature is on.
@@ -665,8 +720,15 @@ func avoid_hulls(ship: Ship) -> void:
 ## Nudge the nose away from mothership hulls (avoid_hulls()) and from rocks
 ## just ahead. It runs about once a tick; the rock search itself runs on
 ## every 5th call (about 12 times a second; it's the costliest part of
-## steering), and the push it finds is reused in between.
-func avoid_rocks(ship: Ship) -> void:
+## steering), and the push it finds is reused in between. `may_replan` says
+## whether a ship of the line that cannot stop short of a rock may go back along
+## its trail and plan again: only travel() passes true, because the backing off
+## makes a ship in a fight drop its fight, so the other callers (the fight code's
+## dogfight steering and the wingmen's flying) keep the default, false. A big
+## ship holding station in a fight, and a strike craft's two trips round a rock
+## to a hidden target, fly through travel() with its own `may_replan` false, so
+## none of them starts a replan in a fight.
+func avoid_rocks(ship: Ship, may_replan := false) -> void:
 	var brain := ai
 	var c := ship.controls
 	var v := ship.velocity
@@ -680,7 +742,13 @@ func avoid_rocks(ship: Ship) -> void:
 	_rock_t -= 1
 	if _rock_t <= 0:
 		_rock_t = 5
+		# A ship of the line, which needs a long way to stop, looks as far ahead as
+		# its stop (at most LINE_LOOK_MAX), when that is farther.
 		var look := ship.global_position + v * 0.6
+		if _line_rules(ship):
+			var reach := minf(line_stop_distance(ship), LINE_LOOK_MAX)
+			if reach > v.length() * 0.6:
+				look = ship.global_position + v.normalized() * reach
 		var push := Vector2.ZERO
 		# In open space no rock can reach that spot: skip the search (the
 		# push would stay zero anyway; AsteroidField.clear_at()).
@@ -693,6 +761,15 @@ func avoid_rocks(ship: Ship) -> void:
 				if d < rr and d > 0.01:
 					push += (look - rc) / d * (rr - d)
 		_rock_push = push
+		# A ship of the line heading into a rock that it cannot stop short of
+		# (its stop is longer than the way to the rock) goes back along its
+		# trail and plans again, at most once in LINE_REPLAN_GAP seconds.
+		if may_replan and _line_rules(ship) and push.length() > 1.0 and v.normalized().dot(-push.normalized()) > 0.6:
+			var here := ship.global_position
+			var hit := brain.world.asteroids.segment_hit(here, look, ship.radius)
+			if not hit.is_empty() and line_stop_distance(ship) > float(hit["t"]) * here.distance_to(look) and brain.world.time - _line_replan_at >= LINE_REPLAN_GAP:
+				_line_replan_at = brain.world.time
+				stall(ship, brain.goal, false)
 	# Step 3: turn the nose toward the push and slide that way; brake if
 	# we're flying mostly straight at the rock.
 	var push := _rock_push
@@ -708,3 +785,80 @@ func avoid_rocks(ship: Ship) -> void:
 				c.forward = maxf(c.forward, 0.3)
 			else:
 				c.forward = minf(c.forward, -0.3)
+
+
+## Do the ship-of-the-line rules (rock look-ahead and replan, corner speed,
+## group pace) apply to `ship`? Yes for a ship of the line flown by a computer
+## pilot; no for one flown by a yard crew of the Admiral's squadrons (a crew's
+## brain flies as it always did), and no for any ship that is not of the line.
+func _line_rules(ship: Ship) -> bool:
+	return ship.f_line and not Squads.is_crew(ai.profile)
+
+
+## How far (world units) the ship of the line would still fly if it braked now:
+## its speed squared over twice its braking power, plus the distance flown
+## while its engines swing round to push back (the same sum travel() makes for
+## the last leg, here along the ship's own motion).
+func line_stop_distance(ship: Ship) -> float:
+	var sp := ship.velocity.length()
+	return sp * sp / (2.0 * maxf(40.0, ship.f_brake)) + sp * ship.f_brake_lag
+
+
+## The speed (world units per second) at which a ship of the line may take a
+## corner of its route: the speed whose turning circle (speed over the turn
+## rate it keeps at speed) fits the corner. The circle may take half of the
+## shorter of the two legs at the corner (`leg_in`, from the ship to the corner,
+## and `leg_out`, from the corner to the next point), at most LINE_CORNER_R_MAX,
+## and the speed is never below LINE_CORNER_MIN nor above the ship's top speed.
+## travel() uses it for a ship of the line instead of a share of top speed.
+func line_corner_cap(ship: Ship, leg_in: float, leg_out: float) -> float:
+	var r := minf(0.5 * minf(leg_in, leg_out), LINE_CORNER_R_MAX)
+	return clampf(r * ship.f_turn * (1.0 - ship.f_bleed), LINE_CORNER_MIN, ship.f_max)
+
+
+## A ship of the line on a long trip stops thrusting when it runs ahead of
+## slower ships of its own team that are heading the same way, so that the
+## group arrives together. About 4 times a second (LINE_GROUP_EVERY) it looks
+## at the ships of its team within LINE_GROUP_R that are moving within 45
+## degrees of its own course (not the Admiral's crews: they go where the Admiral
+## sends them, not with the pilots' group), takes the slowest top speed among them and itself,
+## and sets the limit to LINE_GROUP_FACTOR times that (no limit when it is
+## alone, or within LINE_GROUP_FREE of the enemy mothership's hull). Between
+## looks it keeps the last answer: a ship that is over the limit and ahead of
+## the middle of the others gets no forward thrust. The slowest ship's limit is
+## LINE_GROUP_FACTOR times its own top speed, so it is held only when it boosts
+## past that (and is ahead of the others); at its normal top speed it never is.
+## `p` is the ship's position. It only reads the ships.
+func _hold_for_group(ship: Ship, p: Vector2) -> void:
+	var world := ai.world
+	_group_t -= 1
+	if _group_t <= 0:
+		_group_t = LINE_GROUP_EVERY
+		_group_cap = INF
+		var ems := world.mothership(1 - ship.team)
+		var near_enemy := ems != null and ems.alive and ems.hull_dist(p) < LINE_GROUP_FREE
+		var v := ship.velocity
+		var sp := v.length()
+		if not near_enemy and sp > LINE_GROUP_MOVING:
+			var slowest := ship.f_max
+			var sum := Vector2.ZERO
+			var n := 0
+			for u: Unit in world.ship_hash.query(p, LINE_GROUP_R, _group_scratch):
+				var o := u as Ship
+				if o == null or o == ship or o.team != ship.team or not o.alive or not o.f_line or Squads.is_crew(o.profile):
+					continue
+				var ov := o.velocity
+				var osp := ov.length()
+				if osp <= LINE_GROUP_MOVING or v.dot(ov) < 0.70710678 * sp * osp:
+					continue
+				slowest = minf(slowest, o.f_max)
+				sum += o.global_position
+				n += 1
+			if n > 0:
+				_group_cap = LINE_GROUP_FACTOR * slowest
+				_group_centre = sum / float(n)
+	if _group_cap == INF:
+		return
+	var vel := ship.velocity
+	if vel.length() > _group_cap and (_group_centre - p).dot(vel) < 0.0:
+		ship.controls.forward = minf(ship.controls.forward, 0.0)

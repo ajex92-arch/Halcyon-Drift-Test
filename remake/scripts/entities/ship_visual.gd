@@ -23,7 +23,12 @@ extends Node2D
 ##     hull, the camera zoom (by 2%) or a test switch of DrawParts. The four shield
 ##     arcs have a kept picture of their own on the same "Spin" node (ShieldArcs:
 ##     drawn again when a zone's fill moves by a thirty-second or the hit glow starts
-##     or ends; the usual play zoom and further out draw all four arcs as one command),
+##     or ends; the usual play zoom and further out draw all four arcs as one command; a zone in
+##     its shield gate, immune after a break (ShieldZones.gate_left), also gets a steady
+##     glow along its side, and the picture is drawn again when a gate starts or ends; an
+##     overloaded ship, locked out after a blocked hit overran its battery, wears a steady
+##     red ring and a ship with its systems off (overloaded or venting) shows no lit zones,
+##     the picture being drawn again only when a lockout or a Vent starts or ends),
 ##     and the bars and the name have one of their own that stays upright (drawn again
 ##     when a bar moves by a 64th). What changes by the frame stays on this node's own
 ##     picture: the heads of the turning guns, a Bomber's torpedo run and the human's
@@ -53,7 +58,7 @@ extends Node2D
 ##     craft and the Bomber keep one stream, and the side thrusters are as they were.
 ##   - Cinder (the red team) wears an alien look: a Cinder ship's shape is
 ##     drawn by CinderPaint from the tables in CinderShapes (dark, bladed hulls
-##     with glowing veins) instead of from HULLS below, and its flames come
+##     with glowing veins) instead of from HullTables.OUTLINES, and its flames come
 ##     out of the alien hull's own engines, a quarter smaller than Aurelian's
 ##     (CINDER_JET_SIZE). Each Cinder hull keeps the length and width of its
 ##     Aurelian hull; shield arcs, bars, name and the arrow are drawn as
@@ -61,7 +66,7 @@ extends Node2D
 ##   - Aurelian (the amber team) wears a steel look: a hull is drawn by
 ##     AurelianPaint from the named pieces in AurelianShapes (armour plates,
 ##     glass canopies, engine nozzles) inside an amber outline, and its flames
-##     come out of the hull's own engines. The plain outlines of HULLS below are
+##     come out of the hull's own engines. The plain outlines of HullTables.OUTLINES are
 ##     drawn only while the steel look is off (the hull gallery's measurements).
 ##   - Every gun that turns (a turret or an automatic mount) is drawn as a small
 ##     turret on the hull by TurretPaint, turned the way the gun points; a fixed
@@ -93,26 +98,6 @@ extends Node2D
 ## TurretPaint the turrets, EngineStreams works out the big hulls' stream places.
 ## DrawParts holds the test-only switches it reads. ShieldArcs draws the shield arcs.
 
-## Each hull's plain outline: a list of corner points, nose pointing right (+x),
-## for a ship 36 units long (they are scaled to the hull's real length). The
-## Aurelian steel hulls (AurelianShapes) keep these sizes to within about a
-## tenth (more only where a gun mount sits outside the plain outline: the
-## Bomber's torpedo mount, the Destroyer's and Battlecruiser's point-defense
-## mounts); this table is drawn only while the steel look is off, and is the size
-## the hull gallery checks the Cinder shapes against. Hulls not listed here use
-## the "fighter" shape.
-const HULLS := {
-	"scout": [Vector2(18, 0), Vector2(-10, 5), Vector2(-14, 0), Vector2(-10, -5)],
-	"fighter": [Vector2(18, 0), Vector2(-8, 7), Vector2(-4, 0), Vector2(-8, -7)],
-	"lance": [Vector2(20, 0), Vector2(2, 3), Vector2(-10, 8), Vector2(-6, 0), Vector2(-10, -8), Vector2(2, -3)],
-	"bomber": [Vector2(16, 0), Vector2(4, 6), Vector2(-12, 8), Vector2(-8, 0), Vector2(-12, -8), Vector2(4, -6)],
-	"logistics": [Vector2(14, 0), Vector2(8, 9), Vector2(-12, 9), Vector2(-14, 0), Vector2(-12, -9), Vector2(8, -9)],
-	"support": [Vector2(12, 0), Vector2(-2, 5), Vector2(-10, 4), Vector2(-6, 0), Vector2(-10, -4), Vector2(-2, -5)],
-	"flak": [Vector2(16, 0), Vector2(6, 10), Vector2(-14, 9), Vector2(-16, 0), Vector2(-14, -9), Vector2(6, -10)],
-	"ion": [Vector2(18, 0), Vector2(14, 4), Vector2(-12, 7), Vector2(-16, 0), Vector2(-12, -7), Vector2(14, -4)],
-	"destroyer": [Vector2(18, 0), Vector2(10, 4), Vector2(-2, 4.5), Vector2(-6, 6), Vector2(-17, 5), Vector2(-18, 0), Vector2(-17, -5), Vector2(-6, -6), Vector2(-2, -4.5), Vector2(10, -4)],
-	"battlecruiser": [Vector2(18, 0), Vector2(12, 5), Vector2(0, 5), Vector2(-4, 7), Vector2(-16, 6), Vector2(-18, 0), Vector2(-16, -6), Vector2(-4, -7), Vector2(0, -5), Vector2(12, -5)],
-}
 ## Minimum drawn length of a ship, in screen pixels.
 const MIN_PX := 16.0
 ## How big a Cinder ship's engine flames are next to Aurelian's: 0.75 = a
@@ -132,6 +117,29 @@ const FEWEST_DOTS := 4
 ## about 8,500 screen pixels of the game's 1280-wide picture: the widest pilot zoom-out
 ## and the admiral's overview). The emitters are still there, stopped and hidden.
 const FAR_FLAMES_ZOOM := 0.15
+## The drawing layer (z_index) of the main flame. The hulls are drawn on layer 0, so one
+## layer under them a flame dot that blows forward during a split brake (see _update_jets())
+## is hidden by the hull it passes over, and only the part behind the stern shows. The
+## flame is a top-level node, which makes the layer absolute (not relative to its parent).
+const MAIN_JET_Z := -1
+## The gate glow's brightness (alpha) on its thin line: steady, and softer than the break
+## flash of the arcs (up to 0.92).
+const GATE_GLOW_ALPHA := 0.4
+## The gate glow's brightness (alpha) on the wider faint band under the thin line.
+const GATE_GLOW_WIDE_ALPHA := 0.13
+## Where the four gate bits start in the shield picture's key (above ShieldArcs.key's
+## bits and DrawParts.version).
+const GATE_BITS_SHIFT := 56
+## The bit of the shield picture's key that says the ship is overloaded (the red ring), above
+## the four gate bits.
+const OVERLOAD_BIT_SHIFT := 60
+## The bit of the shield picture's key that says the shield is dark (overloaded or venting:
+## the zones are not drawn lit), above the overload bit.
+const DARK_BIT_SHIFT := 61
+## The brightness (alpha) of the overload ring: steady, never pulsing.
+const OVERLOAD_RING_ALPHA := 0.85
+## The brightness (alpha) of the wider faint band under the overload ring.
+const OVERLOAD_RING_WIDE_ALPHA := 0.18
 
 ## The ship we draw (our parent node).
 var ship: Ship
@@ -143,6 +151,10 @@ var port_jet: CPUParticles2D
 var star_jet: CPUParticles2D
 ## True when the human player flies this ship (drawn bolder, named "YOU").
 var is_human := false
+## T-125: when the camera last came back to this ship (CameraRig.pulse_return()), in real milliseconds (Time.get_ticks_msec(); far in
+## the past = never). The return flash runs on real time, not match time, so it plays while the match is paused too. It lives here, in the
+## drawing, and never on the Ship (the simulation must not know about it).
+var _return_ms := -100000
 ## True once the flames of a Cinder ship have been given their own colours
 ## (CinderPaint.tint_jets). It happens on the first frame, because the ship's
 ## team is not known yet when _ready() runs.
@@ -186,6 +198,9 @@ var _caps := PackedFloat32Array([0.0, 0.0, 0.0, 0.0])
 var _caps_total := -1.0
 ## The shield focus the sizes in _caps were worked out for (-1 = not yet).
 var _caps_focus := -1
+## The shield's caps_stamp the sizes in _caps were worked out for (-1 = not yet): a swing moves
+## the caps while the focus stays put, so the stamp tells the sizes are stale.
+var _caps_stamp := -1
 ## The kept picture of the hull bar, the shield bar and the name (upright, drawn
 ## over this node's own drawing).
 var _gauges: DrawCache
@@ -242,6 +257,9 @@ func _ready() -> void:
 	_gauges.draw.connect(_draw_gauges_layer)
 	add_child(_gauges)
 	main_jet = _jet(Color(1.0, 0.85, 0.6))
+	# The main flame is drawn under the hulls (MAIN_JET_Z); the side flames stay over them.
+	main_jet.z_as_relative = false
+	main_jet.z_index = MAIN_JET_Z
 	port_jet = _jet(Palette.SIDE_JET)
 	star_jet = _jet(Palette.SIDE_JET)
 
@@ -282,6 +300,7 @@ func _process(_dt: float) -> void:
 	if ship == null or not ship.alive:
 		return
 	rotation = -ship.rotation
+	if IconLayer.takes_over(self, ship): return  # RT6 C1: past the icon line the icon layer draws this ship
 	# A ship nobody can see (the fog hides it) needs no update: it is brought up to date on the
 	# first frame it shows again (a gun's kick starts over after a gap, see GunKick).
 	if not is_visible_in_tree():
@@ -303,12 +322,76 @@ func _process(_dt: float) -> void:
 	_live_drawn = live
 
 
+## T-125: start the return flash (CameraRig calls it for the human's ship): the outline turns white and eases back, with a faint glow.
+func pulse_return() -> void:
+	_return_ms = Time.get_ticks_msec()
+	queue_redraw()
+
+
+## T-125: is the return flash running (or just over, so one more picture clears it)? CameraRig asks while the match is paused, when
+## _process() does not run, to ask for a new picture of each step.
+func return_active() -> bool:
+	return Time.get_ticks_msec() - _return_ms < int(float(FlashTable.RETURN_FLASH["secs"]) * 1000.0) + 60
+
+
+## T-125: how far the return flash has faded, in steps: 0 = not showing, FlashTable.RETURN_FLASH["steps"] = just started. Only the
+## human's ship flashes (the enemy and the other pilots never do).
+func _return_q() -> int:
+	if not is_human:
+		return 0
+	var secs := float(FlashTable.RETURN_FLASH["secs"])
+	var t := float(Time.get_ticks_msec() - _return_ms) / 1000.0
+	if t < 0.0 or t >= secs:
+		return 0
+	var left := 1.0 - t / secs
+	return maxi(1, int(ceil(left * left * float(int(FlashTable.RETURN_FLASH["steps"])))))
+
+
+## T-125: the return flash's strength 0..1 in whole steps (the same steps the hull's kept picture is keyed on).
+func _return_strength() -> float:
+	return float(_return_q()) / float(int(FlashTable.RETURN_FLASH["steps"]))
+
+
+## T-125: the outline's colour and width (`edge`, `edge_w` pixels) with the return flash on them: [colour, width]. Unchanged when the flash
+## is not showing or the ship is flashing from a hit (`hit` > 0: the hit flash wins). The flash turns the colour toward ICE white,
+## whatever the team's colour, and widens the line toward RETURN_FLASH["width"].
+func outline_after_return(edge: Color, edge_w: float, hit: float) -> Array:
+	var back := _return_strength() if hit <= 0.0 else 0.0
+	if back <= 0.0:
+		return [edge, edge_w]
+	var lit := edge.lerp(Palette.ICE, back)
+	lit.a = edge.a
+	return [lit, lerpf(edge_w, float(FlashTable.RETURN_FLASH["width"]), back)]
+
+
+## T-125: how strong the faint white glow round the ship is now (0 = none): RETURN_FLASH["glow_alpha"] at the start, fading to nothing
+## over RETURN_FLASH["glow_secs"]. The hit flash wins: none while the ship is flashing from a hit.
+func glow_alpha_now() -> float:
+	if ship.flash > 0.0 or not is_human:
+		return 0.0
+	var glow_secs := float(FlashTable.RETURN_FLASH["glow_secs"])
+	var t := float(Time.get_ticks_msec() - _return_ms) / 1000.0
+	if t < 0.0 or t >= glow_secs:
+		return 0.0
+	return float(FlashTable.RETURN_FLASH["glow_alpha"]) * (1.0 - t / glow_secs)
+
+
+## T-125: draw the faint white glow round the ship (on this node's own picture, which the human's ship draws again every frame).
+func _draw_return_glow(px: float, drawn_len: float) -> void:
+	var a := glow_alpha_now()
+	if a > 0.0:
+		draw_arc(Vector2.ZERO, drawn_len * 0.5, 0.0, TAU, 48, Palette.with_alpha(Palette.ICE, a), float(FlashTable.RETURN_FLASH["glow_px"]) * px, true)
+
+
 ## Does this ship have something to draw on this node's own picture that changes from
 ## frame to frame (and so needs a new drawing every frame)? That is the heads of its
 ## turning guns (when the ship is big enough on the screen to show them), a torpedo
 ## run's fan and the human's drift arrow.
 func _wants_live(z: float) -> bool:
-	if is_human or ship.run_mount != null:
+	if is_human or ship.run_mount != null or ship.charge_t > 0.0:
+		return true
+	# A big ship whose part rings this player may see: they change with the parts' states.
+	if ship.parts != null and PartRings.visible_to(Game.human_team, ship):
 		return true
 	if not TurretPaint.is_on():
 		return false
@@ -446,9 +529,13 @@ func _update_jets(z: float) -> void:
 		dots = EngineStreams.dot_range(_plan, un, px, ship.boosting, jet_size)
 		_hop += 1
 	# Main engine: behind the ship, blowing backwards (against the way the
-	# engines push, which a ship of the line swivels: Ship.swivel).
+	# engines push, which a ship of the line swivels: Ship.swivel). During a split
+	# brake the swivel is 0 and the engines toe out (Ship.toe), so the one flame
+	# follows swivel plus toe, not straight back: the forked flame (planned) replaces it.
+	# That can point it forward along the hull, so the flame is drawn under the hulls
+	# (MAIN_JET_Z) and never shows over the ship's own drawing.
 	main_jet.global_position = main_at
-	main_jet.direction = -Vector2.from_angle(ship.rotation + ship.swivel)
+	main_jet.direction = -Vector2.from_angle(ship.rotation + ship.swivel + ship.toe)
 	main_jet.emitting = ship.thrust_main > 0.1
 	main_jet.initial_velocity_min = speeds.x
 	main_jet.initial_velocity_max = speeds.y
@@ -496,6 +583,9 @@ func _draw() -> void:
 		_update_gauges(z)
 	# The guns that turn, as small turrets on the hull (a fixed gun gets none).
 	TurretPaint.draw_mounts(self, ship, k, u, px, rot, _kicks)
+	# The part rings of a big ship, when this player may see them (PartRings: own side only for now).
+	if ship.parts != null:
+		_draw_part_rings(px, rot)
 	# A Bomber's torpedo run: the fan of lines and the bar (RunPaint).
 	if ship.run_mount != null:
 		var sr := maxf(length * k * 0.62, ship.radius * 1.3)
@@ -503,6 +593,37 @@ func _draw() -> void:
 	# Velocity arrow: only on the ship the human flies, at any zoom.
 	if DrawParts.arrow and is_human:
 		_velocity_arrow(px)
+	# T-125: the glow of the return flash (the outline's part is in _draw_hull()).
+	if is_human:
+		_draw_return_glow(px, length * k)
+		# The arcs view and the mark at the reticle (a ship of the line only; the human's ship only).
+		ArcView.draw(self, ship, px)
+	# A Broadside charging: a faint line from each held gun to the aim point, for every viewer.
+	if ship.charge_t > 0.0 and ship.charge_side != 0:
+		_draw_charge_lines(px)
+
+
+## The telegraph of a Broadside charge: a faint team-coloured line from each battery gun of the
+## charged side to the aim point (one draw call per gun, only while ship.charge_t runs).
+func _draw_charge_lines(px: float) -> void:
+	var col := Palette.with_alpha(Palette.team(ship.team), 0.35)
+	var to := ship.controls.aim_point - ship.global_position
+	for m: WeaponMount in ship.mounts:
+		if m.battery and int(signf(m.offset.y)) == ship.charge_side:
+			draw_line(m.world_pos() - ship.global_position, to, col, 1.5 * px)
+
+
+## Draw a small ring on each part of this big ship (PartRings.rings() for the human's team: nothing for an
+## enemy ship until scanning exists): 5 screen pixels wide, in the part's state colour, with a light arc that
+## fills as an offline part climbs back. The node is turned against the ship, so the offsets turn with `rot`.
+func _draw_part_rings(px: float, rot: float) -> void:
+	for r: Dictionary in PartRings.rings(ship, Game.human_team):
+		var at := (r["off"] as Vector2).rotated(rot)
+		var rad := 5.0 * px
+		draw_circle(at, rad, Palette.with_alpha(r["colour"], 0.9))
+		draw_arc(at, rad + 1.5 * px, 0.0, TAU, 14, Palette.with_alpha(Palette.ICE, 0.35), px, true)
+		if int(r["state"]) == ShipSystems.OFF:
+			draw_arc(at, rad + 1.5 * px, -PI * 0.5, -PI * 0.5 + TAU * float(r["climb"]), 14, Palette.with_alpha(Palette.ICE, 0.9), 1.5 * px, true)
 
 
 ## The ship's shape at scale `u`, turned to `rot`: filled and outlined in the
@@ -518,6 +639,11 @@ func _draw_hull(ci: CanvasItem, u: float, rot: float, col: Color, px: float) -> 
 	var edge_w := 2.2 if is_human else 1.4
 	# The hit flash strength (0 = not hit just now).
 	var hit := Palette.HIT_FLASH if ship.flash > 0.0 else 0.0
+	# T-125: the return flash: the outline turns toward ICE white and widens to RETURN_FLASH["width"], then eases back. The hit
+	# flash wins: none while the ship is flashing from a hit. White, whatever the team's colour.
+	var look := outline_after_return(edge, edge_w, hit)
+	edge = look[0] as Color
+	edge_w = float(look[1])
 	# How hot the engines glow, 0..1.
 	var heat := _heat()
 	if CinderPaint.alien(ship.team):
@@ -529,7 +655,7 @@ func _draw_hull(ci: CanvasItem, u: float, rot: float, col: Color, px: float) -> 
 		AurelianPaint.draw_shape(ci, AurelianPaint.hull(ship.hull_id), u, rot, px, edge, edge_w, hit, heat, 1.0, GunKick.fixed_back(_kicks.fixed_weapon, nose_age), GunKick.is_flash(nose_age))
 		return
 	var pts := PackedVector2Array()
-	for p: Vector2 in HULLS.get(ship.hull_id, HULLS["fighter"]):
+	for p: Vector2 in HullTables.OUTLINES.get(ship.hull_id, HullTables.OUTLINES[Ships.DEFAULT_HULL]):
 		pts.append((p * u).rotated(rot))
 	ci.draw_colored_polygon(pts, Palette.HULL_FILL)
 	if DrawParts.outline:
@@ -562,6 +688,8 @@ func _update_hull(z: float) -> void:
 	var bits := (1 if ship.ace_t > 0.0 else 0) | (2 if is_human else 0) | (4 if ship.flash > 0.0 else 0)
 	bits |= (8 if CinderPaint.alien(ship.team) else 0) | (16 if AurelianPaint.on(ship.team) else 0) | (32 if GunKick.is_flash(nose_age) else 0)
 	bits |= (int(_heat() * 8.0) << 6) | (DrawParts.version << 28) | ((1 << 26) if DrawCache.is_close(z) else 0)
+	# T-125: the return flash's step (0 = not showing): the picture is drawn again at each step.
+	bits |= _return_q() << 40
 	if _pulses:
 		bits |= CinderPaint.pulse_step(float(ship.uid) * 1.7) << 20
 	_hull.want(ship.hull_id, DrawCache.STATE_BASE, bits, GunKick.fixed_back(_kicks.fixed_weapon, nose_age), z)
@@ -570,12 +698,36 @@ func _update_hull(z: float) -> void:
 ## Tell the shield arcs' kept picture what the arcs look like now (see ShieldArcs.key()).
 func _update_shield(z: float) -> void:
 	var sh := ship.shields
-	if sh.max_total != _caps_total or sh.focus != _caps_focus:
+	if sh.max_total != _caps_total or sh.focus != _caps_focus or sh.caps_stamp != _caps_stamp:
 		_caps_total = sh.max_total
 		_caps_focus = sh.focus
+		_caps_stamp = sh.caps_stamp
 		for zone in 4:
 			_caps[zone] = sh.cap(zone)
-	_shield.want(ship.hull_id, DrawCache.STATE_BASE, ShieldArcs.key(sh, _caps, z) | (DrawParts.version << 28), 0.0, z)
+	# The gate glow bits (one per zone, bits 56 to 59) change only when a zone's gate starts or
+	# ends, so the picture is not drawn again every frame of a gate.
+	# The overload and dark bits change only when a lockout or a Vent starts or ends.
+	var state_bits := (int(overload_on(ship)) << OVERLOAD_BIT_SHIFT) | (int(sh.dark) << DARK_BIT_SHIFT)
+	_shield.want(ship.hull_id, DrawCache.STATE_BASE, ShieldArcs.key(sh, _caps, z) | (DrawParts.version << 28) | (gate_mask(sh) << GATE_BITS_SHIFT) | state_bits, 0.0, z)
+
+
+## True while ship `s` is in an overload lockout (it is shown with a red ring); false for no
+## ship. A Vent is not an overload: it darkens the zones but draws no ring.
+static func overload_on(s: Ship) -> bool:
+	return s != null and s.overload_left > 0.0
+
+
+## Which zones are gated right now, as four bits (bit 0 front, 1 rear, 2 left, 3 right;
+## see ShieldZones.gate_left): a zone is gated while it has gate seconds left. 0 for a
+## missing shield.
+static func gate_mask(sh: ShieldZones) -> int:
+	if sh == null:
+		return 0
+	var m := 0
+	for zone in 4:
+		if sh.gate_left[zone] > 0.0:
+			m |= 1 << zone
+	return m
 
 
 ## Tell the bars' kept picture what the bars and the name look like now: nothing at all
@@ -614,6 +766,11 @@ func _ring_radius(z: float) -> float:
 	return maxf(length * _scale() * 0.62, ship.radius * 1.3)
 
 
+## The radius (world units) of the ring the shield arcs sit on at camera zoom `z`: the number the pilot's ring (ShipRing) is sized from.
+func ring_radius_world(z: float) -> float:
+	return _ring_radius(z)
+
+
 ## Draw the four shield arcs on their kept picture (the `draw` signal of _shield): the
 ## ship pointing along +x, because the picture turns with the ship. Which look the arcs
 ## get depends on the zoom (ShieldArcs).
@@ -624,7 +781,36 @@ func _draw_shield_layer() -> void:
 	var z := cam.zoom.x if cam != null else 1.0
 	_shield.drawn_at(z)
 	if DrawParts.arcs:
-		ShieldArcs.draw(_shield, ship.shields, _ring_radius(z), 1.0 / maxf(0.02, z), z)
+		var sr := _ring_radius(z)
+		var px := 1.0 / maxf(0.02, z)
+		# A dark shield (overloaded or venting) shows no lit zones; an overloaded ship wears
+		# a steady red ring where the arcs would be.
+		if not ship.shields.dark:
+			ShieldArcs.draw(_shield, ship.shields, sr, px, z)
+			_draw_gate_glow(_shield, ship.shields, sr, px, z)
+		if overload_on(ship):
+			var aa := DrawCache.is_close(z)
+			_shield.draw_arc(Vector2.ZERO, sr, 0.0, TAU, 48, Palette.with_alpha(Palette.CINDER, OVERLOAD_RING_WIDE_ALPHA), 7.0 * px, aa)
+			_shield.draw_arc(Vector2.ZERO, sr, 0.0, TAU, 48, Palette.with_alpha(Palette.CINDER, OVERLOAD_RING_ALPHA), 2.5 * px, aa)
+
+
+## The gate glow: a steady (not pulsing) soft glow along the side of every zone that is
+## gated (immune after a break, ShieldZones.gate_left), in the shield colour and softer
+## than the break flash: a thin bright line over a wider faint band, on the same ring as
+## the arcs. A broken zone has no arc, so the glow shows where the immune side is.
+func _draw_gate_glow(ci: CanvasItem, sh: ShieldZones, sr: float, px: float, z: float) -> void:
+	var mask := gate_mask(sh)
+	if mask == 0:
+		return
+	var aa := DrawCache.is_close(z)
+	for zone in 4:
+		if mask & (1 << zone) == 0:
+			continue
+		var centre: float = ShieldArcs.CENTERS[zone]
+		var a0 := centre - ShieldArcs.HALF_SPAN
+		var a1 := centre + ShieldArcs.HALF_SPAN
+		ci.draw_arc(Vector2.ZERO, sr, a0, a1, 12, Palette.with_alpha(Palette.SHIELD, GATE_GLOW_WIDE_ALPHA), 7.0 * px, aa)
+		ci.draw_arc(Vector2.ZERO, sr, a0, a1, 12, Palette.with_alpha(Palette.SHIELD, GATE_GLOW_ALPHA), 2.5 * px, aa)
 
 
 ## Draw the hull bar, the shield bar and the name on their kept picture (the `draw`
@@ -647,8 +833,11 @@ func _draw_bars_and_name(ci: CanvasItem, sr: float, drawn_len: float, col: Color
 	var bw := maxf(34.0 * px, minf(140.0 * px, drawn_len * 0.9))
 	var by := -sr - 10.0 * px
 	if DrawParts.bars:
-		ci.draw_rect(Rect2(-bw / 2.0, by, bw, 3.0 * px), Palette.with_alpha(Palette.VOID, 0.75))
+		# T-126a: the hull bar has its empty part at VOID 0.9, a 1 px mist frame at 0.55 and the team's mark 6 px to its left.
+		ci.draw_rect(Rect2(-bw / 2.0 - 0.5 * px, by - 0.5 * px, bw + px, 4.0 * px), Palette.with_alpha(Palette.MIST, 0.55), false, px)
+		ci.draw_rect(Rect2(-bw / 2.0, by, bw, 3.0 * px), Palette.with_alpha(Palette.VOID, 0.9))
 		ci.draw_rect(Rect2(-bw / 2.0, by, bw * ship.hull_frac(), 3.0 * px), col)
+		TeamMarks.mark(ci, Vector2(-bw / 2.0 - 6.0 * px, by + 1.5 * px), 6.0, ship.team, px)
 		ci.draw_rect(Rect2(-bw / 2.0, by - 4.0 * px, bw * ship.shields.fraction(), 2.0 * px), Palette.SHIELD)
 	if DrawParts.name_tag and (is_human or z > 0.45):
 		var font := ThemeDB.fallback_font

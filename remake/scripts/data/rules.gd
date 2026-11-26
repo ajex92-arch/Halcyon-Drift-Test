@@ -88,6 +88,45 @@ static func big_hull_flight() -> bool:
 	return Game.big_hull_flight
 
 
+# --- the drone ore steal switch ---------------------------------------------------
+
+## THE SWITCH for stealable drone ore. true: a mining drone shot down while it holds
+## ore drops the ore to the killer's team (the whole hold, paid like delivered ore:
+## Economy.steal_ore), and the computer pilots rate a fuller drone a better target
+## (PilotTargeting.drone_ore_pull). false: the old rule, the ore is lost and every
+## drone is rated the same. This one constant is the default for every match; the
+## option --drone-ore-steal (or =0 / =false) overrides it for one run (Game reads it).
+const DRONE_ORE_STEAL := true
+
+
+## Is this match played with stealable drone ore? The answer is DRONE_ORE_STEAL, or
+## the --drone-ore-steal option when it was given (Game keeps the answer). Economy
+## asks it when a drone is shot down, and PilotTargeting when it rates a drone.
+static func drone_ore_steal() -> bool:
+	return Game.drone_ore_steal
+
+
+# --- the ship parts switch ---------------------------------------------------------
+
+## THE SWITCH for the ship parts (guns, engine pods and a sensor that can be knocked
+## out on the four big hulls, see ShipParts and ShipSystems). false: no ship has parts and
+## every hit, number and aim is as it was before parts existed. true: the frigates, the
+## Destroyer and the Battlecruiser carry parts. This one constant is the default for every
+## match; the option --parts=on or --parts=off overrides it for one run.
+const SHIP_PARTS := true
+
+
+## Is this match played with ship parts? The answer is SHIP_PARTS, or the --parts option
+## ("on", "off", or "1", "0", "true", "false") when it was given. Ship.setup asks it once
+## for each ship.
+static func parts_on() -> bool:
+	var asked = Game.opt("parts")
+	if asked == null:
+		return SHIP_PARTS
+	var text := str(asked)
+	return text != "off" and text != "0" and text != "false"
+
+
 # --- teams -------------------------------------------------------------------
 # Every unit belongs to a team, stored as a number.
 
@@ -442,8 +481,17 @@ const ASSIST_MIN_FRACTION := 0.1
 ## hits in the last this many seconds. (Monster kills use 30 seconds.)
 const ASSIST_WINDOW := 15.0
 ## Extra bounty (credits) for ending a kill streak: this much for every
-## kill in the victim's streak after the first.
+## kill in the victim's streak after the first. A kill counts only from
+## BOUNTY_GROW_DELAY seconds after it was made.
 const SHUTDOWN_PER_STREAK := 50.0
+## Seconds after a kill before its step counts in the killer's bounty (the
+## bounty on a streak holder grows 5 s after each kill). A kill that is
+## younger than this when the holder dies adds nothing.
+const BOUNTY_GROW_DELAY := 5.0
+## How many kills of a streak add nothing to the bounty, however old they
+## are: 1 means the first kill of a streak grows nothing, the same as the
+## old rule (streak minus 1).
+const BOUNTY_GROW_FREE_KILLS := 1
 ## Credits shared by the enemy pilots who hit a turret in the last
 ## ASSIST_WINDOW seconds, when it is destroyed.
 const TURRET_BOUNTY := 350.0
@@ -607,8 +655,9 @@ const VARIANT_DEFAULTS := {
 	## its first Patrol Leader gets +40% hull and +15% weapon range instead)
 	"escort_wing": "extra",
 	## endgame_closure fork (docs/FUN_PLAN.md section 5; every key is "off" by
-	## default, so a match is today's game). Each value is listed in the
-	## header of its feature module in scripts/features/.
+	## default, so a match is today's game, except the ones the standard rules
+	## turn on in CouncilPresets). Each value is listed in the header of its
+	## feature module in scripts/features/.
 	## Sieges that land (SiegeFixFeature): "off" | "gather3" | "full" | "stall"
 	"siege_fix": "off",
 	## Lane breach corvette (BreachFeature): "off" | "on" | "fulldmg"
@@ -617,7 +666,8 @@ const VARIANT_DEFAULTS := {
 	"ms_cap": "off",
 	## Fleet attrition after 40:00 (AttritionFeature): "off" | "on"
 	"attrition": "off",
-	## Surrender vote (SurrenderFeature): "off" | "vote"
+	## Surrender vote (SurrenderFeature): "off" | "vote" ("vote" is on in the
+	## standard rules, CouncilPresets "pick"; the default here stays "off")
 	"surrender": "off",
 	## Extra super minion in a breached lane's waves (BreachExtraFeature):
 	## "off" | "on"
@@ -843,7 +893,8 @@ const TUNABLES := {
 	"escort_bonus": "extra share of delivered ore that a drone's escorts split (ESCORT_BONUS, 0.2; Economy.deliver_ore)",
 	"kill_base": "base bounty in credits for destroying a pilot ship (KILL_BASE, 100; Economy)",
 	"kill_value_share": "share of the destroyed ship's value added to its bounty (KILL_VALUE_SHARE, 0.12; Economy)",
-	"shutdown_per_streak": "extra bounty in credits per kill of the victim's streak after the first (SHUTDOWN_PER_STREAK, 50; Economy)",
+	"shutdown_per_streak": "extra bounty in credits per kill of the victim's streak after the first, whose delay is up (SHUTDOWN_PER_STREAK, 50; Economy)",
+	"bounty_grow_delay": "seconds after a kill before its step counts in the killer's bounty; 0 pays every kill at once, the old rule (BOUNTY_GROW_DELAY, 5; Economy.grown_kills)",
 	"kill_assist_share": "share of a ship bounty that the helpers split in equal parts, out of the killer's pay (KILL_ASSIST_SHARE, 1/3; Economy). It replaces \"assist_share\" (0.5 on top of the killer's pay), which is gone",
 	"minion_assist_share": "share of a minion's bounty that the helpers split by their damage, out of the last hitter's pay (MINION_ASSIST_SHARE, 0.25; Economy)",
 	"assist_min_fraction": "share of the recent damage a helper must have done, for ship, minion and derelict kills (ASSIST_MIN_FRACTION, 0.1; Economy)",

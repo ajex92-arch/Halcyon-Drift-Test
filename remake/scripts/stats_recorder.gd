@@ -32,7 +32,8 @@ extends Node
 ## PC. With the option off the match is bit for bit the same (tests/det_hash.gd
 ## proves it; it is the same with the option on).
 ##
-## THE FILE (JSON): "final", "reason", "match" (time, your seat, the seed),
+## THE FILE (JSON): "final", "reason", "match" (time, your seat, the seed, and
+## "practice": true only in a practice range, so the calibration skips that file),
 ## "human" (your page, or null when nobody plays), "ai_summary" (all AI pilots
 ## added up the same way, to hold your numbers against), "history" (one short
 ## entry per minute of match time: your key numbers so far and the AI added
@@ -243,10 +244,18 @@ func snapshot(final: bool, reason: String) -> Dictionary:
 			human = page.to_dict()
 		else:
 			ai.append(page.to_dict())
+	var match_info := {"t": snappedf(_t, 0.1), "clock": Util.clock(_t), "number": _number, "role": _role, "seed": _seed,
+		"winner": _winner, "variants": Game.variants, "sim_only": Game.sim_only, "godot": Engine.get_version_info()["string"]}
+	# A practice range marks its file, so the calibration of the computer pilots skips it. A normal
+	# match has no such key: its file is exactly as it always was.
+	if world != null and is_instance_valid(world) and world.practice:
+		match_info["practice"] = true
+		# The switches the player used: each one's presses that worked and the tick of the first.
+		if world.practice_range != null:
+			match_info["practice_uses"] = world.practice_range.uses.duplicate(true)
 	return {
 		"tool": "stats_recorder", "version": 1, "final": final, "reason": reason,
-		"match": {"t": snappedf(_t, 0.1), "clock": Util.clock(_t), "number": _number, "role": _role, "seed": _seed,
-			"winner": _winner, "variants": Game.variants, "sim_only": Game.sim_only, "godot": Engine.get_version_info()["string"]},
+		"match": match_info,
 		"human": human, "ai_summary": _ai_summary(), "history": _history, "ai": ai,
 	}
 

@@ -33,10 +33,10 @@ extends Node
 ## What "within" switches on: variant -> value (the rest stay at their defaults).
 const WITHIN := {"minion_cap": "on", "lance_role": "on", "bomber_role": "both", "admiral_sinks": "fleet",
 	"redeploy": "on", "gear_mk2": "on"}
-## What "pick", the standard rules, switches on: "within", persistent nodes and
-## small ships that leave the enemy mothership alone.
+## What "pick", the standard rules, switches on: "within", persistent nodes,
+## small ships that leave the enemy mothership alone and the surrender vote.
 const PICK := {"minion_cap": "on", "lance_role": "on", "bomber_role": "both", "admiral_sinks": "fleet",
-	"redeploy": "on", "gear_mk2": "on", "node_persist": "on", "ms": "nosmall"}
+	"redeploy": "on", "gear_mk2": "on", "node_persist": "on", "ms": "nosmall", "surrender": "vote"}
 ## Words a player must not meet on the start screen or in How to play: they
 ## would ask for a choice of rules.
 const FORBIDDEN := "(?i)rule.?set|preset|council|within requirements"

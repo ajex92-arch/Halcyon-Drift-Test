@@ -30,7 +30,7 @@ extends Node
 ## WHO USES IT: main.gd loads it for --test=flight_gate. It only reads the
 ## game; it changes nothing in the match.
 
-## A seat counts as at its Crossing within this many world units of the node
+## A seat counts as at its Crossing (its own team's outer lane turret) within this many world units of the node
 ## (the number opening_probe uses).
 const NEAR_R := 1500.0
 ## A big ship counts as at its lane when it flies in the lane state within this
@@ -141,7 +141,7 @@ func _look_seats() -> void:
 		if float(r["t_launch"]) < 0.0:
 			r["t_launch"] = snappedf(world.time, 0.1)
 		if float(r["t_near"]) < 0.0:
-			var node := _crossing(str(r["lane"]))
+			var node := _crossing(str(r["lane"]), p.team)
 			if node != null and ship.global_position.distance_to(node.global_position) <= NEAR_R:
 				r["t_near"] = snappedf(world.time, 0.1)
 
@@ -164,10 +164,10 @@ func _look_bigs() -> void:
 			r["t_lane"] = snappedf(world.time - float(r["t_launch"]), 0.1)
 
 
-## The Crossing node on `lane` (the middle node of that lane), or null.
-func _crossing(lane: String) -> ResourceNode:
+## The Crossing node of `team` on `lane` (its outer lane turret site, the anchor of opening_probe), or null.
+func _crossing(lane: String, team: int) -> ResourceNode:
 	for n in world.nodes:
-		if n.node_kind == "middle" and n.lane == lane:
+		if n.node_kind == "outer" and n.lane == lane and n.side == team:
 			return n
 	return null
 

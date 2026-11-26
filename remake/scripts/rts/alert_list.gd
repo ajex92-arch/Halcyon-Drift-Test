@@ -26,10 +26,13 @@ extends RefCounted
 ## lives after its last raise; `key`: what makes two events one alert ("team" =
 ## the kind and team only, "cell" = also the 2,000-unit square, "reason" = also
 ## the refusal's reason, "seat", "squad"); `gap`: ticks before the same key may
-## sound again; `text`: the line a screen shows. Kinds nothing raises yet are
-## listed too (structure_under_attack, cap_full, pilot_request, squadron_*).
+## sound again; `text`: the line a screen shows; `count` (optional, true when left out): false keeps
+## the text as it is when alerts merge, with no " x2" added (ship_under_fire: its line is always
+## "Under Fire!"). Kinds nothing raises yet are listed too (structure_under_attack, cap_full,
+## pilot_request, squadron_*).
 const KINDS := {
 	"mothership_under_attack": {"priority": 1, "life": 600, "key": "team", "gap": 900, "text": "Mothership under attack"},
+	"ship_under_fire": {"priority": 1, "life": 300, "key": "team", "gap": 900, "text": "Under Fire!", "count": false},
 	"squadron_under_attack": {"priority": 2, "life": 600, "key": "cell", "gap": 900, "text": "Squadron under attack"},
 	"structure_under_attack": {"priority": 3, "life": 600, "key": "cell", "gap": 900, "text": "Structure under attack"},
 	"ship_lost": {"priority": 4, "life": 1800, "key": "cell", "gap": 900, "text": "Ship lost"},
@@ -42,6 +45,7 @@ const KINDS := {
 	"module_done": {"priority": 7, "life": 600, "key": "team", "gap": 900, "text": "Module finished"},
 	"research_done": {"priority": 8, "life": 600, "key": "team", "gap": 900, "text": "Research finished"},
 	"pilot_request": {"priority": 9, "life": 1200, "key": "seat", "gap": 900, "text": "Pilot request"},
+	"seat_open": {"priority": 9, "life": 1200, "key": "seat", "gap": 900, "text": "Seat open"},
 	"squadron_idle": {"priority": 10, "life": 1800, "key": "squad", "gap": 1800, "text": "Squadron awaiting orders"},
 }
 ## An order_refused alert for these reasons may sound only this often (ticks).
@@ -100,9 +104,10 @@ func on_event(ev: Dictionary, tick: int) -> Dictionary:
 		alert = {"kind": kind, "key": key, "priority": int(row["priority"]), "raised": tick, "count": 0, "pos": pos, "text": str(row["text"]), "voice": false, "expires": tick}
 		_live.append(alert)
 	alert["count"] = int(alert["count"]) + 1
+	alert["seat"] = int(data.get("seat", Rules.ADMIRAL_SEAT))
 	alert["expires"] = tick + int(row["life"])
 	alert["pos"] = pos
-	alert["text"] = str(row["text"]) + (" x%d" % int(alert["count"]) if int(alert["count"]) > 1 else "")
+	alert["text"] = str(row["text"]) + (" x%d" % int(alert["count"]) if int(alert["count"]) > 1 and bool(row.get("count", true)) else "")
 	alert["voice"] = _may_voice(kind, key, tick, int(ev.get("uid", 0)), data)
 	return alert
 
@@ -125,6 +130,13 @@ func live(tick: int) -> Array:
 			return int(x["priority"]) < int(y["priority"])
 		return int(x["raised"]) > int(y["raised"]))
 	return out
+
+
+## Take the live alerts of `kind` in the 2,000-unit square of `pos` out of the list (a squadron lost folds its "under
+## attack" row away). They do not go to `recent`. A `pos` that is not a point drops the kind's alerts without a place.
+func drop_in_cell(kind: String, pos: Variant) -> void:
+	var cell := _merge_key(kind, "cell", pos, {})
+	_live = _live.filter(func(a: Dictionary) -> bool: return a["key"] != cell)
 
 
 ## Where a click on the top alert should jump the view to, or null when nothing is
@@ -157,6 +169,9 @@ func _merge_key(kind: String, how: String, pos, data: Dictionary) -> String:
 				key += "|%d,%d" % [floori(float(p.x) / float(CELL)), floori(float(p.y) / float(CELL))]
 		"reason":
 			key += "|" + str(data.get("reason", ""))
+			# The deputy's refusals are their own alert, apart from the human's.
+			if int(data.get("seat", Rules.ADMIRAL_SEAT)) == OrderKinds.DEPUTY_SEAT:
+				key += "|deputy"
 		"seat":
 			key += "|" + str(data.get("seat", ""))
 		"squad":

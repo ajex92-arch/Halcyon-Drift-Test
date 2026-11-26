@@ -63,8 +63,9 @@ extends RefCounted
 ## or ms), which the Bomber probe prints. Every run that is cancelled with the
 ## cancel input has exactly one reason, the pilot's own (off_line, blocked,
 ## target, stalled) or what settle() sees (stopped, lost, hidden, other), so the
-## reasons add up to RunGun's torpedo_runs_cancel_input. A run a rock ended is
-## counted as "dropped" (it is no cancel input).
+## reasons add up to RunGun's torpedo_runs_cancel_input. A run a rock ended
+## (RunGun's torpedo_runs_cancel_rock) or an overload or a Vent ended
+## (torpedo_runs_cancel_overload) is counted as "dropped" (it is no cancel input).
 ##
 ## WHO USES IT: PilotAI makes one (brain.run); PilotCombat.fight() calls fly()
 ## for a Bomber, abandon() when the brain stops fighting, settle() at the end
@@ -390,7 +391,10 @@ func _get_ready(ship: Ship, target: Unit, tp: Vector2, d: float, reach: float) -
 	var hs := _hit_size(target)
 	if _frac_for != target.get_instance_id():
 		_pick_launch(target)
-	var near := PilotRunFan.near_edge(m, hs, hs + reach * (_launch_frac - WINDOW))
+	# The arming term measures a capsule hull by its reach (its tip), so a head-on
+	# run keeps the arming distance from the nose; the share and far terms keep hs.
+	var arm_size := hs if target is Mothership else target.hit_reach()
+	var near := PilotRunFan.near_edge(m, arm_size, hs + reach * (_launch_frac - WINDOW))
 	var far := hs + reach * (_launch_frac + WINDOW)
 	# The blocked-line and touch counts (step 3) run only while we wait in the window.
 	if d < near or d > far:

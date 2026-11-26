@@ -4,9 +4,11 @@ extends RefCounted
 ## type) the pilot can buy for their next launch.
 ##
 ## HOW IT WORKS: build() makes a grid of cards, 2 per row, in Ships.ORDER.
-## Each card shows the hull's name, its class (Strike craft, Corvette, ...)
-## and its short text (Ships.blurb, 2 to 5 words), and nothing else: no
-## numbers. A card is only as tall as those lines and its footer.
+## Each card shows the hull's name, its class (Strike craft, Corvette, ...),
+## its short text (Ships.blurb, 2 to 5 words) and the published turn and stop
+## times (FlightTimes.line_for) and, for a ship of the line, a line of the reach of
+## each kind of gun it carries (reach_line()), and nothing else. A card is only as tall as
+## those lines and its footer.
 ## refresh_card() writes each card's footer 4 times a second:
 ##   - "Locked: needs ..." while the Admiral hasn't researched it yet;
 ##   - "Your ship for the next launch" for the hull already chosen (the
@@ -28,17 +30,52 @@ extends RefCounted
 
 ## Build the Ships tab's cards on hangar `h` (see HOW IT WORKS).
 static func build(h: Hangar) -> void:
-	# One card per hull, 2 per row. The card's description is two short
-	# lines: the class, then the hull's short text.
+	# One card per hull, 2 per row. The card's description is made by
+	# card_text(): the class, the hull's short text and the turn and stop times.
 	var g := h._grid(2)
 	var w := h._card_width(2)
 	for id: String in Ships.ORDER:
 		var d: Dictionary = Ships.HULLS[id]
-		# The hull's "size" (0..3) picks its class name.
-		var size_label: String = ["Strike craft", "Corvette", "Frigate", "Capital ship"][int(d["size"])]
-		var sub := "%s\n%s" % [size_label, Ships.blurb(id)]
 		var hid := id
-		h._make_card(g, "ship:" + id, String(d["label"]), sub, w, func() -> void: buy(h, hid))
+		h._make_card(g, "ship:" + id, String(d["label"]), card_text(id), w, func() -> void: buy(h, hid))
+
+
+## The description of hull `id`'s card: its class name, its short text and, when
+## the hull has them, the published turn and stop times (FlightTimes.line_for),
+## one line each.
+static func card_text(id: String) -> String:
+	var d: Dictionary = Ships.HULLS[id]
+	# The hull's "size" (0..3) picks its class name.
+	var size_label: String = ["Strike craft", "Corvette", "Frigate", "Capital ship"][int(d["size"])]
+	var sub := "%s\n%s" % [size_label, Ships.blurb(id)]
+	var times := FlightTimes.line_for(id)
+	var text := sub if times == "" else "%s\n%s" % [sub, times]
+	# A ship of the line also shows how far each kind of gun it carries reaches.
+	if bool(d.get("side_battery", false)):
+		text += "\n" + reach_line(id)
+	return text
+
+
+## The reach line of hull `id`'s card: "Reach: heavy 1,353 - ion 1,600 - chaser 735 - flak 675 - PD 512",
+## only the guns the hull carries, each number the weapon's own reach (Weapons.reach) with a thousands comma.
+static func reach_line(id: String) -> String:
+	var names := {"heavy_cannon": "heavy", "ion_turret": "ion", "light_turret": "chaser", "flak_auto": "flak", "pd_gun": "PD"}
+	var parts: Array[String] = []
+	for wid: String in names:
+		var carried := false
+		for row: Dictionary in Ships.HULLS[id]["mounts"]:
+			if String(row["w"]) == wid:
+				carried = true
+				break
+		if carried:
+			parts.append("%s %s" % [names[wid], _with_comma(int(round(Weapons.reach(Weapons.get_def(wid)))))])
+	return "Reach: " + " - ".join(parts)
+
+
+## `n` written with a comma before the last three digits (1353 becomes "1,353").
+static func _with_comma(n: int) -> String:
+	var s := str(n)
+	return s if s.length() <= 3 else "%s,%s" % [s.substr(0, s.length() - 3), s.substr(s.length() - 3)]
 
 
 ## Write the footer of card `c` for hull `id` on hangar `h` (see HOW IT

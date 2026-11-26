@@ -6,7 +6,7 @@ extends RefCounted
 ## a pass/fail run (hull_gallery --check) and not by someone looking at a
 ## picture.
 ##
-## HOW IT WORKS: run() makes four checks and prints a summary line for each
+## HOW IT WORKS: run() makes five checks and prints a summary line for each
 ## (and a "FAIL ..." line for every shape that fails):
 ##   - every polygon can be filled: Godot cuts a polygon into triangles to
 ##     fill it, and cannot for one that crosses itself;
@@ -14,6 +14,9 @@ extends RefCounted
 ##     Aurelian shape it replaces, so hits and ranges read the same (the lane
 ##     minions' Cinder shells against the Aurelian MinionShapes footprints: the
 ##     plate and, for the Patrol Leader, its engine pods);
+##   - the four capital hulls (both teams' Destroyer and Battlecruiser, drawn as
+##     broadside ships) keep their pinned length and widest half-width to within
+##     CAPITAL_PIN_SLACK, so a later edit cannot drift a drawn size unseen;
 ##   - the Aurelian minion outlines stay plain: at most MinionShapes.max_corners()
 ##     corners (6; 8 for the Snub-Fighter's stepped plate) and a flat tail (two
 ##     corners at the back, none on the middle line), unlike a pilot hull's
@@ -32,8 +35,21 @@ extends RefCounted
 ## that edge, and an exact inside test of such a point is not reliable.
 const MARK_SLACK := 0.02
 
+## How far (design units) a capital hull's drawn length or widest half-width may differ
+## from its pinned number before step 2b fails it.
+const CAPITAL_PIN_SLACK := 0.05
 
-## Run the four checks and print the results; returns the number of failures.
+## The four capitals' drawn sizes, as [team, hull id, length, widest half-width] in
+## design units (36 units long; the Aurelian engine block reaches 0.8 past the Vhorr stern).
+const CAPITAL_PINS: Array = [
+	["aurelian", "destroyer", 36.8, 7.5],
+	["aurelian", "battlecruiser", 36.8, 7.3],
+	["vhorr", "destroyer", 36.0, 6.4],
+	["vhorr", "battlecruiser", 36.0, 7.0],
+]
+
+
+## Run the five checks and print the results; returns the number of failures.
 static func run() -> int:
 	var bad := 0
 	var total := 0
@@ -55,7 +71,7 @@ static func run() -> int:
 	# length and half-width within 10% (for a minion, the plate and its pods).
 	var pairs: Array = []
 	for hid: String in Ships.ORDER:
-		pairs.append([hid, CinderShapes.HULLS[hid]["sil"], ShipVisual.HULLS[hid]])
+		pairs.append([hid, CinderShapes.HULLS[hid]["sil"], HullTables.OUTLINES[hid]])
 	for mt: String in Minions.TYPES:
 		pairs.append(["minion " + mt, CinderShapes.MINIONS[mt]["sil"], MinionShapes.footprint(mt)])
 	pairs.append(["mining drone", CinderShapes.UNITS["mining_drone"]["sil"], UnitVisual.DRONE])
@@ -74,6 +90,25 @@ static func run() -> int:
 			off += 1
 			print("FAIL size %s: length %.2f vs %.2f, width %.2f vs %.2f" % [pr[0], mine.x, theirs.x, mine.y, theirs.y])
 	print("cinder sizes: %d shapes checked, %d outside 10%% of the Aurelian shape" % [pairs.size(), off])
+	# Step 2b: the four capitals keep the drawn size of their broadside redraw: a later
+	# edit (new damage art, a moved mount) cannot change a length or a widest half-width
+	# unseen. The Aurelian numbers come from AurelianPaint's prepared records (the way
+	# the hull checks read them), the Vhorr ones from the box of the outline.
+	var pin_off := 0
+	for pin: Array in CAPITAL_PINS:
+		var team: String = pin[0]
+		var hid: String = pin[1]
+		var got := Vector2.ZERO
+		if team == "aurelian":
+			var rec: Dictionary = AurelianPaint.hull(hid)
+			got = Vector2(float(rec["len"]), float(rec["hw"]))
+		else:
+			var bx := box(CinderShapes.HULLS[hid]["sil"])
+			got = Vector2(bx.x, bx.y * 0.5)
+		if absf(got.x - float(pin[2])) > CAPITAL_PIN_SLACK or absf(got.y - float(pin[3])) > CAPITAL_PIN_SLACK:
+			pin_off += 1
+			print("FAIL capital pin %s %s: length %.2f vs %.2f, half-width %.2f vs %.2f" % [team, hid, got.x, float(pin[2]), got.y, float(pin[3])])
+	print("capital pins: %d hulls checked, %d off" % [CAPITAL_PINS.size(), pin_off])
 	# Step 3: the Aurelian minion outlines are plain: at most max_corners() corners
 	# (6, or 8 for the Snub-Fighter) and a flat tail (two corners at the back, and
 	# none of them on the middle line).
@@ -129,7 +164,7 @@ static func run() -> int:
 				bad_marks += 1
 				print("FAIL minion mark %s %s" % [mt, kind])
 	print("minion marks: %d marks checked, %d outside the plate" % [mark_count, bad_marks])
-	return bad + off + not_plain + bad_marks
+	return bad + off + pin_off + not_plain + bad_marks
 
 
 ## The length and width of a shape given as a list of points (its width is

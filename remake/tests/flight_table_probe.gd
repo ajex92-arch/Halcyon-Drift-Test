@@ -30,7 +30,12 @@ extends Node
 ##                it keeps.
 ##   strafe_run   from rest, the strafe key held for 3 s with the nose told to
 ##                hold still: the sideways speed gained and how far the nose
-##                swung.
+##                swung. (Ship.kick_keys is off: the old strafe.)
+##   kick_run     a ship of the line only: from rest, the same key held for 1 s as
+##                a stern kick (Ship.kick_keys on) with the nose told to hold
+##                still: how many degrees the nose swung in that second, and then,
+##                the key let go, the seconds until the nose is back within 2
+##                degrees of the heading for good.
 ##
 ## HOW TO RUN IT ("godot" is the Godot console program, started from the
 ## folder that holds remake/):
@@ -38,7 +43,9 @@ extends Node
 ##
 ## HOW TO READ THE OUTPUT: one "FLIGHT <hull> ..." line per hull, then one
 ## "PROBE_JSON {...}" line with the same numbers (time in seconds, distance in
-## world units, angles in degrees, speed in world units per second).
+## world units, angles in degrees, speed in world units per second). The last two
+## numbers of a line, kick_deg and kick_back_s, are the kick_run's (0.0 for a hull
+## that is not a ship of the line).
 ##
 ## WHO USES IT: main.gd loads it for --test=flight_table_probe. It only reads
 ## the game and draws no random numbers (the ships it makes are launched into
@@ -87,9 +94,18 @@ func _run() -> void:
 		var s := _launch(hid)
 		var row := _measure(s)
 		out[hid] = row
-		print("FLIGHT %s top %.1f t95 %.2f d95 %.0f stop_t %.2f stop_d %.0f slide %.0f turn90 %.2f turn180 %.2f over180 %.1f settle180 %.2f cruise90 %.2f cruise180 %.2f circle_d %.0f circle_v %.0f strafe_v %.1f nose_swing %.1f" % [
+		print("FLIGHT %s top %.1f t95 %.2f d95 %.0f stop_t %.2f stop_d %.0f slide %.0f turn90 %.2f turn180 %.2f over180 %.1f settle180 %.2f cruise90 %.2f cruise180 %.2f circle_d %.0f circle_v %.0f strafe_v %.1f nose_swing %.1f kick_deg %.1f kick_back_s %.2f" % [
 			hid, row["top"], row["t95"], row["d95"], row["stop_t"], row["stop_d"], row["stop_slide"], row["turn90"], row["turn180"],
-			row["over180"], row["settle180"], row["cruise90"], row["cruise180"], row["circle_d"], row["circle_v"], row["strafe_v"], row["strafe_nose"]])
+			row["over180"], row["settle180"], row["cruise90"], row["cruise180"], row["circle_d"], row["circle_v"], row["strafe_v"], row["strafe_nose"],
+			row["kick_deg"], row["kick_back_s"]])
+		# A hull with ship parts (the parts switch on): the same measures with one engine pod forced
+		# OFF and with both (no rows with the switch off, so the old rows are unchanged).
+		var pods := _pod_rows(s)
+		if not pods.is_empty():
+			row["pods"] = pods
+			for case_name: String in pods.keys():
+				var pr: Dictionary = pods[case_name]
+				print("FLIGHT_PODS %s %s top %.1f t95 %.2f turn90 %.2f" % [hid, case_name, pr["top"], pr["t95"], pr["turn90"]])
 		_put(s)
 	print("PROBE_JSON ", JSON.stringify({"probe": "flight_table_probe", "dt": DT, "rows": out}))
 	get_tree().quit()
@@ -122,6 +138,13 @@ func _measure(s: Ship) -> Dictionary:
 	var sr := _strafe_run(s)
 	row["strafe_v"] = sr["v"]
 	row["strafe_nose"] = sr["nose"]
+	# A ship of the line: the stern kick (the other hulls have none: 0.0).
+	row["kick_deg"] = 0.0
+	row["kick_back_s"] = 0.0
+	if s.f_line:
+		var kr := _kick_run(s)
+		row["kick_deg"] = kr["deg"]
+		row["kick_back_s"] = kr["back"]
 	# The four big classes: the engine swivel, end to end (from one limit to
 	# the other), when the build has swivelling engines.
 	if Handling.has_line(s.hull_id):
@@ -130,6 +153,33 @@ func _measure(s: Ship) -> Dictionary:
 		var rate := float(line["swivel_rate"])
 		row["swivel_end_to_end"] = 2.0 * float(line["swivel_max"]) / rate if rate > 0.0 else 0.0
 	return row
+
+
+## The flight measures of ship `s` with its left engine pod forced OFF ("one_pod_off") and with both
+## ("both_pods_off"): top speed, seconds to 95% of it and the 90-degree turn time. Empty for a ship
+## with no parts. The pods are put back whole at the end.
+func _pod_rows(s: Ship) -> Dictionary:
+	var out := {}
+	var parts: ShipSystems = s.parts
+	if parts == null or parts.pod_l < 0 or parts.pod_r < 0:
+		return out
+	var cases := {"one_pod_off": [parts.pod_l], "both_pods_off": [parts.pod_l, parts.pod_r]}
+	for case_name: String in cases.keys():
+		for i in parts.count():
+			parts.hp[i] = int((parts.rows[i] as Dictionary)["hp_max"])
+			parts.offline[i] = 0
+		for pod: int in cases[case_name]:
+			parts.hp[pod] = 0
+			parts.offline[pod] = 1
+			parts.since[pod] = parts.tick_n
+		var a := _accel_run(s)
+		var t90 := _turn_run(s, 90.0, 0.0, 0.0)
+		out[case_name] = {"top": a["top"], "t95": a["t95"], "turn90": t90["t"]}
+	for i in parts.count():
+		parts.hp[i] = int((parts.rows[i] as Dictionary)["hp_max"])
+		parts.offline[i] = 0
+	s.recompute_stats(true)
+	return out
 
 
 ## Launch a pilot ship of hull `hid` for team 0 (a pilot named after the hull),
@@ -301,3 +351,24 @@ func _strafe_run(s: Ship) -> Dictionary:
 		swing = maxf(swing, absf(rad_to_deg(Util.wrap_angle(s.rotation))))
 	var v := s.velocity.dot(Util.port_of(s.rotation))
 	return {"v": v, "nose": swing}
+
+## A ship of the line, from rest, the strafe key held for 1 s as a stern kick
+## (Ship.kick_keys on) with the nose told to hold still: "deg" is how many
+## degrees the nose swung in that second; then the key is let go and "back" is the
+## seconds until the nose is within NOSE_OK_DEG of the heading for good (0.0 if it
+## never left it by more than that). kick_keys goes back to false at the end.
+func _kick_run(s: Ship) -> Dictionary:
+	_reset(s, 0.0)
+	s.kick_keys = true
+	s.controls.strafe = 1.0
+	for _i in int(1.0 / DT + 0.5):
+		_step(s)
+	var deg := absf(rad_to_deg(Util.wrap_angle(s.rotation)))
+	s.controls.strafe = 0.0
+	var back := 0.0
+	for i in int(MAX_SECS / DT):
+		_step(s)
+		if _nose_err_deg(s, 0.0) > NOSE_OK_DEG:
+			back = float(i + 1) * DT
+	s.kick_keys = false
+	return {"deg": deg, "back": back}

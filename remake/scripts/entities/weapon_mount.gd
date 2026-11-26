@@ -12,7 +12,13 @@ extends RefCounted
 ##           which its RunGun part keeps (run_gun.gd).
 ##   TURRET  swings toward the owner's aim point, but only within its `arc`.
 ##           Big ships use these: the pilot aims a reticle while the hull
-##           faces wherever positioning demands.
+##           faces wherever positioning demands. A TURRET that is part of a ship of
+##           the line's broadside battery (`battery`) follows the reticle only while
+##           the reticle is inside its arc; with the reticle off its side it works on
+##           its own like an AUTO gun (_auto_step), a Broadside charge can hold it
+##           (`hold`), its shots leave with a small fixed spread (shot_offset()) and,
+##           like every turret of such a ship, it swings three times as fast once it
+##           has been idle for 2 s (`idle_boost`).
 ##   AUTO    picks its own targets (flak and point defense). This is what
 ##           lets a well-positioned big ship keep firing at whatever comes
 ##           at it (and shred small craft, while the damage modifiers are
@@ -53,11 +59,45 @@ const TYPE_IDS := {"fixed": FIXED, "turret": TURRET, "auto": AUTO}
 ## How far, in radians, past the edge of its swing an AUTO gun still counts a
 ## direction as inside it (in_swing()).
 const SWING_SLACK := 0.01
+## Seconds without a shot after which a ship-of-the-line turret swings faster (idle_boost).
+const IDLE_TIME := 2.0
+## How many times faster that idle swing is.
+const IDLE_TURN_MULT := 3.0
+## The battery spread: a gun of a group of n aims (i - (n-1)/2) times this fraction of its distance
+## to the aim point to the side of it.
+const SPREAD_STEP := 0.012
+## The shortest distance the spread is worked from, in world units (a close aim point cannot
+## blow the angle up).
+const SPREAD_MIN_DIST := 100.0
 
 ## The unit this gun is bolted to.
 var owner: Unit
 ## Which weapon this is: its id in Weapons (e.g. "fighter_cannon").
 var weapon_id := ""
+## The gun's name on its hull, from the hull's row in Ships (e.g. "pd_fore_port"), unique
+## inside the hull. "" for a gun with none: a hull row that names no guns, or a gun a
+## module or a structure adds.
+var id := ""
+## True for a gun of the broadside battery: a heavy cannon or an ion turret on the beam
+## of a ship of the line (the hull row's "battery" key; Ship.setup() sets it). false for
+## every other gun.
+var battery := false
+## Battery guns of one weapon on one side of the ship, counted in the row order: this gun's
+## place in its group (0 for the first) and how many guns the group has (1 for a lone gun).
+## Ship.setup() sets them. The group aims a fixed spread (shot_offset()).
+var battery_i := 0
+## The size of the gun's battery group (see battery_i).
+var battery_n := 1
+## True while the owner holds this battery gun back (a Broadside charge on its side): it
+## follows the reticle but never takes the self-aiming path. The owner sets it each tick.
+var hold := false
+## Seconds since this gun last fired (a burst beam: since its burst began). Counted in update()
+## for a gun with idle_boost only.
+var idle_t := 0.0
+## True for a turret of a ship of the line (the hull row's "side_battery"): after IDLE_TIME
+## seconds without a shot it swings IDLE_TURN_MULT times as fast until its next shot. Ship.setup()
+## sets it.
+var idle_boost := false
 ## The weapon's data from Weapons (damage, rate, speed, energy cost...).
 var def: Dictionary
 ## The weapon kind: one of Rules.W_* (bolt, torpedo, flak...). It picks the
@@ -127,6 +167,11 @@ var run: RunGun = null
 ## Multiplier on the hit points of the torpedoes this gun fires (the owner
 ## sets it each tick from its research; 1.0 = the weapon's own torp_hp).
 var torp_hp_mult := 1.0
+## Set by _auto_step(): did the self-aiming work this tick want a shot? (Read by update().)
+var _auto_fire := false
+## Multiplier on how fast a turret or self-aiming gun swings (the owner sets it each tick from
+## its sensor part: 1.0 = whole, 0.75 = hurt, 0.5 = out). 1.0 for a ship with no parts.
+var slew_mult := 1.0
 
 
 ## Create a gun: owner `o`, weapon id `wid`, mount type name `type_name`
@@ -172,7 +217,13 @@ func update(dt: float, aim_point: Vector2, trigger: bool, fire_mult: float, dmg_
 	if cd > 0.0:
 		cd -= dt
 	engaged = false
-	var turn_rate: float = _turn_rate
+	var turn_rate: float = _turn_rate * slew_mult
+	# A ship-of-the-line turret that has not fired for IDLE_TIME seconds swings faster until
+	# its next shot.
+	if idle_boost:
+		idle_t += dt
+		if idle_t >= IDLE_TIME:
+			turn_rate *= IDLE_TURN_MULT
 	var want_local := 0.0
 	var fire := false
 	range_now = reach * range_mult
@@ -196,32 +247,23 @@ func update(dt: float, aim_point: Vector2, trigger: bool, fire_mult: float, dmg_
 			var mp := world_pos()
 			var desired := Util.ang_diff(owner.rotation, (aim_point - mp).angle())
 			var off_centre := _off_centre(desired)
-			want_local = face + clampf(off_centre, -arc, arc)
-			angle = _slew(angle, want_local, turn_rate * dt)
-			fire = trigger and absf(off_centre) <= arc + 0.05 and absf(Util.wrap_angle(want_local - angle)) < 0.3
+			if battery and not hold and absf(off_centre) > arc + 0.05:
+				# A battery gun whose side the reticle is not on works on its own, as an
+				# AUTO gun does: its own target, no trigger.
+				aim_at = _auto_step(dt, turn_rate, aim_at)
+				fire = _auto_fire
+			else:
+				# A battery projectile gun swings to its own place in the fixed spread
+				# round the reticle (the arc and the firing test use the reticle itself).
+				var want_off := off_centre
+				if battery and not is_beam:
+					want_off = _off_centre(Util.ang_diff(owner.rotation, (_spread_point(aim_point, mp) - mp).angle()))
+				want_local = face + clampf(want_off, -arc, arc)
+				angle = _slew(angle, want_local, turn_rate * dt)
+				fire = trigger and absf(off_centre) <= arc + 0.05 and absf(Util.wrap_angle(want_local - angle)) < 0.3
 		AUTO:
-			# Choose a target every 0.25-0.35 s (the random part spreads
-			# the work over different ticks).
-			retarget_t -= dt
-			if retarget_t <= 0.0:
-				retarget_t = 0.25 + randf() * 0.1
-				WeaponMountTargeting.pick_target(self, range_now)
-			# Aim at where the target will be. INF means "no target".
-			var tp := WeaponMountTargeting.target_point(self)
-			if tp.x != INF:
-				aim_at = tp
-				var mp := world_pos()
-				var desired := Util.ang_diff(owner.rotation, (tp - mp).angle())
-				if in_swing(desired, SWING_SLACK):
-					# Inside our arc: swing and fire once within 0.12 rad.
-					want_local = desired
-					angle = _slew(angle, want_local, turn_rate * dt)
-					fire = absf(Util.wrap_angle(want_local - angle)) < 0.12
-					engaged = true
-				else:
-					# Outside our arc: give the target up.
-					target = null
-					target_torp = -1
+			aim_at = _auto_step(dt, turn_rate, aim_at)
+			fire = _auto_fire
 
 	if trigger and mount_type != AUTO:
 		engaged = true
@@ -241,6 +283,60 @@ func update(dt: float, aim_point: Vector2, trigger: bool, fire_mult: float, dmg_
 	cd += 1.0 / maxf(0.01, float(def["rate"]) * fire_mult)
 	_shoot(dmg_mult * next_mult, range_mult, aim_at)
 	next_mult = 1.0
+	idle_t = 0.0
+
+
+## The self-aiming work of one tick, for an AUTO gun and for a battery gun whose side the reticle
+## is not on: choose a target every 0.25-0.35 s, swing toward the lead point inside the arc and
+## say in `_auto_fire` whether to fire (within 0.12 rad of it). Returns the point the gun aims
+## at: the lead point, or `aim_in` when there is no target. A battery gun aims at its own place
+## in the fixed spread round the lead point.
+func _auto_step(dt: float, turn_rate: float, aim_in: Vector2) -> Vector2:
+	_auto_fire = false
+	var aim_at := aim_in
+	# Choose a target every 0.25-0.35 s (the random part spreads
+	# the work over different ticks).
+	retarget_t -= dt
+	if retarget_t <= 0.0:
+		retarget_t = 0.25 + randf() * 0.1
+		WeaponMountTargeting.pick_target(self, range_now)
+	# Aim at where the target will be. INF means "no target".
+	var tp := WeaponMountTargeting.target_point(self)
+	if tp.x != INF:
+		aim_at = tp
+		var mp := world_pos()
+		var swing_to := _spread_point(tp, mp) if battery and not is_beam else tp
+		var desired := Util.ang_diff(owner.rotation, (swing_to - mp).angle())
+		if in_swing(desired, SWING_SLACK):
+			# Inside our arc: swing and fire once within 0.12 rad.
+			var want_local := desired
+			angle = _slew(angle, want_local, turn_rate * dt)
+			_auto_fire = absf(Util.wrap_angle(want_local - angle)) < 0.12
+			engaged = true
+		else:
+			# Outside our arc: give the target up.
+			target = null
+			target_torp = -1
+	return aim_at
+
+
+## The sideways distance, in world units, the gun `i` of a group of `n` battery guns aims off the
+## point it is to hit, when that point is `d` away (never counted under SPREAD_MIN_DIST):
+## (i - (n-1)/2) x SPREAD_STEP x d. A pair gives -6 and +6 at 1,000; a lone gun 0.
+static func shot_offset(i: int, n: int, d: float) -> float:
+	return (float(i) - float(n - 1) * 0.5) * SPREAD_STEP * maxf(d, SPREAD_MIN_DIST)
+
+
+## The point this battery gun aims at to hit `p` from `from`: `p` moved sideways, across the line
+## from the gun to it, by shot_offset().
+func _spread_point(p: Vector2, from: Vector2) -> Vector2:
+	if battery_n < 2:
+		return p
+	var line := p - from
+	var d := line.length()
+	if d < 0.001:
+		return p
+	return p + (line / d).rotated(PI * 0.5) * shot_offset(battery_i, battery_n, d)
 
 
 ## Send the three torpedoes of one run (RunGun calls this at the launch):
@@ -298,7 +394,9 @@ func _shoot(dmg_mult: float, range_mult: float, aim_at: Vector2) -> void:
 	# as wide for guns with more than 2 pellets). Rounds also carry 35% of
 	# the owner's own speed.
 	for i in pellets:
-		var da := (randf() - 0.5) * spread * (2.0 if pellets > 2 else 1.0)
+		# A battery gun has no dice: it leaves along the barrel, which aimed at its own place
+		# in the fixed spread (update()).
+		var da := 0.0 if battery else (randf() - 0.5) * spread * (2.0 if pellets > 2 else 1.0)
 		var dir := Vector2.from_angle(a + da)
 		var vel := dir * speed + owner.velocity * 0.35
 		w.projectiles.spawn(mp + dir * 4.0, vel, life, float(def["dmg"]) * dmg_mult, kind, def, owner, homing_target)
@@ -338,6 +436,7 @@ func _update_beam(dt: float, fire: bool, dmg_mult: float, length: float, energy:
 		# one-shot bonus (Capacitor Dump) is latched for that whole burst.
 		if beam_on <= 0.0 and fire and beam_off <= 0.0:
 			beam_on = on_time
+			idle_t = 0.0
 			burst_mult = next_mult
 			next_mult = 1.0
 		if beam_on <= 0.0:
@@ -357,6 +456,9 @@ func _update_beam(dt: float, fire: bool, dmg_mult: float, length: float, energy:
 	# Fire: Combat damages the first thing on the line and tells us where
 	# the beam stopped; Projectiles draws it.
 	beam_firing = true
+	# A beam that is firing is not idle: the idle swing's count starts over on every tick of the burst,
+	# so the turret is never boosted inside its own burst.
+	idle_t = 0.0
 	engaged = true
 	var w := owner.world
 	# A beam fired from inside a cover patch shows the shooter, like a shot.
@@ -364,5 +466,7 @@ func _update_beam(dt: float, fire: bool, dmg_mult: float, length: float, energy:
 	var mp := world_pos()
 	var dir := Vector2.from_angle(world_angle())
 	var dmg: float = float(def["dps"]) * dt * dmg_mult * bonus
-	beam_end = w.combat.beam(owner, mp, dir, length, dmg, kind, bool(def.get("cuts", false)))
+	# The beam's strength against armour is half its damage per second.
+	var strength: float = float(def["dps"]) * dmg_mult * bonus * 0.5
+	beam_end = w.combat.beam(owner, mp, dir, length, dmg, kind, bool(def.get("cuts", false)), strength)
 	w.projectiles.add_beam(mp, beam_end, owner.team, float(def.get("width", 3.0)), kind)

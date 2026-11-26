@@ -295,7 +295,7 @@ func _tick(dt: float) -> void:
 func _ai_think(team: int) -> void:
 	var ai: AdmiralAI = world.admiral_ai[team]
 	_ai_t[team] = float(_ai_t[team]) - 1.0
-	if not AdmiralWeak.ai_acts(world, team) or float(_ai_t[team]) > 0.0:
+	if not AdmiralWeak.ai_acts_solo(world, team) or float(_ai_t[team]) > 0.0:
 		return
 	var ts := world.teams[team]
 	if ts.treasury < AI_MIN_TREASURY or active_count(team) >= MAX_ACTIVE or CommandOrders.ready_in(world, "bounty", team) > 0.0:

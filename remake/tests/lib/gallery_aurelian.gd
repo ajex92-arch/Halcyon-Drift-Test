@@ -15,7 +15,7 @@ extends RefCounted
 ##     filled, has at most MAX_OUTLINE_POINTS points and reaches as far as the
 ##     pieces do (no piece was lost in the merge);
 ##   - the hull keeps the length and width of its plain outline in
-##     ShipVisual.HULLS to within LENGTH_SLACK and WIDTH_SLACK, so a typing mistake
+##     HullTables.OUTLINES to within LENGTH_SLACK and WIDTH_SLACK, so a typing mistake
 ##     shows (a hull may be wider on purpose where a gun mount sits outside the plain
 ##     outline);
 ##   - every gun mount of the hull in ships.gd sits inside the outline, and every
@@ -119,7 +119,7 @@ static func _hulls() -> int:
 			outline_bad += 1
 			print("FAIL outline %s: %d sample points inside the outline are covered by no piece (a hole), for example %s" % [hid, gaps.size(), gaps.slice(0, 3)])
 		# Check 3: the drawn size against the plain outline.
-		var plain := GalleryChecks.box(ShipVisual.HULLS[base])
+		var plain := GalleryChecks.box(HullTables.OUTLINES[base])
 		var mine := Vector2(float(rec["len"]), float(rec["hw"]) * 2.0)
 		if absf(mine.x / plain.x - 1.0) > LENGTH_SLACK or absf(mine.y / plain.y - 1.0) > WIDTH_SLACK:
 			size_bad += 1

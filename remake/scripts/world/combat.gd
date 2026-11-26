@@ -30,7 +30,8 @@ extends RefCounted
 ##   6. bookkeeping: the target's damage log (for assists), the shooting
 ##      pilot's damage total, the turret "aggro" marker, a sound cue and,
 ##      for probes only, the Events.damage_applied signal
-##      (emit_damage_events);
+##      (emit_damage_events), and (S7A, not in --sim-only runs) the
+##      Events.hit_landed signal that the HUD's hit markers draw from;
 ##   7. if the hull is at 0: kill() pays the rewards (Economy), tells
 ##      everyone (Events), lets the unit react (on_killed) and removes it
 ##      (World.remove_unit).
@@ -48,7 +49,8 @@ extends RefCounted
 ## (their drones when they die), RepairDrone and SnubFighter (themselves).
 ## The ui_tour test calls kill(); the support_probe test calls
 ## apply_damage(). Feature modules set minion_scale_hook; the fun probe and
-## the pilot audit turn on emit_damage_events.
+## the pilot audit turn on emit_damage_events. HitMarkers (the HUD) listens to
+## Events.hit_landed.
 
 ## How much more damage a torpedo does to a "painted" ship: x1.3, that is
 ## +30%. A Support ship paints enemies (Ship.paint_t, set by WorldSupport).
@@ -127,6 +129,15 @@ func apply_damage(target: Unit, info: DamageInfo) -> float:
 	# Measurement only (probes): announce the applied hit, before any death.
 	if emit_damage_events:
 		Events.damage_applied.emit(target, info, amount, hull_dmg)
+	# S7A: tell the HUD's hit markers (drawing only; nothing in the simulation listens, and no field is written). A zone that
+	# broke in this hit has its flash just set to 0.4 (a hit lands before the tick that counts it down), hence the tolerance.
+	if not Game.sim_only:
+		var zone_broke := false
+		if target.shields != null:
+			for f: float in target.shields.flash:
+				if f > 0.39:
+					zone_broke = true
+		Events.hit_landed.emit(target, info, hull_dmg, zone_broke)
 	# Step 7: no hull left, so the target dies.
 	if target.hull <= 0.0:
 		kill(target, info)
@@ -183,9 +194,10 @@ func kill_silently(target: Unit) -> void:
 ## A continuous beam from `from` in direction `dir` (a unit-length vector),
 ## `length` world units long, fired by `src`. It damages the first enemy
 ## unit on its line (or chips an asteroid, for a cutting beam). Returns the
-## point where the beam stops. The real code is CombatBeamArea.beam().
-func beam(src: Unit, from: Vector2, dir: Vector2, length: float, dmg: float, kind: int, cuts: bool) -> Vector2:
-	return beam_area.beam(src, from, dir, length, dmg, kind, cuts)
+## point where the beam stops. `strength` is the beam's strength against armour
+## (half its damage per second; 0 = not set). The real code is CombatBeamArea.beam().
+func beam(src: Unit, from: Vector2, dir: Vector2, length: float, dmg: float, kind: int, cuts: bool, strength: float = 0.0) -> Vector2:
+	return beam_area.beam(src, from, dir, length, dmg, kind, cuts, strength)
 
 
 ## A blast at `pos` with radius `r` (world units) that hurts everyone not on

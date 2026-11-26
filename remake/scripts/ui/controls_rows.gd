@@ -18,7 +18,7 @@ extends RefCounted
 const GROUP_ORDER := ["Camera", "Selection", "Orders", "Build", "Base", "Pilot", "Shared"]
 
 ## The short names of the modes for the "differs in" tag.
-const MODE_SHORT := {"home": "Home", "flying": "Flying", "flying_board": "Board open", "shared": "Every mode"}
+const MODE_SHORT := {"home": "Home", "flying": "Flying", "flying_board": "Board open", "shared": "Every mode", "wheel": "Holding X"}
 
 ## The page this part belongs to.
 var page: ControlsPage
@@ -132,10 +132,11 @@ func _add_row(body: VBoxContainer, row_mode: String, r: Dictionary, tab: String,
 	var tag := _differs(tab, id, KeyMap.effective_keys(row_mode, id), index)
 	if tag != "" and row_mode != "shared":
 		h.add_child(UiKit.label("differs in " + tag, 14, UiKit.accent()))
-	var note := UiKit.label(_note(row_mode, r, slots), 14, Palette.MIST)
+	# The note wraps onto a second line where the page is narrow, so none of it is cut (it used to
+	# end in "..." at 1280 wide; bug ledger T-13 note 27).
+	var note := UiKit.label(_note(row_mode, r, slots), 14, Palette.MIST, true)
 	note.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	note.clip_text = true
-	note.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	note.custom_minimum_size.x = 160.0
 	h.add_child(note)
 
 
@@ -146,7 +147,8 @@ func _note(row_mode: String, r: Dictionary, slots: Array) -> String:
 	if String(r["note"]) != "":
 		parts.append(String(r["note"]))
 	if KeyMap.is_linked(row_mode, String(r["id"])):
-		var target := KeyMap.row("flying", String(r["link"]))
+		var followed := KeyMap.resolve(row_mode, String(r["id"]))
+		var target := KeyMap.row(String(followed[0]), String(followed[1]))
 		parts.append("Same keys as %s (changing them here changes both)" % String(target["label"]))
 	if not KeyMap.is_live(r):
 		parts.append("Comes with " + String(KeyMapData.COMES_WITH.get(String(r["since"]), "a later stage")))

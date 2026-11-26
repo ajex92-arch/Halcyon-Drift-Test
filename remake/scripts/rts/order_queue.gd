@@ -65,6 +65,8 @@ var replay: ReplayPlayer = null
 var replaying := false
 ## True while replay 2 plays the computer's orders in place of its thinking.
 var replaying_ai := false
+## The deputy of the human Admiral (Deputy.install makes it), or null in a match with no human Admiral.
+var deputy: Deputy = null
 ## How many orders have been carried out (counted ok), for the second fingerprint line.
 var applied := 0
 ## The last record submit() was given, whether it was accepted or not (a test reads it
@@ -139,8 +141,11 @@ func replay_stopped() -> bool:
 
 
 ## Record the flight controls the human pilot's ship uses on this tick (PlayerController calls this
-## at the end of its update). Does nothing when no log is open.
+## at the end of its update). The deputy, when there is one, is told first (its absence timer reads the
+## controls). Writes the log only when a log is open.
 func record_controls(ship: Ship) -> void:
+	if deputy != null:
+		deputy.note_controls(ship)
 	if log != null:
 		log.controls(world.tick_count, ship.profile.slot, ship.controls)
 
@@ -212,9 +217,31 @@ func apply_now(o: Dictionary) -> String:
 	return apply(o)
 
 
+## Carry out an order `ticks` ticks from now (the computer Admiral's delayed door, AdmiralOutbox): the record is stamped
+## and checked like submit()'s and waits in the queue for apply_tick = the tick count now + `ticks`; run_due() carries it
+## out and apply() checks it again. A refusal at submit is filed and returned; else the order gets its number (in
+## o["id"]) and "" is returned. `ticks` below 1 acts as apply_now().
+func apply_later(o: Dictionary, ticks: int) -> String:
+	if ticks < 1:
+		return apply_now(o)
+	o["tick"] = world.tick_count
+	o["apply_tick"] = world.tick_count + ticks
+	o["id"] = 0
+	count_submitted(o)
+	var msg := OrderChecks.at_once(world, self, o)
+	if msg != "":
+		_refuse_at_submit(o, msg)
+		return msg
+	o["id"] = take_id()
+	_insert(o)
+	return ""
+
+
 ## Top of the World's tick (step 1a): the fingerprint line, the replay's orders, then every
 ## order that is due, in stored order.
 func run_due() -> void:
+	if deputy != null:
+		deputy.tick()
 	var tc := world.tick_count
 	if not _started:
 		_started = true
@@ -265,13 +292,38 @@ func _replay_should_stop(tc: int) -> bool:
 
 ## Replay 2: the computer Admirals' logged orders for this tick, in the logged order,
 ## carried out in place of the Admirals' thinking. Called once a tick (for team 0) where
-## the Admirals would think; it plays both teams' lines.
+## the Admirals would think; it plays both teams' lines. An `f` line goes to the Admiral's own ship
+## (AdmiralField) or, for the op "goal", to the fleet layer (AdmiralFleet.replay_goal). A line with the d word
+## (a delayed fleet order) is queued at its decision tick instead and carried out by run_due.
 func replay_ai(_team: int) -> void:
 	if replay == null:
 		return
 	for o: Dictionary in replay.due(world.tick_count):
+		if o.has("field"):
+			# An `f` line: a decision of the Admiral about its own ship (AdmiralField), or its fleet goal (op "goal").
+			var ai: AdmiralAI = world.admiral_ai[int(o["team"])]
+			if ai != null:
+				if str(o["op"]) == "goal":
+					# The fleet layer's goal lane (AdmiralFleet.replay_goal): the "lane" rally reads it.
+					if ai.fleet != null:
+						ai.fleet.replay_goal(str(o["a"]))
+				else:
+					ai.field.replay(str(o["op"]), str(o["a"]), str(o["b"]))
+			continue
 		count_submitted(o)
-		apply(o)
+		if o.has("decided") and int(o["tick"]) < int(o["apply_tick"]):
+			# A delayed fleet order (the log's d word): queued at its decision tick, carried out by run_due at its apply tick.
+			_insert(o)
+		else:
+			apply(o)
+
+
+## Record a decision of the computer Admiral of `team` as an `f` line: about its own ship (AdmiralField calls
+## this: launch, recall, resume, end, reason) or a change of its fleet goal lane (AdmiralFleet: goal).
+## Does nothing when no log is open.
+func record_field(team: int, op: String, a: String, b: String) -> void:
+	if log != null:
+		log.field(world.tick_count, team, op, a, b)
 
 
 ## Carry out record `o` now: check it again, then run its applier. Returns "" or the reason.

@@ -15,9 +15,12 @@ extends RefCounted
 ## the enemy team's income (Difficulty); ship insurance is a refund, not
 ## income, and is never scaled.
 ##   - Ore: 60% to the treasury, 40% shared by the team's living pilots,
-##     plus an escort bonus (deliver_ore).
+##     plus an escort bonus (deliver_ore). Ore taken from an enemy drone that
+##     was shot down pays the same 60% / 40%, with no escort bonus (steal_ore).
 ##   - Trickle: every pilot earns a little every second (passive_income).
-##   - Kills: a bounty for each kind of thing destroyed (on_unit_killed).
+##   - Kills: a bounty for each kind of thing destroyed (on_unit_killed). A
+##     mining drone shot down while it holds ore also drops the ore to the
+##     killer's team (steal_ore).
 ##     Pilots who helped kill an enemy ship or an enemy minion get an
 ##     "assist" cut. The cut comes out of the bounty (the killer's pay is
 ##     smaller), it is never paid on top. Who helped is read from the
@@ -35,6 +38,14 @@ extends RefCounted
 ## deliver_ore() when it unloads at home; World calls passive_income()
 ## every tick (one small step of the game clock).
 
+## A shot-down mining drone pays its ore to the killer's team only when its hold is
+## above this many ore (so any drone with ore pays, and an empty one pays only the
+## flat bounty).
+const STEAL_MIN_ORE := 0.0
+## The first minutes of the match, in seconds (10 minutes): ore stolen before this
+## time is also counted in TeamState.ore_stolen_10m.
+const STEAL_EARLY_SECS := 600.0
+
 
 ## A mining drone of `team` brought `amount` ore home (1 ore = 1 credit).
 ## Rules.ORE_TREASURY_SHARE (60%, tuned "ore_treasury_share") goes to the
@@ -44,13 +55,32 @@ extends RefCounted
 ## On top of that, pilots who escorted the drone (flew near it;
 ## `drone.escorts`) share an extra Rules.ESCORT_BONUS (20% of `amount`,
 ## tuned "escort_bonus"), raised by their bounty gear. `drone` may be null
-## (then there is no escort bonus).
+## (then there is no escort bonus). The treasury's and the pilots' shares are
+## paid by _pay_ore_share(), which steal_ore() uses too.
 static func deliver_ore(w: World, team: int, amount: float, drone: MiningDrone) -> void:
-	# Step 1: the treasury's share, and the team's ore count.
+	# Step 1: the team's ore count, and the treasury's and the living pilots' shares.
+	var ts: TeamState = w.teams[team]
+	ts.ore_delivered += amount
+	_pay_ore_share(w, team, amount, "ore")
+	# Step 2: the escort bonus, split among the escorts.
+	if drone != null and not drone.escorts.is_empty():
+		var cut := amount * float(Rules.tune("escort_bonus", Rules.ESCORT_BONUS)) / float(drone.escorts.size())
+		for p: PilotProfile in drone.escorts:
+			p.earn(cut * _bounty_mult(p), "escort")
+
+
+## Pay `amount` ore to `team` the way delivered ore is paid: the treasury gets
+## Rules.ORE_TREASURY_SHARE of it (tuned "ore_treasury_share"), and the rest is
+## split evenly among the team's pilots who are not dead (a human admiral has a
+## pilot record too; the crew of a bought ship is not a pilot and gets none).
+## Each pilot's part is announced with `reason` ("ore" for a delivery, "ore
+## stolen" for a steal). The treasury is paid first, then the pilots in the order
+## of the match's pilot records.
+static func _pay_ore_share(w: World, team: int, amount: float, reason: String) -> void:
+	# Step 1: the treasury's share.
 	var ts: TeamState = w.teams[team]
 	var treasury_share := float(Rules.tune("ore_treasury_share", Rules.ORE_TREASURY_SHARE))
 	ts.earn(amount * treasury_share)
-	ts.ore_delivered += amount
 	# Step 2: the rest is shared by our living pilots.
 	var living: Array = []
 	for p: PilotProfile in w.profiles:
@@ -59,12 +89,22 @@ static func deliver_ore(w: World, team: int, amount: float, drone: MiningDrone) 
 	if not living.is_empty():
 		var share := amount * (1.0 - treasury_share) / float(living.size())
 		for p: PilotProfile in living:
-			p.earn(share, "ore")
-	# Step 3: the escort bonus, split among the escorts.
-	if drone != null and not drone.escorts.is_empty():
-		var cut := amount * float(Rules.tune("escort_bonus", Rules.ESCORT_BONUS)) / float(drone.escorts.size())
-		for p: PilotProfile in drone.escorts:
-			p.earn(cut * _bounty_mult(p), "escort")
+			p.earn(share, reason)
+
+
+## `team` shot down an enemy mining drone that held `amount` ore, and takes the
+## ore: the whole hold is paid like delivered ore (the treasury's share and the
+## living pilots' shares, see _pay_ore_share(), with the reason "ore stolen"). It
+## is counted in the team's ore_stolen (and in ore_stolen_10m while the match is
+## younger than STEAL_EARLY_SECS), never in ore_delivered. No escort bonus is paid
+## (the escorts belong to the victim's team) and no gear bonus raises it, as with
+## delivered ore. on_unit_killed() calls it.
+static func steal_ore(w: World, team: int, amount: float) -> void:
+	var ts: TeamState = w.teams[team]
+	ts.ore_stolen += amount
+	if w.time < STEAL_EARLY_SECS:
+		ts.ore_stolen_10m += amount
+	_pay_ore_share(w, team, amount, "ore stolen")
 
 
 ## The steady trickle: every pilot (even a dead or docked one) earns
@@ -194,11 +234,18 @@ static func on_unit_killed(w: World, victim: Unit, info: DamageInfo) -> void:
 				w.teams[by_team].earn(float(Rules.tune("bay_treasury", Rules.BAY_TREASURY)))
 		# A mining drone: its team counts the loss; an enemy pilot who made
 		# the last hit gets Rules.MINING_DRONE_BOUNTY (35,
-		# "mining_drone_bounty").
+		# "mining_drone_bounty"). While the steal switch is on
+		# (Rules.drone_ore_steal()), the ore in its hold goes to the team that
+		# shot it down (a pilot, a turret or a minion), whatever the drone was
+		# doing; a blow from no team or from its own team takes nothing.
 		Unit.K_MINING_DRONE:
 			w.teams[victim.team].drones_lost += 1
 			if killer != null and killer.team != victim.team:
 				killer.earn(float(Rules.tune("mining_drone_bounty", Rules.MINING_DRONE_BOUNTY)) * _bounty_mult(killer), "drone")
+			if Rules.drone_ore_steal():
+				var drone := victim as MiningDrone
+				if drone != null and drone.cargo > STEAL_MIN_ORE and info.source_team == Rules.enemy_of(victim.team):
+					steal_ore(w, info.source_team, drone.cargo)
 		# A ward (a small sensor buoy): Rules.WARD_BOUNTY (30,
 		# "ward_bounty") to the pilot who made the last hit.
 		Unit.K_WARD:
@@ -279,11 +326,27 @@ static func _minion_killed(w: World, m: Minion, killer: PilotProfile) -> void:
 		p.minion_assists += 1
 
 
+## How many kills of `p`'s streak count in the bounty on them at match time
+## `now`: the kills in `p.kill_times` that are at least Rules.BOUNTY_GROW_DELAY
+## (5 s, tuned "bounty_grow_delay") old, with a tolerance of 0.0001 s, so a kill
+## exactly 5.0 s old counts and one of 4.9 s does not. Delay 0 counts every kill.
+static func grown_kills(p: PilotProfile, now: float) -> int:
+	var delay := float(Rules.tune("bounty_grow_delay", Rules.BOUNTY_GROW_DELAY))
+	var n := 0
+	for t: float in p.kill_times:
+		if now - t >= delay - 0.0001:
+			n += 1
+	return n
+
+
 ## A pilot's ship was destroyed. The bounty is Rules.KILL_BASE (100,
 ## "kill_base") plus Rules.KILL_VALUE_SHARE (12%, "kill_value_share") of
 ## what the ship was worth (Ship.bounty_value: hull + module prices), plus
 ## Rules.SHUTDOWN_PER_STREAK (50, "shutdown_per_streak") for each kill in
-## the victim's streak after the first (ending a streak pays more).
+## the victim's streak after the first (ending a streak pays more). A kill of
+## the streak counts only once it is Rules.BOUNTY_GROW_DELAY (5 s,
+## "bounty_grow_delay") old (see grown_kills), so the bounty grows 5 s after
+## each kill and a kill the victim dies inside of adds nothing.
 ##   - An enemy pilot who made the last hit (`killer`) gets a kill on their
 ##     streak and the bounty: all of it when nobody helped, else two thirds
 ##     of it (see the helpers below). With Rules.ACE_KILLS (3) or more in a
@@ -313,7 +376,7 @@ static func _ship_killed(w: World, ship: Ship, info: DamageInfo, killer: PilotPr
 	var value := ship.bounty_value()
 	var bounty := float(Rules.tune("kill_base", Rules.KILL_BASE)) + value * float(Rules.tune("kill_value_share", Rules.KILL_VALUE_SHARE))
 	if victim != null:
-		bounty += float(Rules.tune("shutdown_per_streak", Rules.SHUTDOWN_PER_STREAK)) * float(maxi(0, victim.streak - 1))
+		bounty += float(Rules.tune("shutdown_per_streak", Rules.SHUTDOWN_PER_STREAK)) * float(maxi(0, grown_kills(victim, w.time) - Rules.BOUNTY_GROW_FREE_KILLS))
 		# Feature hook (World.bounty_hooks): extra bounty, such as a pilot's
 		# accrued bounty (an empty list adds nothing).
 		for f: Callable in w.bounty_hooks:
@@ -331,6 +394,7 @@ static func _ship_killed(w: World, ship: Ship, info: DamageInfo, killer: PilotPr
 		killer.earn(killer_pay * _bounty_mult(killer), "kill")
 		killer.kills += 1
 		killer.streak += 1
+		killer.kill_times.append(w.time)
 		killer.best_streak = maxi(killer.best_streak, killer.streak)
 		w.teams[killer.team].kills += 1
 		if killer.streak >= Rules.ACE_KILLS and killer.ship != null and killer.ship.alive:
@@ -349,6 +413,7 @@ static func _ship_killed(w: World, ship: Ship, info: DamageInfo, killer: PilotPr
 	if victim != null:
 		victim.deaths += 1
 		victim.streak = 0
+		victim.kill_times.clear()
 		var insurance := victim.gear_stats().g("insurance") + float(Rules.tune("insurance_base", 0.0))
 		if insurance > 0.0:
 			victim.credits += value * insurance

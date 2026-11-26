@@ -60,5 +60,5 @@ static func on_f1(world: World) -> void:
 	var h := world.human
 	if h.state == "docked":
 		if h.hull_id == "":
-			HumanCmd.run(world, "buy_hull", ["fighter"])
+			HumanCmd.run(world, "buy_hull", [Ships.DEFAULT_HULL])
 		HumanCmd.run(world, "launch")

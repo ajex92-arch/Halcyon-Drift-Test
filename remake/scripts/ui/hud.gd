@@ -34,6 +34,14 @@ extends Control
 ##   Alarm       over the whole screen, hidden until needed: HudAlarm: the
 ##               sound and the edge marker that warn you a Bomber's run is
 ##               aimed at your ship (made in code by setup())
+##   TurnCues    over the whole screen, under the alarm, drawing only: TurnCues: the
+##               heading tick, the turn arc and the stop-here ghost of the pilot's own
+##               ship (made in code by setup(); hidden below 12 units a second)
+##   ShipRing    over the whole screen, under the alarm, drawing and a beep only: ShipRing:
+##               the pilot's own ship's shield brackets, hull and route chin and torpedo
+##               warning (made in code by setup())
+##   TargetCard  over the whole screen, after the ring, drawing only: TargetCard: the card
+##               on the pilot's target, shown only while the team sees it (made in code by setup())
 ##   WingStrip   a child of ShipStatus, just above it: the pilot's wing, one chip
 ##               for each wingman and a Wing button (WingStrip; made in code by
 ##               setup(); hidden without a wing)
@@ -42,6 +50,8 @@ extends Control
 ##               SeatBar; made in code by setup())
 ##   WingWheel   the order wheel, over the whole HUD while it is open (WingWheel;
 ##               made in code by setup())
+##   DeathCard   bottom centre, in the ship readout's place from the pilot's death until the launch:
+##               HudDeathCard: what killed them and the teammate watch (made in code by setup())
 ## The wing's marks on the map (WingMarks) are a child of the World, like the overlay.
 ## _ready() gives the HUD the game's look (UiKit.make_theme()). setup()
 ## then sets the interface's highlight colour to the human's team (amber for
@@ -157,11 +167,16 @@ var wing_strip: WingStrip
 var seat_bar: SeatBar
 ##The pilot's order wheel (hidden until the order key is held or the Wing button is clicked).
 var wing_wheel: WingWheel
+## The Admiral's fleet wheel (hold X while flying; the pilot's seat uses the wing wheel).
+var order_wheel: OrderWheel
 ## The marks the wing puts on the map (a child of the World, like the overlay).
 var wing_marks: WingMarks
 ## The Admiral's command view (the strip, the card, the selection and production panels); shows for the human
 ## Admiral only (made in code by setup()).
 var command_view: CommandView
+## The death card at the bottom centre (it takes the ship readout's place from the pilot's death until the launch, and holds the
+## teammate watch's buttons, label and ring; made in code by setup()).
+var death_card: HudDeathCard
 
 ## Seconds until the next full refresh (counts down from 0.1).
 var _t := 0.0
@@ -229,22 +244,50 @@ func setup(w: World, match_series: MatchSeries = null) -> void:
 	wing_wheel = WingWheel.new()
 	add_child(wing_wheel)
 	wing_wheel.setup(self)
+	# The Admiral's fleet wheel covers the HUD the same way (made for every seat; only a flying Admiral opens it).
+	order_wheel = OrderWheel.new()
+	add_child(order_wheel)
+	order_wheel.setup(self)
 	# Step 2: tell the widgets (already in the scene) what they show.
 	me_panel.world = w
 	feed.world = w
 	banner.hud = self
 	toast_box.hud = self
 	minimap.setup(world, overlay)
+	# The turn cues of the pilot's own ship (heading tick, turn arc, stop-here ghost): drawing only, under the alarm.
+	var cues := TurnCues.new()
+	add_child(cues)
+	cues.setup(world)
+	# The ring round the pilot's own ship (shield brackets, hull and route chin, torpedo warning): drawing and a beep only.
+	var ring := ShipRing.new()
+	add_child(ring)
+	ring.setup(world)
+	# The card on the pilot's target (a frame round it, one side for each shield zone, and a strip with its hull): drawing only.
+	var card := TargetCard.new()
+	add_child(card)
+	card.setup(world)
+	# S7A: the hit markers (a small cross where the pilot's own shot landed): drawing only, under the alarm.
+	var hits := HitMarkers.new()
+	add_child(hits)
+	hits.setup(world)
 	# The warning for the pilot a Bomber is aiming at (a sound and an edge marker).
 	# It is the last child, so it draws on top, and it stays hidden until needed.
 	var alarm := HudAlarm.new()
 	add_child(alarm)
 	alarm.setup(world)
+	if world.practice: add_child(PracticeStatus.new(world))   # the practice range's score line (a practice match only)
+	if world.practice: add_child(PracticePanel.new(world))   # the practice range's switches (a practice match only)
+	# The death card (the cause, the weapon, the side and the attackers of the human's death, and the teammate watch): it takes the
+	# ship readout's place while the pilot has no ship.
+	death_card = HudDeathCard.new()
+	add_child(death_card)
+	death_card.setup(self)
 	# Step 3: listen to game news. Each signal goes to the widget that
 	# shows it (the order of these lines is kept from the original code).
 	Events.feed.connect(feed.on_feed)
 	Events.toast.connect(toast)
 	Events.unit_killed.connect(feed.on_unit_killed)
+	Events.unit_killed.connect(death_card.on_killed)
 	Events.turret_destroyed.connect(feed.on_turret_destroyed)
 	Events.site_state_changed.connect(feed.on_site_state)
 	Events.research_done.connect(feed.on_research_done)
@@ -356,7 +399,7 @@ func toast(text: String, danger: bool = false) -> void:
 ## being played, no board and no big panel open?
 func wing_ready() -> bool:
 	var h := world.human
-	if h == null or world.human_role != "pilot" or world.phase != "play" or world.board_open or _any_panel_open():
+	if h == null or world.human_role != "pilot" or world.phase != "play" or world.mode3() or _any_panel_open():
 		return false
 	if h.ship == null or not is_instance_valid(h.ship) or not h.ship.alive:
 		return false
@@ -395,6 +438,50 @@ func wing_wheel_toggle() -> void:
 		wing_wheel.close()
 	elif wing_ready():
 		wing_wheel.open_at(get_viewport().get_mouse_position(), wing_aim(), true)
+
+
+# --- the Admiral's field orders (the real code lives in FieldOrders and OrderWheel) ---------------
+
+## Can the Admiral give a field order now (the X wheel and its tap): the human Admiral, the match being played, out
+## flying a live ship of their own, with no big panel and no note box open? Docked, X does what it did before (nothing).
+func field_ready() -> bool:
+	var h := world.human
+	if h == null or world.human_role != "admiral" or world.phase != "play" or world.teams[world.human_team].admiral_docked:
+		return false
+	if _any_panel_open() or _note_is_open():
+		return false
+	return h.ship != null and is_instance_valid(h.ship) and h.ship.alive
+
+
+## The world point under the mouse now (where a field order is aimed).
+func field_aim() -> Vector2:
+	return world.mouse_world()
+
+
+## Give the Admiral's field order `name` (a slice of the fleet wheel: "move", "hold", "stop", or an order of a later
+## stage) with the mouse at `aim`. The orders go to the selected squadrons, else to every squadron. The answer is a
+## pop-up (a refusal in the danger colour). Returns the refusal text or "".
+func field_command(name: String, aim: Vector2) -> String:
+	var ids := FieldOrders.ids_for(overlay, world)
+	var why := FieldOrders.give(world, name, ids, aim)
+	if why != "":
+		toast(why, true)
+	else:
+		toast("%s: %s" % [FieldOrders.LIVE[name], RtsSquadOrders.squads_word(ids.size())])
+	return why
+
+
+## The tap of the order key (not a hold) in a field seat: the smart order at `aim` for the selected squadrons (Move on
+## open ground, Attack on an enemy we see). With nothing selected the tap does nothing and says nothing. The answer is a
+## pop-up: the refusal, else the map layer's own answer line.
+func field_tap(aim: Vector2) -> void:
+	if overlay.sel_squads.is_empty():
+		return
+	var why := RtsSquadOrders.smart_order_at(overlay, aim)
+	if why != "":
+		toast(why, true)
+	elif overlay.result_text != "":
+		toast(overlay.result_text, not overlay.result_ok)
 
 
 ## A happening on the event stream (Events.rts_event): the pop-ups of the human pilot's wing. An order of
@@ -479,7 +566,12 @@ func _process(dt: float) -> void:
 	if world == null:
 		return
 	toast_box.tick(dt)
+	# Mode 3 (the command view open while flying) ends when the Admiral docks, loses the ship or the match is over:
+	# the next launch starts flying, not coasting.
+	if world.view_open and (world.phase != "play" or world.teams[world.human_team].admiral_docked):
+		world.view_open = false
 	router.wing_tick()
+	router.target_tick()
 	_track_pointer(dt)
 	world.ui_hold = (_pointer_on_buttons() or _pointer_nears_readout()) and not world.mouse_fire
 	_t -= dt
@@ -563,6 +655,7 @@ func _refresh() -> void:
 	status.set_ship(ship)
 	wing_strip.refresh()
 	seat_bar.refresh()
+	death_card.refresh()
 	# Step 3: gear slots for pilots (and for an Admiral flying a ship).
 	slots.slots_box.visible = h != null and (world.human_role == "pilot" or ship != null)
 	slots.refresh_keys(world.human_role, h != null and Squads.lead_record(world, h.team, h.slot) != null)

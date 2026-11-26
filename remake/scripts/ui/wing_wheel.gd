@@ -14,7 +14,8 @@ extends Control
 ## from the middle (the dead zone is 36 pixels). close_and_apply() gives the hovered order through
 ## Hud.wing_command() and closes. Everything is drawn in code in _draw(): the ring slices in the panel
 ## colour, the one under the mouse in the interface colour, text 14 pixels, the wing's current shape and fire
-## setting outlined in the interface colour.
+## setting outlined in the interface colour. The ring itself is drawn by RadialMenu, which the Admiral's fleet
+## wheel (OrderWheel) shares.
 ##
 ## WHO USES IT: Hud.setup() makes it; HudInput opens it on the press of the order key (after 130 ms) and
 ## closes it on the release; the strip's Wing button toggles it.
@@ -37,8 +38,8 @@ const FIRE_CHIP := Vector2(84.0, 24.0)
 const CHIP_GAP := 6.0
 ## The text size (pixels).
 const TEXT_SIZE := 14
-## How many segments make the curve of a slice's edge.
-const ARC_STEPS := 8
+## How many segments make the curve of a slice's edge (RadialMenu's number).
+const ARC_STEPS := RadialMenu.ARC_STEPS
 ## The orders in the ring, clockwise from the top: [the gesture's name, its label lines].
 const SLICES := [
 	["follow", ["Form on", "me"]], ["cover", ["Cover me"]], ["attack", ["Attack", "my target"]],
@@ -79,6 +80,9 @@ func open_at(at: Vector2, aim: Vector2, clicks: bool = false) -> void:
 	is_open = true
 	visible = true
 	hud.world.wheel_hold = true
+	# A middle drag that is still going would never see its release (the wheel takes it): it ends now.
+	if hud.world.camera != null:
+		hud.world.camera.end_drag()
 	queue_redraw()
 
 
@@ -138,7 +142,9 @@ func fire_chip(i: int) -> Rect2:
 
 
 ## A click on the wheel (the wheel is open and covers the HUD): left click on an order or a chip gives it;
-## a click elsewhere closes a click wheel and is swallowed by a held one.
+## a click elsewhere closes a click wheel and is swallowed by a held one. A middle click (the target button) marks the
+## enemy under the pointer and the wheel stays open (HudInput.wheel_target(): no order is filed, no drag starts). A click
+## of any other button is swallowed.
 func _gui_input(event: InputEvent) -> void:
 	if not is_open or not (event is InputEventMouseButton):
 		return
@@ -149,6 +155,10 @@ func _gui_input(event: InputEvent) -> void:
 		accept_event()
 		return
 	var mb := event as InputEventMouseButton
+	# The target button (the middle click) marks the enemy under the pointer and the wheel stays open: no order is filed.
+	if hud.router.wheel_target(mb):
+		accept_event()
+		return
 	if mb.button_index != MOUSE_BUTTON_LEFT or not mb.pressed:
 		return
 	accept_event()
@@ -180,27 +190,14 @@ func _draw() -> void:
 	var font := ThemeDB.fallback_font
 	var hit := hovered()
 	var accent := UiKit.accent()
-	for i in 6:
-		var mid := deg_to_rad(-90.0 + 60.0 * float(i))
-		var a0 := mid - deg_to_rad(30.0)
-		var a1 := mid + deg_to_rad(30.0)
-		var pts := PackedVector2Array()
-		for k in ARC_STEPS + 1:
-			pts.append(center + Vector2.from_angle(lerpf(a0, a1, float(k) / float(ARC_STEPS))) * RING_R)
-		for k in ARC_STEPS + 1:
-			pts.append(center + Vector2.from_angle(lerpf(a1, a0, float(k) / float(ARC_STEPS))) * DEAD_R)
-		draw_colored_polygon(pts, Palette.with_alpha(Palette.PANEL, 0.85))
+	# The ring of orders (RadialMenu draws it: the same wedges, outlines and two-line labels as before).
+	var labels: Array = []
+	var hover := -1
+	for i in SLICES.size():
+		labels.append((SLICES[i] as Array)[1])
 		if str(hit.get("name", "")) == str((SLICES[i] as Array)[0]):
-			draw_colored_polygon(pts, Palette.with_alpha(accent, 0.35))
-		var closed := pts.duplicate()
-		closed.append(pts[0])
-		draw_polyline(closed, Palette.LINE, 1.5, true)
-		# The label: one or two lines, centred in the slice.
-		var lines: Array = (SLICES[i] as Array)[1]
-		var at := center + Vector2.from_angle(mid) * ((DEAD_R + RING_R) * 0.5)
-		for j in lines.size():
-			var y := at.y + 5.0 + (float(j) - float(lines.size() - 1) * 0.5) * 16.0
-			draw_string(font, Vector2(at.x - 40.0, y), str(lines[j]), HORIZONTAL_ALIGNMENT_CENTER, 80.0, TEXT_SIZE, Palette.ICE)
+			hover = i
+	RadialMenu.draw_ring(self, center, labels, DEAD_R, RING_R, hover, [], accent, font, TEXT_SIZE)
 	# The chips: shapes, then fire settings.
 	var lead := Squads.lead_record(hud.world, hud.world.human.team, hud.world.human.slot) if hud.world.human != null else null
 	var shape := lead.formation if lead != null else -1

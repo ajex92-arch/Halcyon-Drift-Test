@@ -82,6 +82,10 @@ extends Node
 ##   over_17ms, over_33ms                the share (0..1) of those ticks that
 ##                                       took over one frame (16.7 ms) and over
 ##                                       two frames (33.3 ms) at 60 fps
+##   ships_mean                          the pilot ships alive (pilots, admirals and
+##                                       the fleets' crews), the mean over the
+##                                       measured ticks: the load the run carried
+##                                       (the speed gate of F311 checks it)
 ##   cpu_s, cpu_ms_per_sim_s             the computer time this program used
 ##                                       (all of it, start-up included) and
 ##                                       that per game second. It does not
@@ -108,6 +112,9 @@ var late := false
 var _t0 := 0.0
 ## How many ticks have been measured.
 var _ticks := 0
+## The pilot ships alive (World.ships: pilots, admirals and the fleets' crews)
+## added up over those ticks, for the ships_mean of the end line.
+var _ship_sum := 0
 ## What those ticks cost in all (microseconds).
 var _usec := 0
 ## The three slowest ticks after the first 2 minutes of the run, slowest
@@ -241,6 +248,7 @@ func _fill_fleet() -> void:
 ## Remember a tick that cost `usec` microseconds.
 func _count(usec: int) -> void:
 	_ticks += 1
+	_ship_sum += world.ships.size()
 	_usec += usec
 	if world.time - _t0 < SKIP_SECS:
 		return
@@ -295,6 +303,7 @@ func _finish() -> void:
 		"over_17ms": snappedf(float(_over_17) / maxf(1.0, float(_counted)), 0.0001), "over_33ms": snappedf(float(_over_33) / maxf(1.0, float(_counted)), 0.0001),
 		"cpu_s": snappedf(cpu, 0.01), "cpu_ms_per_sim_s": snappedf(cpu * 1000.0 / sim_s, 0.01) if cpu >= 0.0 else -1.0,
 		"ended": world.phase != "play",
+		"ships_mean": snappedf(float(_ship_sum) / maxf(1.0, float(_ticks)), 0.1),
 	}
 	print("PERF_JSON ", JSON.stringify(out))
 

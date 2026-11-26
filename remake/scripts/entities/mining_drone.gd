@@ -25,10 +25,16 @@ extends Unit
 ## WHO USES IT: TeamState's drone line (TeamDrones: free drones and the ones
 ## the admiral orders) and WorldSetup (the starting drones) make them
 ## through World.spawn_mining_drone -> WorldSpawner, which calls setup().
-## World calls sim_update() every tick. AdmiralCommand changes `assign`;
+## World calls sim_update() every tick. The DRONE_SEND order calls send_to(),
+## which changes `assign` (AdmiralCommand carries it out);
 ## WorldResearch changes hull_max and capacity after research; WorldMining
 ## counts drones per node (node_id); Economy reads `escorts`; UnitVisual
-## draws cargo, capacity, state and rock.
+## draws cargo, capacity, state and rock, and the cargo words ("Ore 120/300",
+## cargo_words) by a drone the pointer is over.
+
+## The screen pixels around a drone's middle inside which the pointer counts as being over it
+## (cargo_shown).
+const CARGO_HOVER_PX := 14.0
 
 ## The node id the admiral ordered it to, or "" to choose automatically.
 var assign := ""
@@ -115,6 +121,34 @@ func _go_out() -> void:
 	# is the only place ore is.
 	path = world.map.route.path(global_position, n.global_position, _in_jungle(n))
 	path_i = 0
+
+
+## The words that say how much ore a drone carries, for example "Ore 120/300": the cargo and the
+## most the hold takes, rounded to whole ore. The word "Ore" keeps it apart from the X/Y figure of
+## an ore node. UnitVisual draws it by the drone.
+static func cargo_words(cargo: float, capacity: float) -> String:
+	return "Ore %d/%d" % [roundi(cargo), roundi(capacity)]
+
+
+## Should the cargo words show by a drone? When the drone is selected, or when the pointer (`pointer`,
+## a world position) is over it: within the drone's drawn size (`radius` x 1.2) of its middle `at`, or
+## within CARGO_HOVER_PX screen pixels of it, whichever is more. `px` is the world units per screen
+## pixel, so the reach stays CARGO_HOVER_PX pixels at any zoom.
+static func cargo_shown(pointer: Vector2, at: Vector2, px: float, radius: float, selected: bool) -> bool:
+	return selected or pointer.distance_to(at) <= maxf(radius * 1.2, CARGO_HOVER_PX * px)
+
+
+## Send this drone to ore node `target_node` (the DRONE_SEND order calls it):
+## the node becomes the one it is ordered to (`assign`) and it goes there
+## straight away, whatever it carries. What it does now depends on its mood:
+## "out" turns toward the new node; "mine" leaves its rock (a rock is chosen
+## again at the new node) and keeps the ore it has; "home" turns round and
+## keeps the ore (it hands the ore over on its next trip home, not this one);
+## "idle" goes out. At the new node it tops up its hold and delivers on the
+## trip home that follows, and every later trip goes to the same node.
+func send_to(target_node: String) -> void:
+	assign = target_node
+	_go_out()
 
 
 ## Start the trip home: get a route to the drop-off point beside our

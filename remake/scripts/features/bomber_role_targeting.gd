@@ -24,7 +24,7 @@ extends PilotTargeting
 func pick_target(ship: Ship, r: float) -> Unit:
 	var best := super.pick_target(ship, r)
 	var brain := ai
-	if best != null or ship.hull_id != "bomber" or brain.state != "lane":
+	if best != null or not Ships.has_role(ship.hull_id, "torpedo") or brain.state != "lane":
 		return best
 	# Step 1: the nearest visible small enemy pilot ship within r.
 	var foe := brain.world.nearest_enemy(ship.global_position, r, ship.team,

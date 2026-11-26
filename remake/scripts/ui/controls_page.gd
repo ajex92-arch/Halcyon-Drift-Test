@@ -159,10 +159,24 @@ func _build_pickers() -> void:
 			b.button_pressed = pid == chosen
 			row.add_child(b)
 		_pickers.add_child(row)
-		_pickers.add_child(UiKit.label(String(g["presets"][chosen]["text"]), 14, Palette.MIST, true))
+		_pickers.add_child(_wrapped(String(g["presets"][chosen]["text"])))
 	if note != "":
-		_pickers.add_child(UiKit.label(note, 14, Palette.MIST, true))
+		_pickers.add_child(_wrapped(note))
 	_pickers.visible = _pickers.get_child_count() > 0
+
+
+## A wrapping line of the pickers, given its width at once. A wrapping label has no width until it
+## is laid out and measures itself far too tall till then; made while the page shows (the window
+## was resized), that one tall frame stretched the column thousands of pixels past the window and
+## it stayed so (bug ledger T-13 note 27). The width is the room inside the page less 24 pixels,
+## so the page can still narrow a little before the next rebuild.
+func _wrapped(text: String) -> Label:
+	var l := UiKit.label(text, 14, Palette.MIST, true)
+	var w := UiKit.panel_width(self) - 60.0
+	if _pickers.size.x > 40.0:
+		w = minf(w, _pickers.size.x)
+	UiKit.pin_width(l, w)
+	return l
 
 
 # --- keys, clashes -----------------------------------------------------------------------

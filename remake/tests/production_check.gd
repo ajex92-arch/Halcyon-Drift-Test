@@ -153,7 +153,7 @@ func _pay_cases() -> void:
 		var n := RtsHulls.max_count(hull)
 		ok = ok and RtsHulls.price_of(hull, n) == int(want[hull])
 	_check("pay: the Admiral price of every hull is the table's", ok)
-	_check("pay: the build times of the classes", RtsHulls.build_ticks("fighter") == 1200 and RtsHulls.build_ticks("logistics") == 1500 and RtsHulls.build_ticks("flak") == 2400 and RtsHulls.build_ticks("destroyer") == 3600)
+	_check("pay: the build times of the classes", RtsHulls.build_ticks("fighter") == 1200 and RtsHulls.build_ticks("logistics") == 1500 and RtsHulls.build_ticks("flak") == RtsHulls.BUILD_TICKS_FRIGATE and RtsHulls.build_ticks("destroyer") == RtsHulls.BUILD_TICKS_CAPITAL)
 
 
 ## The order of the ore turn.

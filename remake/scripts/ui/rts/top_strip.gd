@@ -53,7 +53,7 @@ func setup(v: CommandView) -> void:
 	_make("clock", "The match clock. A click pauses.", func() -> void: _pause_pressed())
 	_make("speed", "The match speed. A click goes to the next speed.", func() -> void: _speed_pressed())
 	_make("diff", "The difficulty.", func() -> void: _diff_pressed())
-	_make("deputy", "The deputy: it comes with a later stage. A click opens the Base page.", func() -> void: view.card.set_page("base"))
+	_make("deputy", "The deputy: a computer Admiral that builds and researches with you and takes over the fleet when you leave the keys for 30 seconds. A click switches it on or off.", func() -> void: DeputyToggle.toggle(view))
 
 
 ## One strip button.
@@ -150,7 +150,7 @@ func refresh() -> void:
 	if mult >= 0.0:
 		_text("diff", Difficulty.short_tag_for(mult))
 		diff.tooltip_text = Difficulty.blurb_for(mult)
-	_text("deputy", "DEPUTY off")
+	_text("deputy", DeputyToggle.strip_text(DeputyToggle.deputy_of(view)))
 	_place()
 
 

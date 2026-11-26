@@ -92,7 +92,7 @@ static func enemy_in_fan(ship: Ship) -> bool:
 	var near: Array = []
 	w.unit_hash.query(centre, reach * 0.5 + Projectiles.HASH_PAD, near)
 	if w.big_count > 0:
-		near.append_array(w.big_hash.query(centre, reach * 0.5 + Projectiles.HASH_PAD + Projectiles.BIG_PAD, []))
+		near.append_array(w.big_hash.query(centre, reach * 0.5 + Projectiles.BODY_UNIT_RADIUS, []))
 	for u: Unit in near:
 		if not u.alive or u.team == ship.team or not (FogOff.is_on() or w.vision.is_visible(ship.team, u.global_position)):
 			continue

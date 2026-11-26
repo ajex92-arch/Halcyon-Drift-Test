@@ -31,7 +31,7 @@ extends Unit
 ##     anger goes to whoever attacks our pilots (the same rule as in League
 ##     of Legends). The current target gets 300 off, so the turret doesn't
 ##     flip between two equally close targets. It never shoots through
-##     asteroids, and it only shoots a ward that our team can see.
+##     asteroids, and it only shoots a unit that our team can see.
 ##   - Damage ramp: every shot it fires at the same ship adds 20%
 ##     (TurretData.TURRET_RAMP) to the damage of the next ones, up to +100%
 ##     (TURRET_RAMP_MAX). The count starts again when it switches to
@@ -224,7 +224,7 @@ func _pick_target() -> void:
 	var best_score := INF
 	var r := reach()
 	# Step 1: look at every unit near us (a little past our reach).
-	for u: Unit in world.unit_hash.query(global_position, r + Projectiles.MAX_UNIT_RADIUS, _scratch):
+	for u: Unit in world.unit_hash.query(global_position, r + Projectiles.BODY_UNIT_RADIUS, _scratch):
 		# Skip the dead, the unshootable, friends and neutrals.
 		if not u.alive or u.team == team or u.team == Rules.NEUTRAL:
 			continue
@@ -232,8 +232,8 @@ func _pick_target() -> void:
 		var d := global_position.distance_to(u.global_position)
 		if d > r + u.hit_radius():
 			continue
-		# Wards are stealthy: only shoot one our team can see.
-		if u.kind == Unit.K_WARD and not u.visible_to(team):
+		# Only shoot what our team can see (a ward follows its own stealth rule inside visible_to).
+		if not u.visible_to(team):
 			continue
 		# No shooting through asteroids.
 		if world.asteroids.segment_blocked(global_position, u.global_position):

@@ -11,7 +11,10 @@ extends RefCounted
 ## grid cells around that point, which is fast. It can also return units a
 ## little outside the circle. Some questions here check the exact distance
 ## themselves; odds, minions_tanking and turret_under_attack accept that
-## small slack.) When ships are counted as "odds", each ship counts
+## small slack.) The questions that count only pilot ships (odds, odds_at,
+## allies_near) ask world.ship_hash, which holds just the pilot ships in the
+## same order, so they get the same ships without stepping over minions
+## (F311). When ships are counted as "odds", each ship counts
 ## by its size: small 1, medium 2, large 3, capital 4. Allies add, enemies
 ## subtract, and enemies we can't see don't count.
 ##
@@ -54,7 +57,7 @@ func odds_at(p: Vector2, ship: Ship) -> int:
 	var brain := ai
 	var score := 0
 	var me_counted := false
-	for u: Unit in brain.world.unit_hash.query(p, 2000.0, _scratch):
+	for u: Unit in brain.world.ship_hash.query(p, 2000.0, _scratch):
 		# Only live ships truly within 2,000; only enemies we can see.
 		if u.kind != Unit.K_SHIP or not u.alive or u.global_position.distance_to(p) > 2000.0:
 			continue
@@ -76,7 +79,7 @@ func odds_at(p: Vector2, ship: Ship) -> int:
 func odds(ship: Ship) -> int:
 	var brain := ai
 	var score := 0
-	for u: Unit in brain.world.unit_hash.query(ship.global_position, 1800.0, _scratch):
+	for u: Unit in brain.world.ship_hash.query(ship.global_position, 1800.0, _scratch):
 		if u.kind != Unit.K_SHIP or not u.alive:
 			continue
 		if u.team != ship.team and not u.visible_to(ship.team):
@@ -90,7 +93,7 @@ func odds(ship: Ship) -> int:
 func allies_near(ship: Ship, r: float) -> int:
 	var brain := ai
 	var n := 0
-	for u: Unit in brain.world.unit_hash.query(ship.global_position, r, _scratch):
+	for u: Unit in brain.world.ship_hash.query(ship.global_position, r, _scratch):
 		if u.kind == Unit.K_SHIP and u.team == ship.team and u.alive and u != ship and u.global_position.distance_to(ship.global_position) < r:
 			n += 1
 	return n

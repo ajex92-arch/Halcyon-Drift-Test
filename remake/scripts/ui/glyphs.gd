@@ -11,7 +11,8 @@ extends RefCounted
 ## test can measure it. It must still read as a solid dark shape at 10 pixels, where the
 ## fill and the bar merge into the outline. It is not the map icon of strike craft, which
 ## is a triangle in a team colour with no mark inside; this one is always upright and
-## always carries the bar.
+## always carries the bar. An optional `alpha` (1 by default) makes every part of the sign
+## fainter together, so the sign can fade with whatever it goes with (the edge wedge's fade).
 ##
 ## WHO USES IT: DangerMark (a control that draws it in a row) and any screen that shows a
 ## refused or lost state with Palette.DANGER; tests/flash_check.gd measures its shape.
@@ -32,18 +33,20 @@ static func triangle(centre: Vector2, side: float) -> PackedVector2Array:
 
 
 ## Draw the danger sign on canvas item `ci` with its middle at `centre` and its side `size`
-## pixels (see HOW IT WORKS). Call it from the item's _draw().
-static func danger(ci: CanvasItem, centre: Vector2, size: float = SIDE) -> void:
+## pixels (see HOW IT WORKS). `alpha` (1 by default, which draws it as it always was) is the
+## strength of every part of it, from 1 (full) down to 0 (gone); the edge wedge uses it to fade
+## the sign with the wedge. Call it from the item's _draw().
+static func danger(ci: CanvasItem, centre: Vector2, size: float = SIDE, alpha: float = 1.0) -> void:
 	var pts := triangle(centre, size)
 	# Step 1: the flat fill, then the outline over it.
-	ci.draw_colored_polygon(pts, Palette.PANEL)
+	ci.draw_colored_polygon(pts, Palette.with_alpha(Palette.PANEL, alpha))
 	var line := clampf(2.0 * size / SIDE, 1.5, 3.0)
 	var closed := PackedVector2Array([pts[0], pts[1], pts[2], pts[0]])
-	ci.draw_polyline(closed, Palette.DANGER, line, true)
+	ci.draw_polyline(closed, Palette.with_alpha(Palette.DANGER, alpha), line, true)
 	# Step 2: the hazard mark: a bar over a dot, on the triangle's middle line.
 	var h := size * sqrt(3.0) * 0.5
 	var bar_w := maxf(1.5, line)
 	var top := centre.y - h * 0.16
 	var bar_h := h * 0.30
-	ci.draw_rect(Rect2(centre.x - bar_w * 0.5, top, bar_w, bar_h), Palette.DANGER)
-	ci.draw_circle(Vector2(centre.x, top + bar_h + bar_w * 1.1), bar_w * 0.65, Palette.DANGER)
+	ci.draw_rect(Rect2(centre.x - bar_w * 0.5, top, bar_w, bar_h), Palette.with_alpha(Palette.DANGER, alpha))
+	ci.draw_circle(Vector2(centre.x, top + bar_h + bar_w * 1.1), bar_w * 0.65, Palette.with_alpha(Palette.DANGER, alpha))

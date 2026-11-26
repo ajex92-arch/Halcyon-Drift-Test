@@ -23,7 +23,8 @@ extends RefCounted
 ## and time, how far the match had got and at what world speed (slow motion),
 ## the seed (the one given with --seed, else the one the match picked: a note always
 ## names a number that plays the same match again), the rules played (the preset's name, "pick" for the standard
-## rules, and a label for it), difficulty and test options (Unlock everything and No fog),
+## rules, and a label for it), difficulty and test options (Unlock everything, No fog, the computer Admiral's
+## profile: its name and the launch option's text, and whether the computer's memory is shown),
 ## what the human plays (seat, ship, place, credits) and the typed text. A text
 ## that starts with an item ID ("T-7: the
 ## top lane falls too fast") also gets an "item" entry, so the notes can be
@@ -162,17 +163,23 @@ static func describe(world: World, text: String, paused_before: bool, picture_na
 		human["modules"] = ship.modules.duplicate()
 		human["hull_percent"] = int(round(100.0 * ship.hull / maxf(1.0, ship.hull_max)))
 	var window_size := world.get_window().size
+	var setup := {"seed": _seed_text(), "preset": Game.preset,
+		"rule_set": str(CouncilPresets.LABELS.get(Game.preset, "unknown (--preset was not understood)")),
+		"variants_changed": _changed_variants(), "difficulty": Game.difficulty,
+		"damage_modifiers_removed": Rules.damage_modifiers_removed(),
+		"unlock_everything": Game.unlock_everything, "fog_off": Game.fog_off,
+		"admiral_profile": StartScreen.profile_choice(Game.options), "admiral_profile_option": str(Game.opt("admiral-profile", "")),
+		"ai_memory_shown": Game.show_ai_memory}
+	# A practice range adds who else is on the map and the switches the player used; a normal match has no such entry.
+	if world.practice:
+		setup["practice"] = {"others": Game.practice_others, "uses": world.practice_range.uses.duplicate(true) if world.practice_range != null else {}}
 	return {
 		"tool": "note_key", "version": 1, "build": BuildId.get_id(),
 		"text": text, "item": item_id(text),
 		"saved_at": Time.get_datetime_string_from_system(false, true),
 		"match": {"time": snappedf(world.time, 0.1), "clock": Util.clock(world.time), "phase": world.phase, "paused_before": paused_before,
 			"world_speed": world.speed.factor},
-		"setup": {"seed": _seed_text(), "preset": Game.preset,
-			"rule_set": str(CouncilPresets.LABELS.get(Game.preset, "unknown (--preset was not understood)")),
-			"variants_changed": _changed_variants(), "difficulty": Game.difficulty,
-			"damage_modifiers_removed": Rules.damage_modifiers_removed(),
-			"unlock_everything": Game.unlock_everything, "fog_off": Game.fog_off},
+		"setup": setup,
 		"human": human,
 		"screen": {"window": [window_size.x, window_size.y], "camera": [int(round(cam.x)), int(round(cam.y))]},
 		"screenshot": picture_name,

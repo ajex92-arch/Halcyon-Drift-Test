@@ -118,13 +118,28 @@ func print_minute(world: World) -> void:
 	_worst = 0
 
 
+## How many of team `ts`'s drone losses happened before match time `secs`, counted
+## from its drone_loss_log (a loss that had no ore node id is not in the log, so this
+## can be a little under TeamState.drones_lost).
+func _losses_before(ts: TeamState, secs: float) -> int:
+	var n := 0
+	for node_id in ts.drone_loss_log:
+		for t in ts.drone_loss_log[node_id]:
+			if float(t) < secs:
+				n += 1
+	return n
+
+
 ## Print the end-of-match "SUMMARY" line: `result` (such as "time limit" or
 ## "Halcyon wins: ..."), the match time (seconds), the winner (-1 = none
 ## yet), the rule variants, and for each team: ore delivered, ship kills,
 ## turrets destroyed, the mothership's hull (a 0..1 fraction), when each
 ## unlock finished and, for a computer admiral, its field trips (how many
-## and the seconds spent out). With --report=<path> the same data is also written to
-## that file, indented with two spaces so people can read it.
+## and the seconds spent out). The drone ore keys are `ore_stolen` and
+## `ore_stolen_10m` (ore taken from enemy drones, in all and in the first 10
+## minutes) and `drones_lost` and `drones_lost_10m` (drones this team lost, in all and
+## in the first 10 minutes; see _losses_before()). With --report=<path> the same data is
+## also written to that file, indented with two spaces so people can read it.
 func print_summary(world: World, result: String) -> void:
 	# Step 1: gather the result and each team's numbers.
 	var out := {"result": result, "time": world.time, "winner": world.winner, "variants": Game.variants}
@@ -132,7 +147,9 @@ func print_summary(world: World, result: String) -> void:
 	for t in 2:
 		var ts := world.teams[t]
 		out[Rules.TEAM_NAMES[t]] = {"ore": ts.ore_delivered, "kills": ts.kills, "turrets_destroyed": ts.turrets_destroyed,
-			"mothership": world.mothership(t).hull_frac(), "unlocks": ts.unlock_times}
+			"mothership": world.mothership(t).hull_frac(), "unlocks": ts.unlock_times,
+			"ore_stolen": ts.ore_stolen, "ore_stolen_10m": ts.ore_stolen_10m,
+			"drones_lost": ts.drones_lost, "drones_lost_10m": _losses_before(ts, Economy.STEAL_EARLY_SECS)}
 		# The computer admiral's field trips (AdmiralField): how many, and how
 		# many seconds of match time it spent out (a trip still running counts
 		# up to now).

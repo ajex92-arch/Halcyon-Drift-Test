@@ -49,13 +49,18 @@ static func fly(ship: Ship, dt: float) -> void:
 	# turns 1.9x faster while it is on.
 	var sp0 := ship.velocity.length()
 	var speed_frac := minf(1.0, sp0 / ship.f_max) if ship.f_max > 0.0 else 0.0
-	var snap := Ship.SPECIAL_SNAP_TURN if (ship.hull_id == "fighter" and ship.special_t > 0.0) else 1.0
+	var snap := Ship.SPECIAL_SNAP_TURN if (ship.special_t > 0.0 and String(ship.def.get("special", "")) == "snap") else 1.0
 	var turn := ship.f_turn * snap * (1.0 - ship.f_bleed * speed_frac)
 	var to_face := c.face_point - ship.global_position
 	var rot0 := ship.rotation
 	if not run and to_face.length_squared() > 4.0:
 		var diff := Util.ang_diff(ship.rotation, to_face.angle())
 		ship.rotation = Util.wrap_angle(ship.rotation + clampf(diff, -turn * dt, turn * dt))
+	# The pull aside of unequal engine pods (a ship with parts only; see ShipSystems.pull_aside()).
+	if not run and ship.parts != null:
+		var pull := ship.parts.pull_aside(ship.f_turn, maxf(c.forward, 0.0))
+		if pull != 0.0:
+			ship.rotation = Util.wrap_angle(ship.rotation + pull * dt)
 	# A ship with a torpedo run notes whether the nose turned (more than a hair)
 	# this tick: the Bomber's fan only closes while it flies straight (RunFan).
 	if ship.run_mount != null:
@@ -66,7 +71,7 @@ static func fly(ship: Ship, dt: float) -> void:
 	# thrust and more than 2 energy, and it is paid every tick.
 	var f := Vector2.from_angle(ship.rotation)
 	var port := Util.port_of(ship.rotation)
-	ship.boosting = c.boost and ship.can_boost and c.forward > 0.2 and ship.energy.value > 2.0
+	ship.boosting = c.boost and ship.can_boost and c.forward > 0.2 and ship.energy.value > 2.0 and not ship.systems_off()
 	if ship.boosting and not ship.energy.spend(ship.f_boost_drain * dt):
 		ship.boosting = false
 	var main := ship.f_accel * (ship.f_boost_mul if ship.boosting else 1.0)

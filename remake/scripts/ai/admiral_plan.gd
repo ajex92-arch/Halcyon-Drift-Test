@@ -45,14 +45,22 @@ const PLAN := [
 ## from the first one, so the plan's order holds. (Playtest: without this
 ## limit it jumped straight to the Hyperspace Module while frigates were
 ## still locked.)
-const LOOKAHEAD := 4
+const LOOKAHEAD := AdmiralProfileData.TABLE["plan_lookahead"][0] / 1000.0
 
 
 ## The next PLAN step we could start right now, ignoring the price. Returns
 ## {"kind": "f" or "t", "id": the facility or tech id, "cost": its price in
 ## credits}, or {} (an empty dictionary) when there is nothing to start.
 ## `ts` is our team's shared state: money, what is built and researched.
-static func next_step(ts: TeamState) -> Dictionary:
+##
+## `front` is a list of steps put in front of the plan (a preset's research
+## order, AdmiralProfileData.PRESET_PLANS), empty for a normal Admiral. A front
+## step that is finished or under way is skipped, one that is blocked is
+## skipped too and does not count against `lookahead` (at the start of a match
+## every research step is blocked until the Research Module stands, so counting
+## them would hide the module itself); an open one is taken at once. The steps
+## behind the front are read exactly as without it.
+static func next_step(ts: TeamState, lookahead: float = LOOKAHEAD, front: Array = []) -> Dictionary:
 	# How many unfinished steps we have looked at so far.
 	var pending := 0
 	# A feature may give the team its own order (TeamState.plan_override,
@@ -62,7 +70,13 @@ static func next_step(ts: TeamState) -> Dictionary:
 	var plan: Array = PLAN if ts.plan_override.is_empty() else ts.plan_override
 	if ts.plan_hook.is_valid():
 		plan = ts.plan_hook.call(ts, plan)
+	# A preset's own steps go in front of whatever order that left.
+	var front_size := front.size()
+	if front_size > 0:
+		plan = front + plan
+	var place := -1
 	for s: Array in plan:
+		place += 1
 		var kind: String = s[0]
 		var id: String = s[1]
 		# Step 1: skip steps that are finished or already under way.
@@ -72,10 +86,12 @@ static func next_step(ts: TeamState) -> Dictionary:
 		elif ts.done.has(id) or ts.is_researching(id):
 			continue
 		# Step 2: this one still needs doing. Past LOOKAHEAD of these we stop
-		# looking, so a far-later step never jumps the queue.
-		pending += 1
-		if pending > LOOKAHEAD:
-			return {}
+		# looking, so a far-later step never jumps the queue. A front step is
+		# not counted: it is either taken now or skipped as blocked.
+		if place >= front_size:
+			pending += 1
+			if pending > lookahead:
+				return {}
 		# Step 3: a facility. Take it if nothing blocks it (it has its
 		# prerequisites and the build queue has room).
 		if kind == "f":

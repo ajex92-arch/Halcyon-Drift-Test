@@ -35,23 +35,26 @@ const PRESENCE_R := TurretData.BUILD_CLEAR_RADIUS
 ## How many lane turrets this admiral has bought back so far this match (the
 ## first one is picked by rebuy_order() where our own ships are).
 var rebought := 0
-## The game world (nodes, bays, wards, the map and the AdmiralCommand).
+## The game world (the map and the AdmiralCommand; nodes, bays and wards are read through the team view).
 var world: World
 ## Our team: 0 = Aurelian, 1 = Vhorr.
 var team := 0
 ## The admiral's lane helper (for points along a lane).
 var lanes: AdmiralLanes
-## A reusable list the spatial hash fills with nearby units (reusing one list
-## avoids making a new one for every question; see _ours_near()).
-var _scratch: Array = []
+## This admiral's numbers (AdmiralProfile).
+var prof: AdmiralProfile
+## What our team knows (our own nodes, bays, wards and ships exactly: TeamView; it keeps the spatial hash's list).
+var view: TeamView
 
 
 ## Remember the world, our team and the lane helper. AdmiralAI makes this
 ## part once.
-func _init(w: World, t: int, l: AdmiralLanes) -> void:
+func _init(w: World, t: int, l: AdmiralLanes, p: AdmiralProfile = null) -> void:
 	world = w
 	team = t
 	lanes = l
+	prof = p if p != null else AdmiralProfile.for_team(t, Game.options)
+	view = TeamView.of(w, t, prof)
 
 
 ## The ore nodes in the order the turret builders visit them: the map's own
@@ -60,8 +63,8 @@ func _init(w: World, t: int, l: AdmiralLanes) -> void:
 ## first, so a lost turret near home is rebuilt before a far one.
 func _nodes_in_order() -> Array:
 	if not world.features.is_empty() and FeatureRegistry.active_for(world, team, "node_persist"):
-		return world.features["node_persist"].call("nodes_by_distance", team)
-	return world.nodes
+		return view.own_nodes(world.features["node_persist"].call("nodes_by_distance", team))
+	return view.own_nodes()
 
 
 ## Put a PD turret back at each of our lane turret sites (outer, inner and
@@ -81,6 +84,8 @@ func rebuy_lost_sites(ts: TeamState) -> void:
 		if MapLayout.is_lane_site_kind(n.node_kind) and n.side == team and n.turret_count(team) == 0:
 			if cmd.turret_blocker(team, n.node_id, "pd") != "":
 				continue
+			if ts.can_afford(450.0):
+				AdmiralLog.of(world).expect(team, "TURRET", "builder.rebuy", "buys a PD turret at %s" % str(n.node_id), "waiting", "its lane turret site stands empty (%s) and the treasury %d pays 450" % [str(n.node_kind), int(ts.treasury)])
 			if ts.can_afford(450.0) and cmd.build_turret(team, n.node_id, "pd") == "":
 				rebought += 1
 
@@ -95,6 +100,7 @@ func rebuild_posts(ts: TeamState) -> void:
 		if cmd.post_blocker(team, lane) != "":
 			continue
 		if ts.can_afford(float(PostData.POST["cost"])):
+			AdmiralLog.of(world).expect(team, "POST", "builder.post", "rebuilds the %s defense post" % lane, "waiting", "it was destroyed, its timer has run out and the treasury %d pays it" % int(ts.treasury))
 			cmd.rebuild_post(team, lane)
 
 
@@ -134,21 +140,14 @@ func rebuy_order() -> Array:
 ## `p`. (The spatial hash may list units a little outside the circle, so the
 ## distance is checked.)
 func _ours_near(p: Vector2) -> int:
-	var count := 0
-	for u: Unit in world.unit_hash.query(p, PRESENCE_R, _scratch):
-		if u.alive and u.team == team and (u.kind == Unit.K_SHIP or u.kind == Unit.K_MINION) and u.global_position.distance_to(p) < PRESENCE_R:
-			count += 1
-	return count
+	return view.own_near(p, PRESENCE_R)
 
 ## Launch one repair bay, if we are under the team limit
 ## (Structures.REPAIR_BAY "max_per_team", 3). It goes a third of the way
 ## down a lane from our base, beside the lane.
 func place_bay() -> void:
 	# Step 1: count our living bays; stop at the limit.
-	var have := 0
-	for b in world.bays:
-		if b.team == team and b.alive:
-			have += 1
+	var have := view.own_bays().size()
 	if have >= int(Structures.REPAIR_BAY["max_per_team"]):
 		return
 	# Step 2: try the lanes in the order mid, top, bot, and use the first
@@ -157,7 +156,8 @@ func place_bay() -> void:
 	# bot, so minions don't fight over it.
 	# The places to try: [lane, fraction of the lane]. Features that have a
 	# bay_spots() function (Forward Redeploy, bayA) may change the list.
-	var spots: Array = [["mid", 0.33], ["top", 0.33], ["bot", 0.33]]
+	var bay_frac := prof.f("bay_lane_frac")
+	var spots: Array = [["mid", bay_frac], ["top", bay_frac], ["bot", bay_frac]]
 	for f in world.features.values():
 		if f.has_method("bay_spots"):
 			spots = f.bay_spots(world, team, spots, lanes)
@@ -165,16 +165,17 @@ func place_bay() -> void:
 		var lane: String = spot[0]
 		var p := lanes.lane_point(lane, float(spot[1]))
 		# 900 off the line, or half the lane's half-width where the lane is narrow.
-		var off := minf(900.0, float(world.map.lane_half[lane]) * 0.5)
+		var off := minf(prof.f("bay_off"), float(world.map.lane_half[lane]) * 0.5)
 		p += Vector2(0, -off if lane != "bot" else off)
 		# A bay of ours within 1,500 units already covers this spot.
 		var covered := false
-		for b in world.bays:
-			if b.team == team and b.alive and b.anchor.distance_to(p) < 1500.0:
+		for b in view.own_bays():
+			if b.anchor.distance_to(p) < prof.f("bay_cover"):
 				covered = true
 		# Bays only go in open space (a lane, the crossing or a base).
 		if covered or not world.map.in_open_lane(p):
 			continue
+		AdmiralLog.of(world).expect(team, "BAY", "builder.bay", "sends a repair bay to the %s lane" % lane, "the other lanes", "no bay of ours covers that spot and the repair bays are researched")
 		world.command.deploy_bay(team, p)
 		return
 
@@ -185,10 +186,7 @@ func place_bay() -> void:
 func place_ward() -> void:
 	# Step 1: at the limit (Structures.WARD "max_per_team", 6), placing
 	# another would just retire our oldest ward, so don't.
-	var mine := 0
-	for w in world.wards:
-		if w.team == team and w.alive:
-			mine += 1
+	var mine := view.own_wards().size()
 	if mine >= int(Structures.WARD["max_per_team"]):
 		return
 	# Step 2: go through the jungle entrances. Which side owns an entrance
@@ -204,13 +202,14 @@ func place_ward() -> void:
 			continue
 		# Step 3: skip it if one of our wards is already within 1,500 units.
 		var taken := false
-		for w in world.wards:
-			if w.team == team and w.alive and w.anchor.distance_to(p) < 1500.0:
+		for w in view.own_wards():
+			if w.anchor.distance_to(p) < prof.f("ward_cover"):
 				taken = true
 				break
 		if taken:
 			continue
 		# Step 4: place it if the rules allow (we can see it, no asteroid).
 		if world.command.ward_blocker(team, p) == "":
+			AdmiralLog.of(world).expect(team, "WARD", "builder.ward", "places a ward at a jungle entrance of the %s quarter" % q, "the entrances already watched", "no ward of ours is within reach of it and the spot is in sight")
 			world.command.place_ward(team, p)
 			return

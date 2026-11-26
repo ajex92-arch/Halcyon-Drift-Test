@@ -39,7 +39,7 @@ static var _choice := {}
 static var _by_mode := {}
 ## The same rows by "mode/action".
 static var _by_id := {}
-## Answers kept for the current ersion (made again after any change): the visible rows of a mode,
+## Answers kept for the current version (made again after any change): the visible rows of a mode,
 ## the rows in force in a mode and the keys of a row. They make the clash check fast.
 static var _memo_version := -1
 static var _memo_visible := {}
@@ -156,7 +156,9 @@ static func visible_rows(mode: String) -> Array:
 
 ## Every visible row that is in force in `mode`, for the clash check: the mode's own
 ## rows, the flying rows the board mode inherits (unless it has a row of the same
-## name), and the shared rows.
+## name), and the shared rows. The "wheel" mode inherits no flying row (its digits are
+## the build strip's, and 1 to 4 are energy keys there): only its own ten rows and the
+## shared ones.
 static func rows_in_force(mode: String) -> Array:
 	_fresh()
 	if _memo_force.has(mode):
@@ -183,10 +185,11 @@ static func is_linked(mode: String, id: String) -> bool:
 
 
 ## The row whose keys a change to row `id` of `mode` edits: the row itself, or for a
-## link the flying action it follows. Returns [mode, id].
+## link the action it follows: a flying action (the camera keys), or for a row of the
+## "wheel" mode (the build strip's digits) the home row of the same name. Returns [mode, id].
 static func resolve(mode: String, id: String) -> Array:
 	if is_linked(mode, id):
-		return ["flying", String(row(mode, id)["link"])]
+		return ["home" if mode == "wheel" else "flying", String(row(mode, id)["link"])]
 	return [mode, id]
 
 

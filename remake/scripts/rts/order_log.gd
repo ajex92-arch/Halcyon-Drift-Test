@@ -19,6 +19,7 @@ extends RefCounted
 ##   o <apply_tick> <team> <seat> <h|a|t> <id> <KIND> <json> <ok or reason code>   (see Order)
 ##   c <tick> <seat> <aim> <face> <forward> <strafe> <flags> <focus> <energy>   a human pilot's flight controls
 ##   b <tick> <seat> <command> <json arguments> <ok or refused>   a command the human gave on a screen
+##   f <tick> <team> <op> <word> <word>   a decision of the computer Admiral about its own ship (AdmiralField)
 ##   h <tick> <units> <hash8>      the fingerprint at the top of that tick, every 300 ticks
 ##   end <tick> <units> <hash8>    the last line, written once
 ## (The c and b lines are described in HumanLines and docs/RTS_ORDERS.md: a c line is written only
@@ -94,6 +95,12 @@ static func make_header(w: World) -> String:
 		"camps=%d" % w.map.camps.size(), "route_nodes=%d" % w.map.route.node_count(),
 		"wings=%s" % Squads.wings_text(), "cwings=%d" % Squads.cwings_flag(),
 		"play=%s" % play_word(), "opts=%s" % opts_word(), "screen=%s" % screen_word(),
+	]))
+	# A practice range is marked from its first tick: who else is on the map (the switches' presses are
+	# the log's own PRACTICE order lines). A normal match's header has no such word.
+	if w.practice:
+		parts.append("practice=%s" % Game.practice_others)
+	parts.append_array(PackedStringArray([
 		"fp0=%s" % fingerprint_pair(w),
 		"build=%s" % BuildId.get_id(),
 	]))
@@ -183,6 +190,14 @@ func command(tick: int, seat: int, kind: String, args: Array, result: String) ->
 	_add(HumanLines.command_line(tick, seat, kind, args, "ok" if result == "" else "refused"))
 
 
+## Add an `f` line: a decision of the computer Admiral of `team` about its own ship (AdmiralField) or a change
+## of its fleet goal lane (AdmiralFleet, op "goal"), made on tick `tick`: `op` and its two words (an empty word is written "-").
+func field(tick: int, team: int, op: String, a: String, b: String) -> void:
+	if not is_open():
+		return
+	_add("f %d %d %s %s %s" % [tick, team, op, a if a != "" else "-", b if b != "" else "-"])
+
+
 ## Put one line in the buffer (or among the early lines when the header is not written yet).
 func _add(line: String) -> void:
 	if header_written:
@@ -251,11 +266,13 @@ static func fingerprint_pair(w: World) -> String:
 ## Read a log file. Returns {"header": the header line, "head": its key=value words as a
 ## Dictionary, "version": 1 or 2, "orders": the order records in file order, "results": their
 ## result words, "controls": the `c` lines in file order, each [tick, seat, text after the seat],
-## "commands": the `b` lines in file order (HumanLines.parse_command), "hashes": tick ->
+## "commands": the `b` lines in file order (HumanLines.parse_command), "field": the `f` lines in file
+## order ({"field": true, "apply_tick", "team", "op", "a", "b", "after": how many order lines the file
+## has before it}), "hashes": tick ->
 ## "<units> <hash8>", "end": the end line's "<tick> <units> <hash8>" or "", "last_tick": the
 ## highest tick any line names}. An unreadable file gives an empty header.
 static func read(file_path: String) -> Dictionary:
-	var out := {"header": "", "head": {}, "version": 1, "orders": [], "results": [], "controls": [], "commands": [], "hashes": {}, "end": "", "last_tick": 0}
+	var out := {"header": "", "head": {}, "version": 1, "orders": [], "results": [], "controls": [], "commands": [], "field": [], "hashes": {}, "end": "", "last_tick": 0}
 	var f := FileAccess.open(file_path, FileAccess.READ)
 	if f == null:
 		return out
@@ -287,6 +304,12 @@ static func read(file_path: String) -> Dictionary:
 			if not cmd.is_empty():
 				(out["commands"] as Array).append(cmd)
 				last = maxi(last, int(cmd["tick"]))
+		elif line.begins_with("f "):
+			var fw := line.split(" ", false)
+			if fw.size() >= 6:
+				(out["field"] as Array).append({"field": true, "apply_tick": int(fw[1]), "team": int(fw[2]), "op": fw[3],
+					"a": "" if fw[4] == "-" else fw[4], "b": "" if fw[5] == "-" else fw[5], "after": (out["orders"] as Array).size()})
+				last = maxi(last, int(fw[1]))
 		elif line.begins_with("h "):
 			var w := line.split(" ", false)
 			if w.size() >= 4:

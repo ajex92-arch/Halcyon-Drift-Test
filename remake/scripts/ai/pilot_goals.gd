@@ -97,6 +97,12 @@ const FLEX_ROTATION_SHIFT := 2
 ## stand on the same spot. Seats past the list (the computer admiral's seat
 ## when it takes the field, and test seats) use `(slot % 3) - 1`.
 const STATION_SIDE := [0, -1, 0, 0, 1]
+## How far (world units) from the defend point a strike craft, and a corvette or bigger, still answers the base alarm
+## (the "defend the mothership" step of the lane goal). They are the standard values of the profile rows react_reach_small and react_reach_big, which
+## the computer Admiral reads for its own bought squadrons (AdmiralReactions), so the pilots and the squadrons share one
+## rule.
+const DEFEND_REACH_SMALL := AdmiralProfileData.TABLE["react_reach_small"][0] / 1000.0
+const DEFEND_REACH_BIG := AdmiralProfileData.TABLE["react_reach_big"][0] / 1000.0
 
 ## The pilot brain this part belongs to (we read its profile and timers,
 ## and set its goal, target, state and camp). It is reached through a weak
@@ -111,6 +117,10 @@ var ai: PilotAI:
 ## the other alive forever and Godot could never free them (a memory leak).
 ## A weak link points at the brain without keeping it alive.
 var _ai_ref: WeakRef
+## The s of the last _scan_front() answer (-1 = no wave out).
+var _front_s := -1.0
+## The lane lines of _lane_line(), by "<lane>/<team>" (shared by every brain).
+static var _lines := {}
 
 
 ## Remember which brain we belong to.
@@ -154,32 +164,73 @@ func lane_front(lane: String, team: int) -> Vector2:
 ## that team's live minion wave has got, or -1 with no wave out. Only
 ## minions within 2,500 of the lane line count.
 func wave_front_s(lane: String, team: int) -> float:
-	var pts := MapLayout.lane_points(lane, team)
-	var best_s := -1.0
-	for m in ai.world.minions:
-		if m.team != team or not m.alive or m.lane != lane:
-			continue
-		var pr := Util.project_on_polyline(m.global_position, pts)
-		if float(pr["dist"]) < 2500.0 and float(pr["s"]) > best_s:
-			best_s = pr["s"]
-	return best_s
+	_scan_front(lane, team)
+	return _front_s
 
 
 ## The front minion of `team`'s live wave on `lane`: the minion that
 ## wave_front_s() measures (the furthest along the lane, among those within
 ## 2,500 of the lane line), or null with no wave out.
 func front_minion(lane: String, team: int) -> Minion:
-	var pts := MapLayout.lane_points(lane, team)
+	return _scan_front(lane, team)
+
+
+## The scan behind wave_front_s() and front_minion(): walk `team`'s live
+## minions on `lane`, project each onto the lane line, and keep the one
+## furthest along among those within 2,500 of the line. Returns that minion
+## (or null) and leaves its `s` in _front_s (-1 with no wave out).
+## Speed (F311): every think of every ship asks this, so it does the same sums
+## as Util.project_on_polyline() inline, with the lane line and the length of
+## the line before each point worked out once per lane and team (_lane_line),
+## instead of building a Dictionary for each minion. The numbers, the order of
+## the sums and so the answer are exactly the same.
+func _scan_front(lane: String, team: int) -> Minion:
+	var line := _lane_line(lane, team)
+	var pts: PackedVector2Array = line[0]
+	var cum: PackedFloat64Array = line[1]
+	var n := pts.size()
 	var best: Minion = null
 	var best_s := -1.0
 	for m in ai.world.minions:
 		if m.team != team or not m.alive or m.lane != lane:
 			continue
-		var pr := Util.project_on_polyline(m.global_position, pts)
-		if float(pr["dist"]) < 2500.0 and float(pr["s"]) > best_s:
-			best_s = pr["s"]
+		var p := m.global_position
+		# Util.project_on_polyline(p, pts), its "s" and "dist" only.
+		var dist := INF
+		var s := 0.0
+		for i in n - 1:
+			var q := Util.closest_on_segment(p, pts[i], pts[i + 1])
+			var d := p.distance_to(q)
+			if d < dist:
+				dist = d
+				s = cum[i] + pts[i].distance_to(q)
+		if dist < 2500.0 and s > best_s:
+			best_s = s
 			best = m
+	_front_s = best_s
 	return best
+
+
+## [the lane line as MapLayout.lane_points(lane, team) gives it, the length of
+## the line before each of its points] (see _scan_front). Kept once per lane
+## and team in _lines: MapLayout.LANES is a constant, so the line never changes.
+## The lengths are added up in the same order as Util.project_on_polyline()
+## adds them, so they are the same numbers.
+static func _lane_line(lane: String, team: int) -> Array:
+	var key := "%s/%d" % [lane, team]
+	var got: Variant = _lines.get(key)
+	if got != null:
+		return got
+	var pts := MapLayout.lane_points(lane, team)
+	var cum := PackedFloat64Array()
+	var s := 0.0
+	for i in pts.size():
+		cum.append(s)
+		if i < pts.size() - 1:
+			s += pts[i].distance_to(pts[i + 1])
+	var line := [pts, cum]
+	_lines[key] = line
+	return line
 
 
 ## The lane the flex pilot works at match time `t` (seconds): it moves to the
@@ -466,18 +517,12 @@ func _pick_station(ship: Ship, ts: TeamState) -> String:
 		# than its hull plus our radius plus 160 moves out along the line from its
 		# centre to that distance. (A lane turret or post stands 400 or 500 off the
 		# lane line, so the 450 spread alone would put a station on it.)
-		var solids: Array = []
-		for t in world.turrets:
-			solids.append(t)
-		for dp in world.posts:
-			solids.append(dp)
-		for t: Unit in solids:
-			if t.team != ship.team or not t.alive:
-				continue
-			var clear: float = t.radius + ship.radius + 160.0
-			var away: Vector2 = brain.goal - t.global_position
-			if away.length() < clear:
-				brain.goal = t.global_position + (away.normalized() if away.length() > 0.0 else side) * clear
+		# (The turrets first, then the posts, one list after the other; F311: no
+		# joined copy of the two lists is made at every think any more.)
+		for t: Unit in world.turrets:
+			_clear_of(brain, ship, t, side)
+		for t: Unit in world.posts:
+			_clear_of(brain, ship, t, side)
 	# Step 4: defend our turrets on this lane when enemy pilots are hitting
 	# them (if within 9,000 of us, and not while falling back): park 300
 	# from the turret, toward our end of the lane.
@@ -490,7 +535,7 @@ func _pick_station(ship: Ship, ts: TeamState) -> String:
 	# mothership - the only win condition (playtest: 17 turrets fell in a
 	# match but no mothership was ever touched while big ships held separate
 	# stations).
-	if brain.fallback_t <= 0.0 and ts.siege_lane != "" and (not ship.is_small() or ship.hull_id == "bomber"):
+	if brain.fallback_t <= 0.0 and ts.siege_lane != "" and (not ship.is_small() or Ships.has_role(ship.hull_id, "siege")):
 		plain = false
 		if ts.siege_phase == "gather":
 			# Mass at the staging point (spread 400 around it by seat) so the
@@ -502,7 +547,7 @@ func _pick_station(ship: Ship, ts: TeamState) -> String:
 	# (18,000), strike craft only from nearby (12,000), so the lanes keep
 	# their pressure elsewhere. We ring the defend point 300 to 750 out
 	# (bigger ships further), placed around it by seat.
-	var answer_r := 18000.0 if not ship.is_small() else 12000.0
+	var answer_r := DEFEND_REACH_BIG if not ship.is_small() else DEFEND_REACH_SMALL
 	if ts.defending(world.time) and ship.global_position.distance_to(ts.defend_point) < answer_r:
 		brain.goal = ts.defend_point + Vector2.from_angle(float(profile.slot) * 0.9) * (300.0 + 150.0 * float(Rules.size_index(ship.size_class)))
 		plain = false
@@ -512,6 +557,18 @@ func _pick_station(ship: Ship, ts: TeamState) -> String:
 		plain = false
 	return lane if plain else ""
 
+
+## Step 3b of _pick_station(): if our own live turret or defense post `t` is
+## nearer the brain's goal than its hull plus our radius plus 160, move the
+## goal out along the line from its centre to that distance (straight to
+## `side` when the goal is on its centre).
+func _clear_of(brain: PilotAI, ship: Ship, t: Unit, side: Vector2) -> void:
+	if t.team != ship.team or not t.alive:
+		return
+	var clear: float = t.radius + ship.radius + 160.0
+	var away: Vector2 = brain.goal - t.global_position
+	if away.length() < clear:
+		brain.goal = t.global_position + (away.normalized() if away.length() > 0.0 else side) * clear
 
 ## The point on our siege lane just inside our weapon reach (80% of our
 ## main reach) of the enemy mothership's hull. We walk back along the lane
@@ -568,7 +625,8 @@ func think_jungle(ship: Ship) -> void:
 		brain.camp = null
 		# Start a camp only with most of our hull (shields regenerate on the
 		# way).
-		if ship.hull_frac() < 0.6:
+		# (Not while an engine pod is out: ShipSystems.captain_holds().)
+		if ship.hull_frac() < 0.6 and (ship.parts == null or not ship.parts.captain_holds()):
 			brain.state = "retreat"
 			return
 		var bd := INF
@@ -576,7 +634,7 @@ func think_jungle(ship: Ship) -> void:
 		for d: Unit in brain.world.jungle_director.live_camps():
 			# Carriers (they launch snub fighters) are a two-pilot job, or a
 			# Lance's.
-			if lone and (d as Derelict).ctype == "carrier" and ship.hull_id != "lance":
+			if lone and (d as Derelict).ctype == "carrier" and not Ships.has_role(ship.hull_id, "beam"):
 				continue
 			# Feature hook: a feature module may rule a camp out (see
 			# _feature_allows_camp()); none is on by default.
