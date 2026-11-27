@@ -14,7 +14,7 @@ extends RefCounted
 ## "waiting: mothership", and the ships appear on the first tick the mothership is
 ## available again. Otherwise arrive() makes one crew (Crew.make) and one ship for each ship
 ## of the item, files "ship_built" for each, puts the ships into the squad record, gives each
-## the stand-in brain (Standin.attach) and answers true.
+## the brain the record names (SquadronBrain.attach for "squad", Standin.attach for "standin") and answers true.
 ## The launch spot of a small ship has no dice: the first ship of a record takes the
 ## mothership's spot number (record id modulo 5), the next the following spots, wrapping.
 ## The warp spot is the first free one of seven tried in a fixed order around the
@@ -75,7 +75,10 @@ static func arrive(world: World, prod: Production, it: Dictionary) -> bool:
 		squad.member_uids.append(ship.uid)
 		if i == 0:
 			squad.rally = prod.rally_point(str(it["rally"]), int(it["rx"]), int(it["ry"]))
-		Standin.attach(world, ship, squad)
+		if squad.brain == SquadronRules.BRAIN_SQUAD:
+			SquadronBrain.attach(world, ship, squad)
+		else:
+			Standin.attach(world, ship, squad)
 		# Step 3: the event, the picture's data and the cue.
 		_ship_built(world, prod, it, ship)
 		if capital:

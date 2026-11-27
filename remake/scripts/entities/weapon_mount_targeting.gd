@@ -17,8 +17,10 @@ extends RefCounted
 ##     will be when our round gets there (the "lead point"), or the target
 ##     itself for beams. It drops targets that died, hid or moved too far.
 ##
-## WHO USES IT: only WeaponMount.update(), for AUTO mounts: pick_target()
-## every 0.25-0.35 s and target_point() every tick.
+## WHO USES IT: only WeaponMount (through its self-aiming step, _auto_step()), for AUTO
+## mounts and for the battery guns of a ship of the line (the heavy cannons and ion
+## turrets) while the reticle is off their side: pick_target() every 0.25-0.35 s and
+## target_point() every tick.
 
 ## A reusable list that the spatial hash fills with nearby units, so we
 ## don't make a new list every time. (The "spatial hash", world.unit_hash,
@@ -31,8 +33,8 @@ static var _scratch: Array = []
 ## Choose the best target within `r` world units of mount `m`, and store it
 ## in m.target (a unit) or m.target_torp (an enemy torpedo's slot number).
 ## Closest wins, but units of the wrong size count as 3000 (or 1500)
-## world units farther away, so the gun prefers the right size. Enemy wards
-## we can't see, neutral units, anything behind an asteroid and, for a gun
+## world units farther away, so the gun prefers the right size. Enemy units
+## our team can't see, neutral units, anything behind an asteroid and, for a gun
 ## that cannot turn all the way round, anything outside its swing are skipped.
 static func pick_target(m: WeaponMount, r: float) -> void:
 	var w := m.owner.world
@@ -59,11 +61,12 @@ static func pick_target(m: WeaponMount, r: float) -> void:
 	var best_score := INF
 	w.unit_hash.query(mp, r, _scratch)
 	for u: Unit in _scratch:
-		# Skip the dead, the unshootable, friends and neutrals, and enemy
-		# wards we can't see.
+		# Skip the dead, the unshootable, friends and neutrals, and enemies
+		# our team can't see.
 		if not u.alive or u.team == m.owner.team or u.team == Rules.NEUTRAL:
 			continue
-		if u.kind == Unit.K_WARD and not u.visible_to(m.owner.team):
+		# Only shoot what our team can see (a ward follows its own stealth rule inside visible_to).
+		if not u.visible_to(m.owner.team):
 			continue
 		var d := mp.distance_to(u.global_position)
 		if d > r + u.hit_radius():

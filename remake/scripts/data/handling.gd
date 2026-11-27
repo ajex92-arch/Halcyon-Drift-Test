@@ -66,6 +66,14 @@ extends RefCounted
 ##   gyration       how far from the centre of mass the hull's weight is spread
 ##                  (radius of gyration), as a share of the hull's length: the
 ##                  bigger it is, the harder the hull is to spin
+##   trim           the share of the hull's flight-assist grip ("assist") that
+##                  trims sideways drift in a ship of the line [0..1]
+##   brake_split    how far the two main engines toe out of straight back when
+##                  braking [radians, each engine; 0 = the engines swing round as
+##                  one group]
+##   kick_cap       the fastest the stern kick (the A and D keys on a ship of the line)
+##                  may spin the nose, set by the side thrusters alone [radians per
+##                  second; above 0 and below the hull's own "turn"]
 ##
 ## WHO USES IT: ShipStats (every ship's flight numbers), PilotAI (a hull's top
 ## speed), ShipLineFlight (through ShipStats), tests/flight_table_probe.gd.
@@ -106,8 +114,9 @@ const TABLE := {
 		"assist": 1.8, "cap_rate": 2.3, "boost_mul": 1.3, "boost_cap": 1.12, "has_boost": false, "boost_drain": 30.0,
 		"spool": 0.0,
 		"line": {
-			"rate": 6, "swivel_max": 2.79, "swivel_rate": 2.5, "reverse_share": 0.33, "strafe_share": 0.41,
-			"engine_arm": 0.45, "side_arm": 0.38, "gyration": 0.3,
+			"rate": 6, "swivel_max": 2.79, "swivel_rate": 2.5, "reverse_share": 0.33, "strafe_share": 0.465,
+			"engine_arm": 0.45, "side_arm": 0.38, "gyration": 0.3, "trim": 0.2, "brake_split": 0.5236,
+			"kick_cap": 0.24,
 		},
 	},
 	# Support Corvette: a sixth-rate hull.
@@ -116,8 +125,9 @@ const TABLE := {
 		"assist": 1.2, "cap_rate": 2.4, "boost_mul": 1.4, "boost_cap": 1.16, "has_boost": false, "boost_drain": 30.0,
 		"spool": 0.0,
 		"line": {
-			"rate": 6, "swivel_max": 2.79, "swivel_rate": 2.5, "reverse_share": 0.33, "strafe_share": 0.41,
-			"engine_arm": 0.45, "side_arm": 0.38, "gyration": 0.3,
+			"rate": 6, "swivel_max": 2.79, "swivel_rate": 2.5, "reverse_share": 0.33, "strafe_share": 0.465,
+			"engine_arm": 0.45, "side_arm": 0.38, "gyration": 0.3, "trim": 0.2, "brake_split": 0.5236,
+			"kick_cap": 0.24,
 		},
 	},
 	# Flak Frigate: a fourth-rate hull.
@@ -127,7 +137,8 @@ const TABLE := {
 		"spool": 0.0,
 		"line": {
 			"rate": 4, "swivel_max": 2.79, "swivel_rate": 1.75, "reverse_share": 0.3, "strafe_share": 0.375,
-			"engine_arm": 0.45, "side_arm": 0.38, "gyration": 0.3,
+			"engine_arm": 0.45, "side_arm": 0.38, "gyration": 0.3, "trim": 0.2, "brake_split": 0.5236,
+			"kick_cap": 0.24,
 		},
 	},
 	# Ion Frigate: a fourth-rate hull.
@@ -137,7 +148,8 @@ const TABLE := {
 		"spool": 0.0,
 		"line": {
 			"rate": 4, "swivel_max": 2.79, "swivel_rate": 1.75, "reverse_share": 0.3, "strafe_share": 0.375,
-			"engine_arm": 0.45, "side_arm": 0.38, "gyration": 0.3,
+			"engine_arm": 0.45, "side_arm": 0.38, "gyration": 0.3, "trim": 0.2, "brake_split": 0.5236,
+			"kick_cap": 0.24,
 		},
 	},
 	# Destroyer: a third-rate hull.
@@ -147,7 +159,8 @@ const TABLE := {
 		"spool": 0.0,
 		"line": {
 			"rate": 3, "swivel_max": 2.79, "swivel_rate": 1.4, "reverse_share": 0.27, "strafe_share": 0.34,
-			"engine_arm": 0.45, "side_arm": 0.38, "gyration": 0.3,
+			"engine_arm": 0.45, "side_arm": 0.38, "gyration": 0.3, "trim": 0.2, "brake_split": 0.5236,
+			"kick_cap": 0.30,
 		},
 	},
 	# Battlecruiser: the heaviest hull, a first-rate ship of the line.
@@ -157,7 +170,8 @@ const TABLE := {
 		"spool": 0.0,
 		"line": {
 			"rate": 1, "swivel_max": 2.79, "swivel_rate": 1.2, "reverse_share": 0.25, "strafe_share": 0.31,
-			"engine_arm": 0.45, "side_arm": 0.38, "gyration": 0.3,
+			"engine_arm": 0.45, "side_arm": 0.38, "gyration": 0.3, "trim": 0.2, "brake_split": 0.5236,
+			"kick_cap": 0.30,
 		},
 	},
 }

@@ -6,7 +6,7 @@ extends RefCounted
 ##
 ## HOW IT WORKS: help_table() turns the rows of one mode into display rows (name, first
 ## key, second key, and for a row that does not work yet, what it comes with). help_text()
-## writes all four modes as plain text; the test builds it twice to prove it does not
+## writes every mode (five, the "wheel" mode's build strip digits included) as plain text; the test builds it twice to prove it does not
 ## depend on anything but the list. key_line() fills a template with the first key of each
 ## action: with the standard keys the three lines (Admiral, pilot, spectator) read exactly
 ## as the hand-written reminders did. Lines are kept until KeyMap.version changes, because

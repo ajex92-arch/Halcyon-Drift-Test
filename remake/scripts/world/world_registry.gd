@@ -77,6 +77,8 @@ func index(u: Unit) -> void:
 			world.repair_drones.append(u)
 		Unit.K_MONSTER, Unit.K_SNUB:
 			world.monsters.append(u)
+		Unit.K_PRACTICE_DRONE:
+			world.practice_drones.append(u)
 
 
 ## Take unit `u` out of World.units and its kind's list, and free its node
@@ -110,21 +112,28 @@ func remove(u: Unit) -> void:
 			world.repair_drones.erase(u)
 		Unit.K_MONSTER, Unit.K_SNUB:
 			world.monsters.erase(u)
+		Unit.K_PRACTICE_DRONE:
+			world.practice_drones.erase(u)
 	if u.kind != Unit.K_MOTHERSHIP:
 		u.queue_free()
 
 
 ## Once a tick: empty both spatial hashes and file every live unit (except
-## motherships) into World.unit_hash. Units wider than
-## Projectiles.HASH_PAD (60 world units) also go into World.big_hash,
-## counted in World.big_count.
+## motherships) into World.unit_hash. Units whose hit shape reaches farther
+## from the centre than Projectiles.HASH_PAD (60 world units: Unit.hit_reach())
+## also go into World.big_hash,
+## counted in World.big_count. Pilot ships also go into World.ship_hash, in
+## the same order, so its searches list the same ships as unit_hash's.
 func rebuild_hashes() -> void:
 	world.unit_hash.clear()
 	world.big_hash.clear()
+	world.ship_hash.clear()
 	world.big_count = 0
 	for u in world.units:
 		if u.alive and u.kind != Unit.K_MOTHERSHIP:
 			world.unit_hash.insert(u)
-			if u.radius > Projectiles.HASH_PAD:
+			if u is Ship:
+				world.ship_hash.insert(u)
+			if u.hit_reach() > Projectiles.HASH_PAD:
 				world.big_hash.insert(u)
 				world.big_count += 1

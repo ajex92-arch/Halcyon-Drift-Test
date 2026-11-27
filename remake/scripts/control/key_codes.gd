@@ -25,7 +25,7 @@ const NAMES := {
 	"Esc": KEY_ESCAPE, "Tab": KEY_TAB, "Space": KEY_SPACE, "Enter": KEY_ENTER, "KPEnter": KEY_KP_ENTER,
 	"KPAdd": KEY_KP_ADD, "KPSubtract": KEY_KP_SUBTRACT, "Backspace": KEY_BACKSPACE, "QuoteLeft": KEY_QUOTELEFT,
 	"Equal": KEY_EQUAL, "Minus": KEY_MINUS, "Up": KEY_UP, "Down": KEY_DOWN, "Left": KEY_LEFT, "Right": KEY_RIGHT,
-	"Shift": KEY_SHIFT, "Ctrl": KEY_CTRL, "Alt": KEY_ALT,
+	"Shift": KEY_SHIFT, "Ctrl": KEY_CTRL, "Alt": KEY_ALT, "CapsLock": KEY_CAPSLOCK,
 }
 
 ## The mouse buttons by text: text -> Godot button index (3 is the middle button,
@@ -37,7 +37,7 @@ const MOUSE := {
 
 ## The shorter words screens show for some keys: text -> what is shown.
 const SHORT := {
-	"QuoteLeft": "`", "Equal": "=", "Minus": "-", "KPAdd": "Num +", "KPSubtract": "Num -", "KPEnter": "Num Enter",
+	"QuoteLeft": "`", "Equal": "=", "Minus": "-", "KPAdd": "Num +", "KPSubtract": "Num -", "KPEnter": "Num Enter", "CapsLock": "Caps Lock",
 }
 
 ## The modifier key codes: pressing one alone is a key of its own (Shift boosts)

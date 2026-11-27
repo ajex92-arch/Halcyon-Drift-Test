@@ -20,7 +20,7 @@ extends VBoxContainer
 ## a pilot with the hangar closed, an enemy turret is aiming at our ship,
 ## our mothership's systems are failing, then a message from a feature
 ## module (FeatureRegistry.banner_for(): a lane breach, a last stand, a
-## surrender vote ...). If none is true, the banner is empty. The title's colour shows the mood: ice (white) for information,
+## surrender vote ...). While we are dead the small line also names the key that watches a teammate, when one is in flight. If none is true, the banner is empty. The title's colour shows the mood: ice (white) for information,
 ## amber for a map tool, the danger colour WITH the danger triangle above the title (a DangerMark) for danger, veil (teal) for a jump.
 ##
 ## WHO USES IT: the HUD's scene (scenes/ui/hud.tscn) holds it. Hud.setup()
@@ -85,6 +85,9 @@ func refresh() -> void:
 	elif h != null and h.state == "dead":
 		title = "Respawning in %ds" % int(ceil(h.respawn_t))
 		sub = (hud.feed.last_cause + ".  " if hud.feed.last_cause != "" else "") + "Gear is kept; press B to shop while you wait."
+		# A living teammate can be watched with C (the death card has the buttons).
+		if world.human_role == "pilot" and not world.camera.watch_candidates().is_empty():
+			sub += " · %s: watch a teammate" % KeyMapText.key_of("center_camera")
 		# Buyback (BuybackFeature): the hangar's button can buy the respawn.
 		if BuybackFeature.current() != null:
 			sub += "  Buyback: " + BuybackFeature.button_text(h)

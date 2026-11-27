@@ -130,6 +130,8 @@ static func blocker(w: World, o: Dictionary) -> String:
 			if b == "" and not w.map.in_open_lane(Vector2(target)):
 				b = AdmiralCommand.JUNGLE_TEXT
 			return b
+		OrderKinds.DRONE_SEND:
+			return cmd.send_drone_blocker(team, int(target), str(s["node"]))
 	return ""
 
 

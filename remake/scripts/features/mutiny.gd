@@ -202,7 +202,8 @@ func swap(team: int) -> void:
 		# The HUD opens the hangar when the human respawns as a pilot.
 		Events.respawned.emit(ap)
 	elif world.admiral_ai[team] != null:
-		world.admiral_ai[team] = AdmiralAI.new(world, team)
+		# The new Admiral keeps the old one's profile (its numbers and switches).
+		world.admiral_ai[team] = AdmiralAI.new(world, team, (world.admiral_ai[team] as AdmiralAI).profile)
 	# Step 3: a fresh start for the "behind" clock.
 	behind_since[team] = -1.0
 

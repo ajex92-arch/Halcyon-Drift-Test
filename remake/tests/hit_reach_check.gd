@@ -1,21 +1,24 @@
 extends Node
 ## WHAT THIS IS: a check that a round which only grazes the rim of a big
-## ship's hit circle is still found by the hit search. A ship's hit circle is
-## as big as its radius, and the search for big units (World.big_hash) only
-## reaches so far: a round that crossed the outer band of a circle bigger than
+## ship's hit shape is still found by the hit search. The two frigates, the
+## Destroyer and the Battlecruiser are hit as a capsule (a line along the hull
+## with a round end at each end), and the search for big units (World.big_hash)
+## only reaches so far: a round that touched the far tip of a capsule bigger than
 ## the search would pass through the ship without a hit.
 ##
 ## HOW IT WORKS: it builds the normal match and freezes it. For each of the
-## four biggest hulls (the two frigates and the two capitals) it launches one
-## ship of team 1 and stands it at 64 spots, spread over one 320-unit grid
-## cell of the spatial hash in both directions (whether the cell of the ship is
-## searched depends on where in its cell the ship stands). At each spot it asks
+## four biggest hulls it launches one ship of team 1 and stands it at 64 spots,
+## spread over one 320-unit grid cell of the spatial hash in both directions
+## (whether the cell of the ship is searched depends on where in its cell the
+## ship stands), turned a different way at each spot. At each spot it asks
 ## ProjectilesHitScan.scan() about 12 straight rounds of team 0 that pass the
-## ship from 12 directions, each 2 world units inside the rim of the hit
-## circle (the ship's radius plus the round's own radius). A round is the short
-## line it flies in one tick (16 world units: about 1,000 units a second), as
-## in a match; a long line would reach further on its own and hide the gap.
-## Every round must find the ship. It prints one line per hull and then the
+## ship from 12 directions, each 2 world units inside the rim of the hit shape
+## (the round is aimed at the point of the capsule that stands farthest out
+## across its path, so the far tips of the hull are tried, not only its flank).
+## A round is the short line it flies in one tick (16 world units: about 1,000
+## units a second), as in a match; a long line would reach further on its own
+## and hide the gap. A last round comes straight at the bow tip, 2 units inside
+## it. Every round must find the ship. It prints one line per hull and then the
 ## failures.
 ##
 ## HOW TO RUN IT ("godot" is the Godot console program, started from the
@@ -34,7 +37,7 @@ extends Node
 const HULLS := ["flak", "ion", "destroyer", "battlecruiser"]
 ## The radius (world units) of the rounds asked about.
 const ROUND_RADIUS := 3.0
-## How far (world units) inside the rim of the hit circle the rounds pass.
+## How far (world units) inside the rim of the hit shape the rounds pass.
 const INSIDE := 2.0
 ## The length (world units) of the line a round flies in one tick.
 const TICK_LINE := 16.0
@@ -72,22 +75,40 @@ func _run() -> void:
 		for ix in SPOTS:
 			for iy in SPOTS:
 				ship.global_position = home + Vector2(float(ix), float(iy)) * SPOT_STEP
+				ship.rotation = float(ix * SPOTS + iy) * 0.37
 				world.registry.rebuild_hashes()
 				for k in DIRECTIONS:
 					var dir := Vector2.from_angle(float(k) * TAU / float(DIRECTIONS))
-					var side := dir.orthogonal() * (ship.radius + ROUND_RADIUS - INSIDE)
-					var a := ship.global_position + side - dir * TICK_LINE * 0.5
+					var target := _rim_point(ship, dir.orthogonal()) + dir.orthogonal() * (ROUND_RADIUS - INSIDE)
+					var a := target - dir * TICK_LINE * 0.5
 					var b := a + dir * TICK_LINE
 					world.projectiles.hit_scan.scan(a, b, ROUND_RADIUS, 0.0, Rules.W_BOLT, 0, 2.0)
 					tried += 1
 					if world.projectiles.hit_scan.hit_unit != ship:
 						missed += 1
+				# The bow tip, head on: a round that ends 2 units inside the tip.
+				var heading := Vector2.from_angle(ship.rotation)
+				var tip := _rim_point(ship, heading)
+				world.projectiles.hit_scan.scan(tip + heading * (TICK_LINE - INSIDE), tip - heading * INSIDE, ROUND_RADIUS, 0.0, Rules.W_BOLT, 0, 2.0)
+				tried += 1
+				if world.projectiles.hit_scan.hit_unit != ship:
+					missed += 1
 		print("hit_reach_check: %s radius %s, %d rounds, %d missed" % [hid, ship.radius, tried, missed])
 		failures += missed
 		ship.global_position = Vector2(-5000.0, -5000.0)
 		ship.alive = false
 	print("hit_reach_check: %d failures" % failures)
 	get_tree().quit()
+
+
+## The point of the ship's hit shape that stands farthest out in direction `n`
+## (a unit vector): on its capsule the point of the nearer end circle in that
+## direction (a circle has the point of its rim).
+func _rim_point(ship: Ship, n: Vector2) -> Vector2:
+	var axis := Vector2.from_angle(ship.rotation)
+	var along := n.dot(axis)
+	var end := ship.capsule_centre() + axis * (ship.spine_len * 0.5 * (1.0 if along >= 0.0 else -1.0))
+	return end + n * ship.hit_r
 
 
 ## Launch a pilot ship of hull `hid` for team 1 (a pilot named after the hull),

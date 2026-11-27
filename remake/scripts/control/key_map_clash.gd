@@ -23,19 +23,20 @@ const VARIANT_KEYS := [
 	{"key": "T", "variant": "recall", "label": "the recall variant", "modes": ["flying", "flying_board"]},
 	{"key": "M", "variant": "mutiny", "label": "the mutiny variant", "modes": ["flying", "flying_board"]},
 	{"key": "F10", "variant": "surrender", "label": "the surrender vote", "modes": []},
-	{"key": "F11", "variant": "surrender", "label": "the surrender vote", "modes": []},
+	{"key": "Delete", "variant": "surrender", "label": "the surrender vote", "modes": []},
 ]
 
 # --- clashes ---------------------------------------------------------------------------
 
 ## The rows a change to row `id` of `mode` edits: [[mode, id], ...], the row it
-## resolves to first, then every row that follows it.
+## resolves to first, then every row that follows it (the camera rows follow a flying
+## action, the build strip's digit rows the home hull row of the same name).
 static func _edit_pairs(mode: String, id: String) -> Array:
 	var t := KeyMap.resolve(mode, id)
 	var pairs := [t]
 	for m: String in KeyMapData.MODES:
 		for r: Dictionary in KeyMap.rows(m):
-			if String(r["link"]) == String(t[1]) and t[0] == "flying" and KeyMap.is_linked(m, String(r["id"])):
+			if String(r["link"]) == String(t[1]) and KeyMap.is_linked(m, String(r["id"])) and KeyMap.resolve(m, String(r["id"])) == t:
 				pairs.append([m, String(r["id"])])
 	return pairs
 
@@ -87,11 +88,14 @@ static func conflicts(mode: String, id: String, keys: Array, page: String = "") 
 		seen["%s/%s" % [pair[0], pair[1]]] = true
 	for pair: Array in pairs:
 		var pg := page if (pair[0] == mode and pair[1] == id) else KeyMap.page_of(String(pair[0]), String(pair[1]))
-		var scope: Array = ["home", "flying", "flying_board"] if pair[0] == "shared" else [pair[0]]
+		var scope: Array = ["home", "flying", "flying_board", "wheel"] if pair[0] == "shared" else [pair[0]]
 		for s: String in scope:
 			for r: Dictionary in KeyMap.rows_in_force(s):
 				var rk := "%s/%s" % [r["mode"], r["id"]]
 				if seen.has(rk):
+					continue
+				# A build strip digit is the home row's key: the home row reports a clash with it, so the strip row stays quiet.
+				if String(r["mode"]) == "wheel" and KeyMap.is_linked("wheel", String(r["id"])):
 					continue
 				var rp := KeyMap.page_of(String(r["mode"]), String(r["id"]))
 				if pg != "" and rp != "" and pg != rp:

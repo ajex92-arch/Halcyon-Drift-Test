@@ -6,9 +6,9 @@ extends RefCounted
 ## middle of a match.
 ##
 ## HOW IT WORKS: every temperament has a wish list of hulls, best first
-## (HULL_PREF). When docked, shop() buys the first hull on the list that is
+## (Ships.HULL_PREF). When docked, shop() buys the first hull on the list that is
 ## unlocked and affordable while keeping 120 credits spare, then repair kits
-## (up to two), then the modules that suit the hull (MOD_PREF), then as much
+## (up to two), then the modules that suit the hull (Ships.MOD_PREF), then as much
 ## pilot gear as it can afford (GEAR_SMALL or GEAR_BIG). While flying,
 ## wants_shopping() says whether a better hull (or, with lots of credits, a
 ## piece of gear) is worth the trip home.
@@ -25,27 +25,6 @@ extends RefCounted
 ##           through death; 6 inventory slots, at most one item per
 ##           category. Repair kits share those slots.
 
-## Wish lists of hulls by temperament, best first. Heavies fly fighters
-## until frigates unlock (playtest: with three Logistics corvettes per team,
-## every fight was healed into a draw, so heavies don't buy them).
-const HULL_PREF := {
-	"heavy": ["battlecruiser", "destroyer", "flak", "ion", "fighter"],
-	"heavy_ion": ["battlecruiser", "destroyer", "ion", "flak", "fighter"],
-	"striker": ["bomber", "lance", "fighter"],
-	"support": ["support", "logistics", "fighter"],
-	# Lances melt corvettes but lose dogfights to Fighters (arena test: 3
-	# Fighters beat 3 Lances 3-0), so only one laner per side flies them.
-	"dog": ["fighter"],
-	"lancer": ["lance", "fighter"],
-	"jungle": ["lance", "fighter"],
-}
-## The modules we buy for each hull, in buying order (a hull holds 2).
-const MOD_PREF := {
-	"scout": ["engines"], "fighter": ["weapons", "engines"], "lance": ["capacitor", "weapons"],
-	"bomber": ["weapons", "shield_booster"], "logistics": ["shield_booster", "plating"],
-	"support": ["sensor_suite", "shield_booster"], "flak": ["plating", "shield_booster"],
-	"ion": ["capacitor", "plating"], "destroyer": ["plating", "weapons"], "battlecruiser": ["plating", "shield_booster"],
-}
 ## Pilot gear for small ships (and for a pilot with no hull yet), in buying
 ## order: mostly agility and firepower (turning, fire rate, energy), with
 ## extra hull last. Item ids are from Items.ITEMS.
@@ -101,18 +80,18 @@ func shop() -> void:
 	# Step 2: nothing on the list fits: keep our hull, or (with none) buy a
 	# fighter if we have 150 credits plus the reserve, else a free scout.
 	if want == "":
-		want = profile.hull_id if profile.hull_id != "" else ("fighter" if profile.credits >= 150.0 + reserve else "scout")
+		want = profile.hull_id if profile.hull_id != "" else (Ships.DEFAULT_HULL if profile.credits >= 150.0 + reserve else Ships.FREE_HULL)
 	if profile.hull_id != want:
 		profile.buy_hull(want, ts)
 	if profile.hull_id == "":
-		profile.buy_hull("scout", ts)
+		profile.buy_hull(Ships.FREE_HULL, ts)
 	# Step 3: repair kits, until we carry 2 (only while we have more than
 	# 200 credits and room for them).
 	while profile.kit_count() < 2 and profile.kit_blocker() == "" and profile.credits > 200.0:
 		profile.buy_kit()
 	# Step 4: the modules that suit our hull, if they still leave the
 	# reserve.
-	for m: String in MOD_PREF.get(profile.hull_id, []):
+	for m: String in Ships.MOD_PREF.get(profile.hull_id, []):
 		if not profile.modules.has(m) and profile.module_blocker(m) == "" and profile.credits - Modules.price_for(m, profile.hull_id) > reserve:
 			profile.toggle_module(m)
 	# Step 5: then as much gear as we can afford (one slot stays free for
@@ -134,7 +113,7 @@ func shop() -> void:
 ## enough weight to siege).
 func wish_list() -> Array:
 	var brain := ai
-	var base: Array = HULL_PREF[brain.temperament]
+	var base: Array = Ships.HULL_PREF[brain.temperament]
 	# Feature hook: a fleet-composition call from the AI admiral
 	# (TeamState.comp_call, AdmiralSmartFeature) may change this pilot's list.
 	# With no call, today's list below.
@@ -144,10 +123,9 @@ func wish_list() -> Array:
 		if not changed.is_empty():
 			return changed
 	if brain.world.time > 1200.0:
-		if brain.temperament == "dog":
-			return ["flak"] + base
-		if brain.temperament == "lancer":
-			return ["ion"] + base
+		var first: String = Ships.WISH_LATE_FIRST.get(brain.temperament, "")
+		if first != "":
+			return [first] + base
 	return base
 
 
@@ -192,7 +170,7 @@ func wants_shopping(ship: Ship) -> String:
 	# Step 4: big ships and bombers never leave in the middle of our siege
 	# (playtest: three destroyers at full hull left an assault together to
 	# buy battlecruisers the moment they unlocked).
-	if ts.siege_lane != "" and (not ship.is_small() or ship.hull_id == "bomber"):
+	if ts.siege_lane != "" and (not ship.is_small() or Ships.has_role(ship.hull_id, "siege")):
 		return ""
 	# "Far" = more than 9,000 from our mothership's hull (or no mothership).
 	var ms := world.mothership(ship.team)

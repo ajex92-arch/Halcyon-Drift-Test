@@ -278,6 +278,14 @@ static func install(world: World) -> void:
 		push_error("TEAM VARIANT UNKNOWN: " + Game.team_variant_error)
 		(Engine.get_main_loop() as SceneTree).quit(3)
 		return
+	# Step 0a5: refuse a match whose Admiral profile options cannot be used (--admiral-profile /
+	# --admiral-set, Game.admiral_profile_error) the same way: an unknown key, team or profile, or a
+	# value out of range.
+	if Game.admiral_profile_error != "":
+		print("ADMIRAL PROFILE UNKNOWN: " + Game.admiral_profile_error)
+		push_error("ADMIRAL PROFILE UNKNOWN: " + Game.admiral_profile_error)
+		(Engine.get_main_loop() as SceneTree).quit(3)
+		return
 	# Step 0b: refuse a combination that FUN_PLAN 4.5 rules out (CONFLICTS):
 	# nothing is installed and the game quits with exit code 3.
 	var clash := conflict()

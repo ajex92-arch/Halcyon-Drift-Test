@@ -394,10 +394,21 @@ func _on_damage(target: Node, info: RefCounted, amount: float, _hull_dmg: float)
 		world.combat.kill(tu, di)
 	elif tu.kind == Unit.K_MOTHERSHIP and tu.hull_frac() < MS_BELOW:
 		_in_extra = true
-		tu.take_hit(di, amount * (MS_BONUS - 1.0))
+		bonus_hit(tu, di, amount * (MS_BONUS - 1.0))
 		_in_extra = false
 		Game.count_usage("elder_ms_hits")
 
+
+## The Elder Core's extra hit on target `tu`: `amount` more damage from the same
+## shot as `di`, through the same shield and armour path as any hit (take_hit). It
+## carries the original hit's impact point and a strength equal to its own amount,
+## and leaves `di` as it found it. Returns the damage the hull took.
+static func bonus_hit(tu: Unit, di: DamageInfo, amount: float) -> float:
+	var kept := di.strength
+	di.strength = amount
+	var took := tu.take_hit(di, amount)
+	di.strength = kept
+	return took
 
 ## Feature hook (PilotAI._feature_takes_over): go for the Dreadnought by the
 ## AI rules in the header. Returns true when it set the goal and target.

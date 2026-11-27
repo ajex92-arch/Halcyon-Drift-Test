@@ -100,6 +100,68 @@ static func seg_circle_t(a: Vector2, b: Vector2, c: Vector2, r: float) -> float:
 	return t if t >= 0.0 and t <= 1.0 else -1.0
 
 
+## Parameter t (0..1) along a->b where it first enters a capsule, or -1 for a
+## miss. A capsule is a segment with a round end at each end: its middle point
+## is `c`, `dir` is the unit vector it runs along, `half` is half the length of
+## the segment (world units) and `r` is its radius (how far the shape reaches on
+## each side of the segment). t = 0 means at a, and the answer is 0 if a is
+## already inside. With half = 0 it is the circle of radius r, exactly
+## seg_circle_t(). It works in closed form: the path against the two end
+## circles and against the rectangle between them, and the earliest crossing wins.
+static func seg_capsule_t(a: Vector2, b: Vector2, c: Vector2, dir: Vector2, half: float, r: float) -> float:
+	if half <= 0.0:
+		return seg_circle_t(a, b, c, r)
+	if capsule_edge_dist(a, c, dir, half, r) <= 0.0:
+		return 0.0
+	var best := -1.0
+	var t_end := seg_circle_t(a, b, c + dir * half, r)
+	if t_end >= 0.0:
+		best = t_end
+	t_end = seg_circle_t(a, b, c - dir * half, r)
+	if t_end >= 0.0 and (best < 0.0 or t_end < best):
+		best = t_end
+	# The rectangle between the end circles, in the capsule's own frame (x along
+	# the segment, y across it): the path's entry time from the usual slab test.
+	var side := Vector2(-dir.y, dir.x)
+	var q := a - c
+	var ax := q.dot(dir)
+	var ay := q.dot(side)
+	var d := b - a
+	var dx := d.dot(dir)
+	var dy := d.dot(side)
+	var t_in := 0.0
+	var t_out := 1.0
+	var ok := true
+	# Across the segment: between -r and +r; along it: between -half and +half.
+	for axis in 2:
+		var pos := ax if axis == 0 else ay
+		var vel := dx if axis == 0 else dy
+		var lim := half if axis == 0 else r
+		if absf(vel) < 0.000001:
+			if pos < -lim or pos > lim:
+				ok = false
+				break
+		else:
+			var t1 := (-lim - pos) / vel
+			var t2 := (lim - pos) / vel
+			t_in = maxf(t_in, minf(t1, t2))
+			t_out = minf(t_out, maxf(t1, t2))
+	if ok and t_in <= t_out and (best < 0.0 or t_in < best):
+		best = t_in
+	return best
+
+
+## How far point p is from the edge of a capsule (its middle point `c`, unit
+## direction `dir`, half-length of its segment `half`, radius `r`): the distance
+## from p to the segment, minus r. Zero on the edge, negative inside. With
+## half = 0 it is the circle's: the distance to c minus r.
+static func capsule_edge_dist(p: Vector2, c: Vector2, dir: Vector2, half: float, r: float) -> float:
+	var q := p - c
+	var x := q.dot(dir)
+	var y := q.dot(Vector2(-dir.y, dir.x))
+	return Vector2(x - clampf(x, -half, half), y).length() - r
+
+
 ## Closest point on segment a-b to p.
 static func closest_on_segment(p: Vector2, a: Vector2, b: Vector2) -> Vector2:
 	var ab := b - a

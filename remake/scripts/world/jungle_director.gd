@@ -9,6 +9,10 @@ extends RefCounted
 ## (Jungle.CAMPS[type]["respawn"]: 80 s for a gunship, 120 s for a
 ## carrier). tick() spawns it again once that time is reached.
 ##
+## The practice range (and nothing else) may bring camps back at once: respawn_all() and
+## respawn_camp() take the old derelict and its snub fighters away quietly (no pay, no event) and
+## spawn a fresh one with its timer cleared.
+##
 ## WHO USES IT: World makes one (World.jungle_director) in WorldSetup,
 ## which calls setup() unless the "no-jungle" test switch is on; World
 ## calls tick() every tick. Derelict calls on_camp_killed() when it dies.
@@ -59,6 +63,44 @@ func tick(_dt: float) -> void:
 		var e: Dictionary = camps[id]
 		if e["unit"] == null and world.time >= float(e["respawn_at"]):
 			_spawn(id)
+
+
+## Bring every camp back now (the practice range's Respawn all camps): a live camp is replaced,
+## an empty one is simply spawned. Returns "" or the text that says the match has no camps.
+func respawn_all() -> String:
+	if camps.is_empty():
+		return PracticeSwitches.TEXT_NO_JUNGLE
+	for id: String in camps:
+		_replace(id)
+	return ""
+
+
+## Bring camp `id` back now (the practice range's Respawn nearest camp). Returns "" or the reason
+## (the text for an id this match has no camp for).
+func respawn_camp(id: String) -> String:
+	if not camps.has(id):
+		return PracticeSwitches.TEXT_NO_CAMP
+	_replace(id)
+	return ""
+
+
+## Put a fresh derelict in camp `id`: the old one and its snub fighters are taken away quietly
+## (no pay, no kill message, no respawn timer), the entry is cleared and a new derelict is made
+## with its fight state and damage log empty. The new one shows one pale ring (drawing only).
+func _replace(id: String) -> void:
+	var e: Dictionary = camps[id]
+	var old: Variant = e["unit"]
+	if old != null and is_instance_valid(old):
+		var d := old as Derelict
+		for s: Variant in d.snubs:
+			if is_instance_valid(s):
+				world.combat.kill_silently(s as Unit)
+		world.combat.kill_silently(d)
+	e["unit"] = null
+	e["respawn_at"] = 0.0
+	_spawn(id)
+	var at: Vector2 = (e["info"] as Dictionary)["pos"]
+	world.effects.pulse(at, PracticeSwitches.PULSE_RADIUS, PracticeSwitches.PULSE_LIFE, PracticeSwitches.PULSE_COLOR)
 
 
 ## The derelicts currently up (alive), for AI junglers.

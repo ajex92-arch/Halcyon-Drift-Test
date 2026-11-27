@@ -20,7 +20,7 @@ extends PilotShopping
 ## ordinary list.
 func wish_list() -> Array:
 	if ai.temperament == "striker":
-		return ["fighter"]
+		return [Ships.DEFAULT_HULL]
 	return super.wish_list()
 
 
@@ -29,5 +29,5 @@ func wish_list() -> Array:
 func shop() -> void:
 	var before := ai.profile.hull_id
 	super.shop()
-	if ai.temperament == "striker" and ai.profile.hull_id == "fighter" and before != "fighter":
+	if ai.temperament == "striker" and ai.profile.hull_id == Ships.DEFAULT_HULL and before != Ships.DEFAULT_HULL:
 		Game.count_usage("bomber_seat_swaps")

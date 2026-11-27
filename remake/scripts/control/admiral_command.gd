@@ -91,7 +91,7 @@ func _order(team: int, kind: String, settings: Dictionary, target_kind: String =
 	if not pending.is_empty():
 		return pending
 	_early = ""
-	var o := Order.make(kind, team, Rules.ADMIRAL_SEAT, human, settings, subjects, target_kind, target)
+	var o := Order.make(kind, team, Rules.ADMIRAL_SEAT if human else Deputy.computer_seat(world, team), human, settings, subjects, target_kind, target)
 	var q := world.orders
 	if q == null:
 		o["id"] = 0
@@ -144,6 +144,38 @@ func build_drone(team: int, node_id: String = "") -> String:
 		return _done(o, blocked)
 	# Queue it in the build list. (TeamState._drone_line builds the one that starts.)
 	ts.production.add_drone(node_id)
+	return _done(o, "")
+
+
+## Why unit `uid` can't be sent to ore node `node_id` by `team`, or "" if it can. The rules, in
+## this order: the unit is gone; it is not a mining drone of `team`; there is no such node; the node
+## has no ore rocks (a lane turret site). Nothing else is refused: a node the enemy holds, or a node
+## that has run dry, is accepted, as the order for a new drone accepts any node.
+func send_drone_blocker(team: int, uid: int, node_id: String) -> String:
+	var u: Variant = world.by_uid.get(uid)
+	if u == null or not is_instance_valid(u) or not (u as Unit).alive:
+		return OrderKinds.TEXT_GONE_UNIT
+	if not (u is MiningDrone) or (u as MiningDrone).team != team:
+		return OrderKinds.TEXT_VALUE
+	var n := world.node_by_id(node_id)
+	if n == null:
+		return "No such node"
+	if n.ore.size() == 0:
+		return OrderKinds.TEXT_VALUE
+	return ""
+
+
+## Send mining drone `uid` of team `team` to ore node `node_id`: it takes that node as its own
+## (MiningDrone.send_to), goes there straight away, keeps the ore it carries and delivers it on
+## its next trip home. Returns "" or the reason it can't (send_drone_blocker).
+func send_drone(team: int, uid: int, node_id: String) -> String:
+	var o := _order(team, OrderKinds.DRONE_SEND, {"node": node_id}, "unit", uid)
+	if o.is_empty():
+		return _early
+	var blocked := send_drone_blocker(team, uid, node_id)
+	if blocked != "":
+		return _done(o, blocked)
+	(world.by_uid[uid] as MiningDrone).send_to(node_id)
 	return _done(o, "")
 
 

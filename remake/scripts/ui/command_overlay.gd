@@ -11,7 +11,8 @@ extends Node2D
 ## back via Events.admiral_result. A right click or Esc "disarms" it.
 ## Tools: "bay", "ward", "waypoint", "move" (the mothership), "rally" (the spot where new fleet ships gather: it
 ## sends no order, the card and the production panel read the spot from here), "turret" and "torpedo" (a click on
-## a resource node), and "verb_move" (the next click sends the selected squadrons there).
+## a resource node), "verb_move" (the next click sends the selected squadrons there) and the goal verbs "verb_defend", "verb_escort",
+## "verb_push", "verb_merge" and "verb_goal" (the next click sends that order, see RtsSquadOrders.verb_at).
 ## Selection (RtsSelect holds the rules): with no tool armed a left click ACTS ON RELEASE (the press only notes
 ## where it began), a drag of more than 6 screen pixels draws a box, Shift (or the sticky `add_mode`) adds and
 ## toggles, a double-click takes every squadron of that hull on screen and Ctrl+double-click on the whole map.
@@ -19,9 +20,9 @@ extends Node2D
 ## sends `selection_changed`. Selection by clicking works while the Admiral is docked (or the board is open
 ## over a flying Admiral), never while their own ship is flying: there a click fires the guns.
 ## Orders: every order is `world.orders.submit(Order.make(kind, team, ADMIRAL_SEAT, true, ...))`. The smart
-## right-click (smart_order_at) sends Move for a click on open ground and Attack for a click on an enemy unit the
-## team sees (the enemy mothership too); our pilot, a structure of ours or our mothership says "<Verb>: later stage"
-## and sends nothing. The answer of the last click is in `result_text`
+## right-click (smart_order_at) sends Move for a click on open ground, Attack for a click on an enemy unit the
+## team sees (the enemy mothership too), Escort for a friendly ship and Defend for a structure of ours; our mothership says
+## "Retreat: later stage" and sends nothing. The answer of the last click is in `result_text`
 ## (the card prints it) and arrives by `result_changed`.
 ## This node lives under World (not under the HUD), so it draws in world positions and gets the clicks the
 ## HUD's buttons didn't take, before the ship's guns do. For everyone it also draws the team's rally waypoint
@@ -48,9 +49,15 @@ const TOOL_TEXT := {
 	"turret": "Click a resource node to build a turret there",
 	"torpedo": "Click one of your inner turret sites to build a torpedo turret",
 	"verb_move": "Click where the selected squadrons should move",
+	"verb_defend": "Click a point or one of your units or structures for the squadrons to defend",
+	"verb_escort": "Click a friendly ship for the squadrons to escort",
+	"verb_push": "Click inside a lane for the squadrons to push it",
+	"verb_merge": "Click the squadron the selected ones should merge into",
+	"verb_goal": "Click a ship to escort, a lane to push or a spot to defend",
 }
-## The verb a right-click on each kind of target would be when its order comes with a later stage (an enemy sends Attack now).
-const LATER_VERBS := {"pilot": "Escort", "structure": "Defend", "base": "Retreat"}
+## The verb a right-click on each kind of target would be when its order comes with a later stage (an enemy sends Attack now,
+## a friendly ship Escort, a structure of ours Defend).
+const LATER_VERBS := {"base": "Retreat"}
 
 ## The game world (set by setup()).
 var world: World
@@ -86,6 +93,10 @@ var _press_world := Vector2.ZERO
 var _dc_done := false
 ## The font for labels drawn on the map (Godot's built-in default font).
 var _font: Font
+## RT6 C1: the far-zoom icon layer (made by setup()).
+var icons: IconLayer = null
+## The small upgrade marks on the viewer's ships at close zoom (made by setup(); see MarksLayer).
+var marks: MarksLayer = null
 
 
 ## Remember the world, and draw above most of the game (z_index 20: a
@@ -98,6 +109,16 @@ func setup(w: World) -> void:
 	# The overlay keeps taking clicks and drawing while the match is held paused (the command pause), so the Admiral can still
 	# select and give orders.
 	process_mode = Node.PROCESS_MODE_ALWAYS
+	# RT6 C1: the far-zoom icon layer, under this node (see IconLayer): it draws nothing until the view is wider than the icon line.
+	icons = IconLayer.new()
+	icons.name = "IconLayer"
+	add_child(icons)
+	icons.setup(w, self)
+	# The upgrade marks on ships, one layer beside it (it holds nothing while the icons are on).
+	marks = MarksLayer.new()
+	marks.name = "MarksLayer"
+	add_child(marks)
+	marks.setup(w, self)
 
 
 ## Is the human playing as the Admiral?
@@ -111,16 +132,17 @@ func can_command() -> bool:
 	return is_admiral() and world.phase == "play"
 
 
-## May a map click select now: the Admiral docked, or the board open (a flying Admiral's left click fires the guns).
+## May a map click select now: the Admiral docked, or in mode 3 (the command view or the board open while flying; a
+## flying Admiral's left click otherwise fires the guns).
 func select_allowed() -> bool:
-	return can_command() and (world.teams[team].admiral_docked or world.board_open)
+	return can_command() and (world.teams[team].admiral_docked or world.mode3())
 
 
 ## Arm tool `t`, so the next map click uses it. The verb "verb_move" needs a selection first.
 func arm(t: String) -> void:
 	if not can_command():
 		return
-	if t == "verb_move" and sel_squads.is_empty():
+	if t.begins_with("verb_") and sel_squads.is_empty():
 		say("Select squadrons first", false)
 		return
 	tool = t
@@ -152,7 +174,7 @@ func tool_text() -> String:
 
 ## The verb word the cursor carries for the armed tool ("Move" for the Move verb), or "" for the map tools.
 func verb_label() -> String:
-	return "Move" if tool == "verb_move" else ""
+	return str(RtsSquadOrders.VERB_LABELS.get(tool, ""))
 
 
 ## Why the armed tool can't go at world point `p` (AdmiralCommand's
@@ -169,7 +191,7 @@ func blocker_at(p: Vector2) -> String:
 			if b == "" and not world.map.in_open_lane(p):
 				b = "Too big for the jungle: pick a lane or the base"
 			return b
-		"verb_move":
+		"verb_move", "verb_defend", "verb_escort", "verb_push", "verb_merge", "verb_goal":
 			if sel_squads.is_empty():
 				return "Select squadrons first"
 			if not Rect2(0.0, 0.0, MapLayout.W, MapLayout.H).has_point(p):
@@ -240,6 +262,8 @@ func apply_at(p: Vector2) -> void:
 				say("%s: %s" % ["Torpedo turret" if tool == "torpedo" else "Turret", msg if msg != "" else "ordered at " + Rules.display_label(n.node_name)], msg == "")
 		"verb_move":
 			msg = RtsSquadOrders.send(self, OrderKinds.MOVE, "point", at, sel_squads, "Move")
+		"verb_defend", "verb_escort", "verb_push", "verb_merge", "verb_goal":
+			msg = RtsSquadOrders.verb_at(self, tool, p)
 		_:
 			# An order that a feature module added (CommandOrders).
 			if cmd.orders.has(tool):
@@ -248,11 +272,24 @@ func apply_at(p: Vector2) -> void:
 		tool = ""
 
 
-## A right click at world point `p` on the minimap: cancels an armed tool; otherwise nothing (RT6 owns the minimap's
-## right click).
-func order_at(_p: Vector2) -> void:
+## A right click at world point `p` on the minimap (RT6 B1): it cancels an armed map tool (or the armed Move verb), as it always
+## did; with none armed it gives the selected squadrons a Move to `p`, through the same call and order queue as the armed verb's
+## left click (apply_at) and the main view's right click, so the match log carries it. Move only, never Attack, even when
+## an attack verb is armed (that verb is put away and the click is a Move). With nothing selected it sends nothing and says
+## "Select squadrons first". With the setting "Minimap orders" off (Minimap.orders_on) it sends nothing and says so. The
+## camera stays put (the minimap moves it only for a left click).
+func order_at(p: Vector2) -> void:
 	if tool != "":
+		var attack := tool.begins_with("verb_attack") or tool.begins_with("attack")
 		disarm()
+		if not attack:
+			return
+	if not can_command():
+		return
+	if not Minimap.orders_on:
+		say("Minimap orders are off (pause menu)", false)
+		return
+	RtsSquadOrders.send(self, OrderKinds.MOVE, "point", Order.point(p), sel_squads, "Move")
 
 
 # --- the selection -----------------------------------------------------------------------------
@@ -380,8 +417,10 @@ func _unhandled_input(event: InputEvent) -> void:
 			if tool != "":
 				disarm()
 				get_viewport().set_input_as_handled()
-			elif select_allowed() and not sel_squads.is_empty():
-				RtsSquadOrders.smart_order_at(self, p)
+			elif select_allowed() and (not sel_squads.is_empty() or world.mode3()):
+				# In mode 3 the click is swallowed even with nothing selected, so it never fires the special.
+				if not sel_squads.is_empty():
+					RtsSquadOrders.smart_order_at(self, p)
 				get_viewport().set_input_as_handled()
 	elif event is InputEventMouseMotion and _press_screen != Vector2.INF and not _dc_done:
 		var mm := event as InputEventMouseMotion

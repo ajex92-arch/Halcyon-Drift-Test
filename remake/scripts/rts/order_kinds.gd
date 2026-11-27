@@ -21,11 +21,13 @@ extends RefCounted
 ## WHO USES IT: Order (the record), OrderQueue and OrderChecks (the tiers), AdmiralCommand
 ## (the words), RtsEvents and AlertList (the codes), the screens (to build records),
 ## and tests/order_check.gd, which walks every table. The squad kinds are
-## only named here; the production kinds are registered by ProductionOrders.
+## only named here; the production kinds are registered by ProductionOrders and the practice range's
+## switches (PRACTICE) by PracticeOrders.
 
 # --- the kinds -----------------------------------------------------------------
 ## The Admiral's orders of today's game.
 const DRONE := "DRONE"  # order one more mining drone
+const DRONE_SEND := "DRONE_SEND"  # send a mining drone to an ore node
 const MODULE := "MODULE"  # build a mothership module
 const RESEARCH := "RESEARCH"  # start a research
 const TURRET := "TURRET"  # build a turret at a node
@@ -66,8 +68,11 @@ const MERGE := "MERGE"  # later
 const PING := "PING"  # later
 const REQUEST := "REQUEST"  # later
 const ANSWER := "ANSWER"  # later
-const DEPUTY := "DEPUTY"  # later
+const DEPUTY := "DEPUTY"  # the human seat's switch and preset of the deputy (Deputy.apply_order)
 const SET_POSTURE := "SET_POSTURE"  # later: reserved
+## The practice range's switches (waves, camps, money, cooldowns): one kind, the switch is a setting.
+## Every match has its handler; outside a practice range every such order is refused.
+const PRACTICE := "PRACTICE"  # a practice range switch
 
 ## Every kind there is.
 const ALL := [
@@ -76,17 +81,20 @@ const ALL := [
 	ESCORT, ATTACK, HOLD, MOVE, GUARD, SET_FORMATION, SET_STANCE,
 	PRODUCE, CANCEL, MOVE_ITEM, HOLD_ITEM, SET_REPEAT, SET_RALLY,
 	ATTACK_MOVE, PATROL, STOP, DEFEND, PUSH_LANE, RETREAT, MERGE, PING, REQUEST, ANSWER, DEPUTY, SET_POSTURE,
+	PRACTICE,
+	DRONE_SEND,
 ]
 ## The squad orders.
 const SQUADRON_KINDS := [ESCORT, ATTACK, HOLD, MOVE, GUARD, SET_FORMATION, SET_STANCE]
-## The orders a BOUGHT squadron (the Admiral's, made by the yard) takes: Move, Hold and Stop on a point, and Attack on
-## an enemy unit (the smart right-click, the mothership included). Every other kind sent to one is refused "Comes with
-## a later stage". The command card lights a cell only when its kind is in this list; a later stage widens it.
-const BOUGHT_KINDS := [MOVE, HOLD, STOP, ATTACK]
+## The orders a BOUGHT squadron (the Admiral's, made by the yard) takes: Move, Hold and Stop on a point, Attack on an enemy
+## unit (the smart right-click, the mothership included), the goals Defend (a point, one of our units or a lane), Escort (a
+## friendly ship) and Push lane, Merge into a host squadron, and the stance and formation orders. Every other kind sent to one is
+## refused "Comes with a later stage". The command card lights a cell only when its kind is in this list; a later stage widens it.
+const BOUGHT_KINDS := [MOVE, HOLD, STOP, ATTACK, DEFEND, ESCORT, PUSH_LANE, MERGE, SET_STANCE, SET_FORMATION]
 ## The ship yard's orders.
 const PRODUCTION_KINDS := [PRODUCE, CANCEL, MOVE_ITEM, HOLD_ITEM, SET_REPEAT, SET_RALLY]
 ## The kinds that AdmiralCommand carries out (the queue calls its functions).
-const BUILT_IN := [DRONE, MODULE, RESEARCH, TURRET, POST, BAY, WARD, WAYPOINT, MOTHERSHIP_MOVE, SIEGE]
+const BUILT_IN := [DRONE, MODULE, RESEARCH, TURRET, POST, BAY, WARD, WAYPOINT, MOTHERSHIP_MOVE, SIEGE, DRONE_SEND]
 ## Kinds that take effect the moment they are submitted, never queued.
 const AT_ONCE := [GAME_SPEED]
 ## The game speeds an order may name, in whole hundredths of normal.
@@ -110,9 +118,10 @@ const TARGETS := {
 	SET_FORMATION: ["none"], SET_STANCE: ["none"],
 	PRODUCE: ["none"], CANCEL: ["item"], MOVE_ITEM: ["item"], HOLD_ITEM: ["item"], SET_REPEAT: ["id"],
 	SET_RALLY: ["item", "squadron"],
-	ATTACK_MOVE: ["point"], PATROL: ["point"], STOP: ["none"], DEFEND: ["point", "unit"], PUSH_LANE: ["lane"],
+	ATTACK_MOVE: ["point"], PATROL: ["point"], STOP: ["none"], DEFEND: ["point", "unit", "lane"], PUSH_LANE: ["lane"],
 	RETREAT: ["none"], MERGE: ["squadron"], PING: ["point"], REQUEST: ["none"], ANSWER: ["none"],
-	DEPUTY: ["none"], SET_POSTURE: ["none"],
+	DEPUTY: ["none"], SET_POSTURE: ["none"], PRACTICE: ["none", "id"],
+	DRONE_SEND: ["unit"],
 }
 ## The settings each kind may carry: key -> [type, allowed, required]. Type "str"
 ## is a short word with no space or quote; "int" is a whole number inside the
@@ -147,6 +156,8 @@ const SETTINGS := {
 	PING: {}, REQUEST: {}, ANSWER: {},
 	DEPUTY: {"preset": ["str", [], true]},
 	SET_POSTURE: {},
+	PRACTICE: {"switch": ["enum", PracticeSwitches.WORDS, true], "on": ["enum", [0, 1], false]},
+	DRONE_SEND: {"node": ["str", [], true]},
 }
 ## When each kind takes effect: "next" = a screen's order at the start of the next
 ## tick and the computer's in its think; "once" = at once (never queued); "same" =
@@ -157,8 +168,10 @@ const APPLIES := {
 	SIEGE: "same", GAME_SPEED: "once", PAUSE: "later",
 	ESCORT: "next", ATTACK: "next", HOLD: "next", MOVE: "next", GUARD: "next", SET_FORMATION: "next", SET_STANCE: "next",
 	PRODUCE: "next", CANCEL: "next", MOVE_ITEM: "next", HOLD_ITEM: "next", SET_REPEAT: "next", SET_RALLY: "next",
-	ATTACK_MOVE: "later", PATROL: "later", STOP: "next", DEFEND: "later", PUSH_LANE: "later", RETREAT: "later",
-	MERGE: "later", PING: "later", REQUEST: "later", ANSWER: "later", DEPUTY: "later", SET_POSTURE: "later",
+	ATTACK_MOVE: "later", PATROL: "later", STOP: "next", DEFEND: "next", PUSH_LANE: "next", RETREAT: "later",
+	MERGE: "next", PING: "later", REQUEST: "later", ANSWER: "later", DEPUTY: "next", SET_POSTURE: "later",
+	PRACTICE: "next",
+	DRONE_SEND: "next",
 }
 ## The word Events.admiral_result carries for each kind ("none": no toast). The
 ## first nine are the words the HUD, the fun probe and the audits already read.
@@ -172,6 +185,8 @@ const ACTION := {
 	PRODUCE: "produce", CANCEL: "yard", MOVE_ITEM: "yard", HOLD_ITEM: "yard", SET_REPEAT: "yard", SET_RALLY: "yard",
 	ATTACK_MOVE: "none", PATROL: "none", STOP: "none", DEFEND: "none", PUSH_LANE: "none", RETREAT: "none",
 	MERGE: "none", PING: "none", REQUEST: "none", ANSWER: "none", DEPUTY: "none", SET_POSTURE: "none",
+	PRACTICE: "none",
+	DRONE_SEND: "drone_send",
 }
 
 # --- refusal texts and codes ----------------------------------------------------
@@ -211,6 +226,12 @@ const REASONS := [
 	["No target under the reticle", "value"], ["No big ship under the reticle", "value"],
 	[TEXT_LATE, "late"], [TEXT_ONLINE, "online"], [TEXT_SEAT, "seat"], [TEXT_REPLAY, "seat"],
 	[TEXT_UNBUILT, "unbuilt"], [TEXT_UNKNOWN, "unknown"], [TEXT_DUPLICATE, "duplicate"],
+	# The practice range's switches (the words are in PracticeSwitches, the codes are the old ones).
+	[PracticeSwitches.TEXT_ONLY_RANGE, "seat"],
+	[PracticeSwitches.TEXT_PURSE_FULL, "room"], [PracticeSwitches.TEXT_TREASURY_FULL, "room"],
+	[PracticeSwitches.TEXT_WAVES_FULL, "room"], [PracticeSwitches.TEXT_WAIT, "time"],
+	[PracticeSwitches.TEXT_NO_CAMP, "place"], [PracticeSwitches.TEXT_NO_JUNGLE, "gone"],
+	[PracticeSwitches.TEXT_NOTHING_TO_RESET, "gone"],
 ]
 ## Every code a refusal can have ("ok" is a success).
 const CODES := ["money", "room", "unlock", "place", "time", "gone", "late", "online", "seat", "value", "unbuilt", "unknown", "duplicate"]
@@ -255,7 +276,7 @@ static func may_send(kind: String, seat: int, squad = null) -> bool:
 	match kind:
 		SIEGE, WAYPOINT, MOTHERSHIP_MOVE, DEPUTY:
 			return admiral
-		PING, REQUEST, ANSWER:
+		PING, REQUEST, ANSWER, PRACTICE:
 			return seat >= 0 and seat <= Rules.ADMIRAL_SEAT
 		PAUSE, SET_POSTURE:
 			return true

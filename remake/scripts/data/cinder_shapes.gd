@@ -352,102 +352,129 @@ const HULLS := {
 		"nozzles": [Vector3(-12.2, 0, 0.6), Vector3(-14.9, 2.6, 0.9), Vector3(-14.9, -2.6, 0.9)],
 		"jet": [Vector2(-16, 0), Vector2(-2, 6.5)],
 	},
-	# Reaver: a long spine with layers of swept blades and a forked prow.
+	# Reaver: a long blade ship with straight flanks, a notch cut for each big gun and a bow spike with a collar.
 	"destroyer": {
 		"sil": [
-			Vector2(18, 0), Vector2(14.7, 1.3), Vector2(15.7, 2.2), Vector2(13, 4), Vector2(10.1, 4.5), Vector2(8.3, 4.2),
-			Vector2(7, 4.8), Vector2(2.9, 5.6), Vector2(-2.4, 5.6), Vector2(-4.7, 6.2), Vector2(-9.2, 6.5), Vector2(-13.5, 6.3),
-			Vector2(-17.5, 5.6), Vector2(-13.4, 5.7), Vector2(-9.3, 5.3), Vector2(-5.1, 4.4), Vector2(-0.9, 2.6), Vector2(-15, 3.2),
-			Vector2(-18, 2.4), Vector2(-16, 0), Vector2(-18, -2.4), Vector2(-15, -3.2), Vector2(-0.9, -2.6), Vector2(-5.1, -4.4),
-			Vector2(-9.3, -5.3), Vector2(-13.4, -5.7), Vector2(-17.5, -5.6), Vector2(-13.5, -6.3), Vector2(-9.2, -6.5), Vector2(-4.7, -6.2),
-			Vector2(-2.4, -5.6), Vector2(2.9, -5.6), Vector2(7, -4.8), Vector2(8.3, -4.2), Vector2(10.1, -4.5), Vector2(13, -4),
-			Vector2(15.7, -2.2), Vector2(14.7, -1.3),
+				Vector2(18, 0), Vector2(14, 0.9), Vector2(12.6, 2.4), Vector2(9, 5.6), Vector2(7, 6), Vector2(5.36, 6),
+				Vector2(4.8, 5.2), Vector2(2.8, 5.2), Vector2(2.24, 6), Vector2(-1.84, 6), Vector2(-2.4, 5.2), Vector2(-4.4, 5.2),
+				Vector2(-4.96, 6), Vector2(-11, 6), Vector2(-16.8, 6.4), Vector2(-15.6, 5), Vector2(-18, 2.6), Vector2(-16.2, 0),
+				Vector2(-18, -2.6), Vector2(-15.6, -5), Vector2(-16.8, -6.4), Vector2(-11, -6), Vector2(-4.96, -6), Vector2(-4.4, -5.2),
+				Vector2(-2.4, -5.2), Vector2(-1.84, -6), Vector2(2.24, -6), Vector2(2.8, -5.2), Vector2(4.8, -5.2), Vector2(5.36, -6),
+				Vector2(7, -6), Vector2(9, -5.6), Vector2(12.6, -2.4), Vector2(14, -0.9),
 		],
 		"lo": [
-			Vector2(18, 0), Vector2(13, 4), Vector2(-4.7, 6.2), Vector2(-17.5, 5.6), Vector2(-9.3, 5.3), Vector2(-0.9, 2.6),
-			Vector2(-18, 2.4), Vector2(-16, 0), Vector2(-18, -2.4), Vector2(-0.9, -2.6), Vector2(-9.3, -5.3), Vector2(-17.5, -5.6),
-			Vector2(-13.5, -6.3), Vector2(13, -4),
+				Vector2(18, 0), Vector2(12.6, 2.4), Vector2(7, 6), Vector2(-11, 6), Vector2(-16.8, 6.4), Vector2(-18, 2.6),
+				Vector2(-16.2, 0), Vector2(-18, -2.6), Vector2(-16.8, -6.4), Vector2(-11, -6), Vector2(7, -6), Vector2(12.6, -2.4),
 		],
 		"parts": [
 			{"shade": 0, "pts": [
-				Vector2(2.2, 0.8), Vector2(-1.3, 2.9), Vector2(-5.1, 4.4), Vector2(-9.3, 5.3), Vector2(-13.4, 5.7), Vector2(-17.5, 5.6),
-				Vector2(-13.5, 6.3), Vector2(-9.2, 6.5), Vector2(-4.7, 6.2), Vector2(-0.4, 5.1), Vector2(3.8, 3.2),
+				Vector2(7, 3.8), Vector2(-14, 4.4), Vector2(-14.4, 3.6), Vector2(6, 3),
 			]},
 			{"shade": 0, "pts": [
-				Vector2(3.8, -3.2), Vector2(-0.4, -5.1), Vector2(-4.7, -6.2), Vector2(-9.2, -6.5), Vector2(-13.5, -6.3), Vector2(-17.5, -5.6),
-				Vector2(-13.4, -5.7), Vector2(-9.3, -5.3), Vector2(-5.1, -4.4), Vector2(-1.3, -2.9), Vector2(2.2, -0.8),
+				Vector2(6, -3), Vector2(-14.4, -3.6), Vector2(-14, -4.4), Vector2(7, -3.8),
 			]},
-			{"shade": 1, "pts": [
-				Vector2(18, 0), Vector2(15.5, 0.9), Vector2(13, 2.2), Vector2(10, 1.6), Vector2(6, 2), Vector2(0, 2.6),
-				Vector2(-8, 3), Vector2(-15, 3.2), Vector2(-18, 2.4), Vector2(-16, 0), Vector2(-18, -2.4), Vector2(-15, -3.2),
-				Vector2(-8, -3), Vector2(0, -2.6), Vector2(6, -2), Vector2(10, -1.6), Vector2(13, -2.2), Vector2(15.5, -0.9),
+			{"shade": 0, "pts": [
+				Vector2(-14.2, 0), Vector2(-14.2, 3.8), Vector2(-15.6, 5), Vector2(-18, 2.6), Vector2(-16.2, 0),
+			]},
+			{"shade": 0, "pts": [
+				Vector2(-16.2, 0), Vector2(-18, -2.6), Vector2(-15.6, -5), Vector2(-14.2, -3.8), Vector2(-14.2, 0),
+			]},
+			{"shade": 2, "pts": [
+				Vector2(9, 5.6), Vector2(7, 6), Vector2(5.36, 6), Vector2(4.8, 5.2), Vector2(2.8, 5.2), Vector2(2.24, 6),
+				Vector2(-1.84, 6), Vector2(-2.4, 5.2), Vector2(-4.4, 5.2), Vector2(-4.96, 6), Vector2(-11, 6), Vector2(-16.8, 6.4),
+				Vector2(-14, 4.4), Vector2(7, 3.8),
+			]},
+			{"shade": 2, "pts": [
+				Vector2(7, -3.8), Vector2(-14, -4.4), Vector2(-16.8, -6.4), Vector2(-11, -6), Vector2(-4.96, -6), Vector2(-4.4, -5.2),
+				Vector2(-2.4, -5.2), Vector2(-1.84, -6), Vector2(2.24, -6), Vector2(2.8, -5.2), Vector2(4.8, -5.2), Vector2(5.36, -6),
+				Vector2(7, -6), Vector2(9, -5.6),
+			]},
+			{"shade": 2, "pts": [
+				Vector2(14, 0.9), Vector2(12.6, 2.4), Vector2(11, 3.8), Vector2(10.8, 2.4), Vector2(12.8, 0.9),
+			]},
+			{"shade": 2, "pts": [
+				Vector2(12.8, -0.9), Vector2(10.8, -2.4), Vector2(11, -3.8), Vector2(12.6, -2.4), Vector2(14, -0.9),
+			]},
+			{"shade": 2, "pts": [
+				Vector2(16.6, 0), Vector2(14, 0.45), Vector2(10.6, 0.55), Vector2(10.6, -0.55), Vector2(14, -0.45),
 			]},
 		],
 		"veins": [
 			[
-				Vector2(16, 0), Vector2(10, 0), Vector2(5, 2.2), Vector2(0, 4.4), Vector2(-6, 5.4), Vector2(-10, 5.6), Vector2(-6, 5.4), Vector2(0, 4.4),
-				Vector2(5, 2.2), Vector2(10, 0), Vector2(5, -2.2), Vector2(0, -4.4), Vector2(-6, -5.4), Vector2(-10, -5.6), Vector2(-6, -5.4), Vector2(0, -4.4),
-				Vector2(5, -2.2), Vector2(10, 0), Vector2(9.5, 0), Vector2(12, 0.8), Vector2(9.5, 0), Vector2(12, -0.8), Vector2(9.5, 0), Vector2(2.5, 0),
-				Vector2(5, 1.4), Vector2(2.5, 0), Vector2(5, -1.4), Vector2(2.5, 0), Vector2(-4.5, 0), Vector2(-2, 1.6), Vector2(-4.5, 0), Vector2(-2, -1.6),
-				Vector2(-4.5, 0), Vector2(-11.5, 0), Vector2(-9, 1.8), Vector2(-11.5, 0), Vector2(-9, -1.8), Vector2(-11.5, 0), Vector2(-14, 0),
+				Vector2(16, 0), Vector2(8.8, 0), Vector2(7.2, 4.4), Vector2(8.8, 0), Vector2(7.2, -4.4), Vector2(8.8, 0), Vector2(5.6, 0), Vector2(3.8, 4.5),
+				Vector2(4.8, 5.2), Vector2(5.36, 6), Vector2(4.8, 5.2), Vector2(2.8, 5.2), Vector2(2.24, 6), Vector2(2.8, 5.2), Vector2(3.8, 4.5), Vector2(5.6, 0),
+				Vector2(3.8, -4.5), Vector2(4.8, -5.2), Vector2(5.36, -6), Vector2(4.8, -5.2), Vector2(2.8, -5.2), Vector2(2.24, -6), Vector2(2.8, -5.2), Vector2(3.8, -4.5),
+				Vector2(5.6, 0), Vector2(1.9, 0), Vector2(0.2, 4.5), Vector2(1.9, 0), Vector2(0.2, -4.5), Vector2(1.9, 0), Vector2(-1.6, 0), Vector2(-3.4, 4.5),
+				Vector2(-2.4, 5.2), Vector2(-1.84, 6), Vector2(-2.4, 5.2), Vector2(-4.4, 5.2), Vector2(-4.96, 6), Vector2(-4.4, 5.2), Vector2(-3.4, 4.5), Vector2(-1.6, 0),
+				Vector2(-3.4, -4.5), Vector2(-2.4, -5.2), Vector2(-1.84, -6), Vector2(-2.4, -5.2), Vector2(-4.4, -5.2), Vector2(-4.96, -6), Vector2(-4.4, -5.2), Vector2(-3.4, -4.5),
+				Vector2(-1.6, 0), Vector2(-14, 0),
 			],
 		],
-		# Four nozzles: a pair on the spine either side of the notch, a smaller pair on the stern tips.
-		"nozzles": [Vector3(-15, 1, 0.65), Vector3(-15, -1, 0.65), Vector3(-16.7, 2.25, 0.5), Vector3(-16.7, -2.25, 0.5)],
+		# Four nozzles: a pair on the spine, a smaller pair on the stern thorns.
+		"nozzles": [Vector3(-16.3, 1.1, 0.65), Vector3(-16.3, -1.1, 0.65), Vector3(-16.9, 3.2, 0.5), Vector3(-16.9, -3.2, 0.5)],
 		"jet": [Vector2(-18, 0), Vector2(-4, 5.5)],
 	},
-	# Tyrant: a heavy spine with a three-pronged prow, huge forward claws and back-swept under-blades.
+	# Tyrant: a heavy ship with straight flanks, a thorn ridge along each side and one long bow spike (the claws drawn back into it).
 	"battlecruiser": {
 		"sil": [
-			Vector2(18, 0), Vector2(15, 1.2), Vector2(14.5, 3.4), Vector2(11, 2.6), Vector2(4.1, 3.1), Vector2(4.6, 4.3),
-			Vector2(0.6, 5.6), Vector2(7, 5.5), Vector2(11, 5), Vector2(7, 6.1), Vector2(2.4, 6.8), Vector2(-2.4, 7.1),
-			Vector2(-6.9, 7), Vector2(-9.5, 6.4), Vector2(-16, 6), Vector2(-11.3, 5.8), Vector2(-13.5, 4.2), Vector2(-12.8, 3.8),
-			Vector2(-14, 3.8), Vector2(-18, 3), Vector2(-16, 0), Vector2(-18, -3), Vector2(-14, -3.8), Vector2(-12.8, -3.8),
-			Vector2(-13.5, -4.2), Vector2(-11.3, -5.8), Vector2(-16, -6), Vector2(-9.5, -6.4), Vector2(-6.9, -7), Vector2(-2.4, -7.1),
-			Vector2(2.4, -6.8), Vector2(7, -6.1), Vector2(11, -5), Vector2(7, -5.5), Vector2(0.6, -5.6), Vector2(4.6, -4.3),
-			Vector2(4.1, -3.1), Vector2(11, -2.6), Vector2(14.5, -3.4), Vector2(15, -1.2),
+				Vector2(18, 0), Vector2(13.6, 1), Vector2(14.4, 2.2), Vector2(11, 3.6), Vector2(8.4, 6.2), Vector2(5.8, 7),
+				Vector2(5.4, 6.4), Vector2(1.8, 7), Vector2(1.4, 6.4), Vector2(-2.2, 7), Vector2(-2.6, 6.4), Vector2(-6.2, 7),
+				Vector2(-6.6, 6.4), Vector2(-10.2, 7), Vector2(-10.6, 6.4), Vector2(-16.4, 6.6), Vector2(-18, 5.2), Vector2(-18, 3),
+				Vector2(-16.2, 0), Vector2(-18, -3), Vector2(-18, -5.2), Vector2(-16.4, -6.6), Vector2(-10.6, -6.4), Vector2(-10.2, -7),
+				Vector2(-6.6, -6.4), Vector2(-6.2, -7), Vector2(-2.6, -6.4), Vector2(-2.2, -7), Vector2(1.4, -6.4), Vector2(1.8, -7),
+				Vector2(5.4, -6.4), Vector2(5.8, -7), Vector2(8.4, -6.2), Vector2(11, -3.6), Vector2(14.4, -2.2), Vector2(13.6, -1),
 		],
 		"lo": [
-			Vector2(18, 0), Vector2(14.5, 3.4), Vector2(4.1, 3.1), Vector2(0.6, 5.6), Vector2(11, 5), Vector2(2.4, 6.8),
-			Vector2(-16, 6), Vector2(-11.3, 5.8), Vector2(-18, 3), Vector2(-18, -3), Vector2(-11.3, -5.8), Vector2(-16, -6),
-			Vector2(-6.9, -7), Vector2(11, -5), Vector2(0.6, -5.6),
+				Vector2(18, 0), Vector2(14.4, 2.2), Vector2(8.4, 6.2), Vector2(5.8, 7), Vector2(-16.4, 6.6), Vector2(-18, 3),
+				Vector2(-16.2, 0), Vector2(-18, -3), Vector2(-16.4, -6.6), Vector2(5.8, -7), Vector2(8.4, -6.2), Vector2(14.4, -2.2),
 		],
 		"parts": [
 			{"shade": 0, "pts": [
-				Vector2(3.4, 1.7), Vector2(0, 3.4), Vector2(-3.5, 4.6), Vector2(-7.3, 5.4), Vector2(-11.4, 5.8), Vector2(-16, 6),
-				Vector2(-11.4, 6.4), Vector2(-7.2, 6.5), Vector2(-3.2, 6.3), Vector2(0.7, 5.6), Vector2(4.6, 4.3),
+				Vector2(11, 2.4), Vector2(8, 4.4), Vector2(-10.6, 4.4), Vector2(-14.4, 3.8), Vector2(-14.4, 2.9), Vector2(-10, 3),
+				Vector2(7.4, 3.1), Vector2(10.4, 1.6),
 			]},
 			{"shade": 0, "pts": [
-				Vector2(4.6, -4.3), Vector2(0.7, -5.6), Vector2(-3.2, -6.3), Vector2(-7.2, -6.5), Vector2(-11.4, -6.4), Vector2(-16, -6),
-				Vector2(-11.4, -5.8), Vector2(-7.3, -5.4), Vector2(-3.5, -4.6), Vector2(0, -3.4), Vector2(3.4, -1.7),
+				Vector2(10.4, -1.6), Vector2(7.4, -3.1), Vector2(-10, -3), Vector2(-14.4, -2.9), Vector2(-14.4, -3.8), Vector2(-10.6, -4.4),
+				Vector2(8, -4.4), Vector2(11, -2.4),
+			]},
+			{"shade": 0, "pts": [
+				Vector2(-13.8, 0), Vector2(-13.8, 5.2), Vector2(-16.9, 6), Vector2(-18, 5.2), Vector2(-18, 3), Vector2(-16.2, 0),
+			]},
+			{"shade": 0, "pts": [
+				Vector2(-16.2, 0), Vector2(-18, -3), Vector2(-18, -5.2), Vector2(-16.9, -6), Vector2(-13.8, -5.2), Vector2(-13.8, 0),
 			]},
 			{"shade": 2, "pts": [
-				Vector2(-13.5, 4.2), Vector2(-10.7, 6.2), Vector2(-6.9, 7), Vector2(-2.4, 7.1), Vector2(2.4, 6.8), Vector2(7, 6.1),
-				Vector2(11, 5), Vector2(7, 5.5), Vector2(2.3, 5.7), Vector2(-2.3, 5.5), Vector2(-6.5, 4.7), Vector2(-9.5, 3.6),
-				Vector2(-10.5, 2.6),
+				Vector2(14.4, 2.2), Vector2(11, 3.6), Vector2(9.8, 3.3), Vector2(12.8, 1.3),
 			]},
 			{"shade": 2, "pts": [
-				Vector2(-10.5, -2.6), Vector2(-9.5, -3.6), Vector2(-6.5, -4.7), Vector2(-2.3, -5.5), Vector2(2.3, -5.7), Vector2(7, -5.5),
-				Vector2(11, -5), Vector2(7, -6.1), Vector2(2.4, -6.8), Vector2(-2.4, -7.1), Vector2(-6.9, -7), Vector2(-10.7, -6.2),
-				Vector2(-13.5, -4.2),
+				Vector2(12.8, -1.3), Vector2(9.8, -3.3), Vector2(11, -3.6), Vector2(14.4, -2.2),
 			]},
-			{"shade": 1, "pts": [
-				Vector2(18, 0), Vector2(15, 1.2), Vector2(14.5, 3.4), Vector2(11, 2.6), Vector2(6, 3), Vector2(0, 3.4),
-				Vector2(-8, 3.8), Vector2(-14, 3.8), Vector2(-18, 3), Vector2(-16, 0), Vector2(-18, -3), Vector2(-14, -3.8),
-				Vector2(-8, -3.8), Vector2(0, -3.4), Vector2(6, -3), Vector2(11, -2.6), Vector2(14.5, -3.4), Vector2(15, -1.2),
+			{"shade": 2, "pts": [
+				Vector2(8.4, 6.2), Vector2(5.8, 7), Vector2(5.4, 6.4), Vector2(1.8, 7), Vector2(1.4, 6.4), Vector2(-2.2, 7),
+				Vector2(-2.6, 6.4), Vector2(-6.2, 7), Vector2(-6.6, 6.4), Vector2(-10.2, 7), Vector2(-10.6, 6.4), Vector2(-13.2, 6.45),
+				Vector2(-11, 4.4), Vector2(7.6, 4.4),
+			]},
+			{"shade": 2, "pts": [
+				Vector2(7.6, -4.4), Vector2(-11, -4.4), Vector2(-13.2, -6.45), Vector2(-10.6, -6.4), Vector2(-10.2, -7), Vector2(-6.6, -6.4),
+				Vector2(-6.2, -7), Vector2(-2.6, -6.4), Vector2(-2.2, -7), Vector2(1.4, -6.4), Vector2(1.8, -7), Vector2(5.4, -6.4),
+				Vector2(5.8, -7), Vector2(8.4, -6.2),
+			]},
+			{"shade": 2, "pts": [
+				Vector2(17, 0), Vector2(13.6, 0.5), Vector2(9, 0.6), Vector2(9, -0.6), Vector2(13.6, -0.5),
 			]},
 		],
 		"veins": [
 			[
-				Vector2(16, 0), Vector2(9, 0), Vector2(5, 2.6), Vector2(0, 4.8), Vector2(-5, 5.8), Vector2(-9, 5), Vector2(-5, 5.8), Vector2(0, 4.8),
-				Vector2(5, 2.6), Vector2(9, 0), Vector2(5, -2.6), Vector2(0, -4.8), Vector2(-5, -5.8), Vector2(-9, -5), Vector2(-5, -5.8), Vector2(0, -4.8),
-				Vector2(5, -2.6), Vector2(9, 0), Vector2(8, 0), Vector2(11, 1.2), Vector2(8, 0), Vector2(11, -1.2), Vector2(8, 0), Vector2(1, 0),
-				Vector2(4, 1.6), Vector2(1, 0), Vector2(4, -1.6), Vector2(1, 0), Vector2(-6, 0), Vector2(-3, 2), Vector2(-6, 0), Vector2(-3, -2),
-				Vector2(-6, 0), Vector2(-13, 0), Vector2(-10, 2.2), Vector2(-13, 0), Vector2(-10, -2.2), Vector2(-13, 0), Vector2(-14, 0),
+				Vector2(16, 0), Vector2(9, 0), Vector2(7.1, 5.4), Vector2(6, 6.7), Vector2(7.1, 5.4), Vector2(9, 0), Vector2(7.1, -5.4), Vector2(6, -6.7),
+				Vector2(7.1, -5.4), Vector2(9, 0), Vector2(5.6, 0), Vector2(3.6, 5.5), Vector2(2.05, 6.7), Vector2(3.6, 5.5), Vector2(5.6, 0), Vector2(3.6, -5.5),
+				Vector2(2.05, -6.7), Vector2(3.6, -5.5), Vector2(5.6, 0), Vector2(1.6, 0), Vector2(-0.4, 5.5), Vector2(-1.95, 6.7), Vector2(-0.4, 5.5), Vector2(1.6, 0),
+				Vector2(-0.4, -5.5), Vector2(-1.95, -6.7), Vector2(-0.4, -5.5), Vector2(1.6, 0), Vector2(-2.4, 0), Vector2(-4.4, 5.5), Vector2(-5.95, 6.7), Vector2(-4.4, 5.5),
+				Vector2(-2.4, 0), Vector2(-4.4, -5.5), Vector2(-5.95, -6.7), Vector2(-4.4, -5.5), Vector2(-2.4, 0), Vector2(-6.4, 0), Vector2(-8.4, 5.5), Vector2(-9.95, 6.7),
+				Vector2(-8.4, 5.5), Vector2(-6.4, 0), Vector2(-8.4, -5.5), Vector2(-9.95, -6.7), Vector2(-8.4, -5.5), Vector2(-6.4, 0), Vector2(-14, 0),
 			],
 		],
-		# Five nozzles: a big one in front of the notch, a medium one each side of it, a small one on each stern tip.
-		"nozzles": [Vector3(-14.8, 0, 1.2), Vector3(-15.8, 1.95, 0.7), Vector3(-15.8, -1.95, 0.7), Vector3(-17, 2.68, 0.4), Vector3(-17, -2.68, 0.4)],
+		# Five nozzles: a big one on the spine, a medium pair beside it, a small pair on the stern thorns.
+		"nozzles": [Vector3(-15, 0, 1.2), Vector3(-16.7, 2, 0.7), Vector3(-16.7, -2, 0.7), Vector3(-17.6, 4, 0.4), Vector3(-17.6, -4, 0.4)],
 		"jet": [Vector2(-18, 0), Vector2(-6, 6.5)],
 	},
 }

@@ -28,8 +28,12 @@ extends RefCounted
 ## What they mean ("_pct" keys are fractions: 0.10 = +10%, -0.30 = 30%
 ## less):
 ##   hull_pct, shield_pct, energy_pct  bigger hull, shield or battery
-##   hull_resist, shield_resist  the share of each hit that is blocked,
-##       added to the hull's own (a ship's total is capped at 0.75)
+##   hull_resist  armour: on a hull with armour sections it adds armour points
+##       instead (ArmourSections.gear_a): a shot of the Fighter cannon loses this
+##       share at full armour, and gear helps less as a section wears. On any other
+##       hull it is the share of each hit that is blocked, added to the hull's own
+##       (a ship's total is capped at 0.75)
+##   shield_resist  the share of each hit that is blocked, added to the shield's own
 ##   shield_regen_pct, energy_regen_pct  faster shield or battery refill
 ##   shield_delay  seconds added to the shield's wait after a hit
 ##       (negative = the shield starts refilling sooner)
@@ -72,7 +76,7 @@ const CATEGORY_LABEL := {"suit": "Flight Suit", "helmet": "Helmet", "stick": "St
 const ITEMS := {
 	# Flight suits: survival.
 	"suit_pressure": {"label": "Pressure Suit", "category": "suit", "price": 350.0, "stats": {"hull_pct": 0.10}, "blurb": "+10% hull."},
-	"suit_armored": {"label": "Armored Flight Suit", "category": "suit", "price": 900.0, "stats": {"hull_resist": 0.08, "hull_pct": 0.05}, "blurb": "Hull takes 8% less damage; +5% hull."},
+	"suit_armored": {"label": "Armored Flight Suit", "category": "suit", "price": 900.0, "stats": {"hull_resist": 0.08, "hull_pct": 0.05}, "blurb": "Thicker armour (an 8% cut to a small gun's hit at full armour, fading as a section is shot away); +5% hull."},
 	"suit_reactive": {"label": "Reactive Weave", "category": "suit", "price": 1000.0, "stats": {"shield_resist": 0.10, "shield_regen_pct": 0.15}, "blurb": "Shields take 10% less damage; +15% shield regeneration."},
 	"suit_courier": {"label": "Courier Suit", "category": "suit", "price": 600.0, "stats": {"income": 0.6, "speed_pct": 0.03}, "blurb": "+0.6 credits/s income; +3% top speed."},
 	# Helmets: awareness and targeting.
@@ -95,7 +99,7 @@ const ITEMS := {
 	"chair_racing": {"label": "Racing Seat", "category": "chair", "price": 500.0, "stats": {"accel_pct": 0.08, "strafe_pct": 0.06}, "blurb": "+8% acceleration, +6% lateral thrust."},
 	"chair_crash": {"label": "Crash Couch", "category": "chair", "price": 800.0, "stats": {"collision_resist": 0.5, "hull_pct": 0.06}, "blurb": "Collision damage halved; +6% hull."},
 	"chair_eject": {"label": "Ejection Seat", "category": "chair", "price": 700.0, "stats": {"respawn_pct": -0.25, "insurance": 0.30}, "blurb": "Respawn 25% faster; get 30% of your ship's value back when it dies."},
-	"chair_command": {"label": "Command Throne", "category": "chair", "price": 1200.0, "stats": {"shield_resist": 0.07, "hull_resist": 0.05}, "blurb": "Shields take 7% and hull 5% less damage."},
+	"chair_command": {"label": "Command Throne", "category": "chair", "price": 1200.0, "stats": {"shield_resist": 0.07, "hull_resist": 0.05}, "blurb": "Shields take 7% less damage; thicker armour (a 5% cut to a small gun's hit at full armour)."},
 	# Implants: high-end.
 	"impl_reflex": {"label": "Reflex Implant", "category": "implant", "price": 1100.0, "stats": {"turn_pct": 0.10, "fire_rate_pct": 0.06}, "blurb": "+10% turn rate, +6% fire rate."},
 	"impl_stim": {"label": "Stim Implant", "category": "implant", "price": 900.0, "stats": {"shield_delay": -1.5, "repair_recv_pct": 0.30}, "blurb": "Shields start recharging 1.5s sooner; +30% repairs received."},

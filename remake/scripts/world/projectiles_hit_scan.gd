@@ -65,9 +65,10 @@ func scan(a: Vector2, b: Vector2, rad: float, burst_r: float, k: int, my_team: i
 		# Cheap reject before the exact swept test (units are children of
 		# the world root, so position == global position). Big units are in
 		# both hashes, so they come twice; the second test changes nothing. It
-		# uses the same size as the exact test (hit_radius()), or it would throw
-		# out a shot the exact test would count.
-		var lim := half + pad + u.hit_radius()
+		# uses the farthest the exact test's shape reaches from the centre
+		# (hit_reach(): the circle's size, or a capsule hull's tip), or it
+		# would throw out a shot the exact test would count.
+		var lim := half + pad + u.hit_reach()
 		if mid.distance_squared_to(u.position) > lim * lim:
 			continue
 		var t := u.hit_t(a, b, pad)

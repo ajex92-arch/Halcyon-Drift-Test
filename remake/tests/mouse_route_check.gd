@@ -16,7 +16,7 @@ extends Node
 ##      of a launch (nothing); launching from the dock by key and by click; an Admiral's Launch needs the hangar open;
 ##   5. the menu doors: Hangar, Help and Menu open and close their panels; the Menu click brings the card back
 ##      from Look around and does nothing while the card shows; a paused game takes no click; Board and Camera for an
-##      Admiral, and nothing for a pilot; the Centre latch;
+##      Admiral; for a pilot only the Camera toggle (C and the click, one press each and back) and no Board; the Centre latch;
 ##   6. slow speed: a click made on a frame without a tick is seen by exactly one tick (0.5x and 1.5x);
 ##   7. the mouse: a left press on the readout and on the block leaves the guns alone; a fire held from the world
 ##      and let go over the block stops; a real click on the energy button changes the routing; the wheel over the
@@ -309,9 +309,15 @@ func _menus(admiral: bool) -> void:
 		_check(not world.board_open and not hud.board.visible, "the Board click closes it")
 	else:
 		var free_was := cam.free
+		# S1a: a pilot has the camera toggle too. One press switches it, a second press (the other route) returns it; both orders.
 		await _key(KEY_C)
+		_check(cam.free != free_was, "one press of C switches a pilot's camera")
 		await _click("center_camera")
-		_check(cam.free == free_was, "C and the Camera click do nothing for a pilot")
+		_check(cam.free == free_was, "the Camera click then returns it (two presses, the two routes, are a round trip)")
+		await _click("center_camera")
+		_check(cam.free != free_was, "one Camera click switches a pilot's camera")
+		await _key(KEY_C)
+		_check(cam.free == free_was, "C then returns it")
 		await _click("admiral_board")
 		_check(hud.scoreboard == null or not hud.scoreboard.visible, "a pilot's Scores click is not wired: no table opens")
 		_check(not cam.centre_latched, "setup: the camera is not latched")

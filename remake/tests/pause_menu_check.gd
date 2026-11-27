@@ -184,6 +184,11 @@ func _run() -> void:
 		_expect(_button(text) != null, "the menu has a %s button" % text)
 	_expect(_button("Full screen") != null or _button("Windowed") != null, "the menu has the window button")
 	_expect((_button("Quit game") == null) == OS.has_feature("web"), "Quit game is there except in a web page")
+	# The card fits the room the HUD leaves it at 1280 x 720 (the Admiral's menu has its win-odds button in the Look around row).
+	var pm: Control = hud.pause_menu
+	var room_h: float = get_viewport().get_visible_rect().size.y - pm._center.offset_top + pm._center.offset_bottom
+	var card_h: float = pm._card.get_combined_minimum_size().y
+	_expect(card_h <= room_h + 0.5, "the card fits its room (%.0f px card, %.0f px room, role %s)" % [card_h, room_h, world.human_role])
 	# The speed row: one button per speed the game has, the world's speed highlighted.
 	var rows := hud.pause_menu.find_children("*", "HBoxContainer", true, false).filter(func(n: Node) -> bool: return n is SpeedRow)
 	_expect(rows.size() == 1 and (rows[0] as SpeedRow).get_children().filter(func(n: Node) -> bool: return n is Button).size() == SpeedControl.all_steps().size(), "the menu has one speed row with a button for every speed (%d)" % SpeedControl.all_steps().size())

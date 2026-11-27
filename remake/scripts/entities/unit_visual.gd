@@ -2,7 +2,7 @@ class_name UnitVisual
 extends Node2D
 ## WHAT THIS IS: the "painter" for every unit that is not a pilot ship:
 ## minions, mining and repair drones, wards, turrets, defense posts, repair bays, derelict
-## camps, snub fighters and the mothership. It changes nothing in the game;
+## camps, snub fighters, the practice range's target drones and the mothership. It changes nothing in the game;
 ## it only draws. (Pilot ships have their own painter, ShipVisual.)
 ##
 ## HOW IT WORKS:
@@ -163,6 +163,7 @@ func _process(_dt: float) -> void:
 		_park_when_unseen()
 	if not _parked:
 		rotation = -unit.rotation
+	if IconLayer.takes_over(self, unit): return  # RT6 C1: past the icon line the icon layer draws a minion
 	if _body != null:
 		# Nobody sees a unit the fog hides, so it is brought up to date when it shows again.
 		if not is_visible_in_tree():
@@ -377,7 +378,7 @@ func _draw_gauge_layer() -> void:
 	if px < 3.0 and unit.hull < unit.hull_max:
 		var m := unit as Minion
 		var size := maxf(m.radius * 1.3, 6.0 * px)
-		_bar_on(_gauge, -size - 6.0 * px, maxf(20.0 * px, size * 2.0), unit.hull_frac(), Palette.team(m.team), px)
+		_bar_on(_gauge, -size - 6.0 * px, maxf(20.0 * px, size * 2.0), unit.hull_frac(), Palette.team(m.team), px, 0.9, m.team)
 
 
 ## World units per screen pixel at the current camera zoom (zoom limited
@@ -429,19 +430,28 @@ func _phase() -> float:
 	return float(unit.uid) * 1.7
 
 
-## A bar `w` wide at height `y`: a dark background and a `frac` (0..1)
-## filled part in colour `col`. (Test only: nothing is drawn when DrawParts.bars
+## A bar `w` wide at height `y`: a dark background (VOID at `empty_alpha`) and a `frac` (0..1)
+## filled part in colour `col`. T-126a: a HULL bar passes `mark_team` (0 or 1) and an `empty_alpha` of 0.9: it then also
+## gets a 1 px mist frame at 0.55 round it and the team's mark (TeamMarks, 6 px) 6 px left of its left end, on its middle
+## line, so full and empty differ by more than hue and the bar names its team. The shield bars and the Scum den's bar keep
+## the defaults (no mark, empty at 0.75). `px` is the size of a screen pixel. (Test only: nothing is drawn when DrawParts.bars
 ## is off.)
-func _bar(y: float, w: float, frac: float, col: Color, px: float) -> void:
-	_bar_on(self, y, w, frac, col, px)
+func _bar(y: float, w: float, frac: float, col: Color, px: float, empty_alpha: float = 0.75, mark_team: int = -1) -> void:
+	_bar_on(self, y, w, frac, col, px, empty_alpha, mark_team)
 
 
 ## The same bar drawn on `ci` (a kept picture, or this node).
-func _bar_on(ci: CanvasItem, y: float, w: float, frac: float, col: Color, px: float) -> void:
+func _bar_on(ci: CanvasItem, y: float, w: float, frac: float, col: Color, px: float, empty_alpha: float = 0.75, mark_team: int = -1) -> void:
 	if not DrawParts.bars:
 		return
-	ci.draw_rect(Rect2(-w / 2.0, y, w, 3.0 * px), Palette.with_alpha(Palette.VOID, 0.75))
-	ci.draw_rect(Rect2(-w / 2.0, y, w * clampf(frac, 0.0, 1.0), 3.0 * px), col)
+	var h := 3.0 * px
+	if mark_team >= 0:
+		# The frame's 1 px line lies just outside the bar (its middle is half a pixel out).
+		ci.draw_rect(Rect2(-w / 2.0 - 0.5 * px, y - 0.5 * px, w + px, h + px), Palette.with_alpha(Palette.MIST, 0.55), false, px)
+	ci.draw_rect(Rect2(-w / 2.0, y, w, h), Palette.with_alpha(Palette.VOID, empty_alpha))
+	ci.draw_rect(Rect2(-w / 2.0, y, w * clampf(frac, 0.0, 1.0), h), col)
+	if mark_team >= 0:
+		TeamMarks.mark(ci, Vector2(-w / 2.0 - 6.0 * px, y + h * 0.5), 6.0, mark_team, px)
 
 
 ## Draw the unit (Godot calls this after queue_redraw()): work out the
@@ -473,6 +483,8 @@ func _draw() -> void:
 			_draw_repair_drone(px)
 		Unit.K_WARD:
 			_draw_ward(px, col)
+		Unit.K_PRACTICE_DRONE:
+			_draw_practice_drone(px)
 		Unit.K_TURRET:
 			_draw_turret(px, col)
 		Unit.K_POST:
@@ -539,10 +551,26 @@ func _draw_mining_drone(px: float, col: Color, fill: Color) -> void:
 		_poly(DRONE, size, fill, col, 1.2 * px)
 	if d.cargo > 1.0:
 		draw_circle(Vector2.ZERO, size * 0.35 * (d.cargo / d.capacity), Palette.ORE)
+	if MiningDrone.cargo_shown(get_global_mouse_position(), d.global_position, px, d.radius, false):
+		_draw_cargo_words(d, px)
 	if d.state == "mine" and d.rock >= 0:
 		var n := d.world.node_by_id(d.node_id)
 		if n != null:
 			draw_line(Vector2.ZERO, (n.ore_pos[d.rock] - d.global_position).rotated(0.0), Palette.with_alpha(col, 0.5), 1.0 * px)
+
+
+## The words that say how much ore mining drone `d` carries ("Ore 120/300"), centred above it: white
+## text with a dark outline, 12 screen pixels tall. They show while the pointer is over the drone, or
+## when it is selected (no drone can be selected yet, so the call passes false). They show on any drone
+## that is drawn, an enemy's too: the fog already hides a drone the viewer cannot see. `px` is the world
+## units per screen pixel.
+func _draw_cargo_words(d: MiningDrone, px: float) -> void:
+	var font := ThemeDB.fallback_font
+	var size := int(maxf(11.0, 12.0 * px))
+	var at := Vector2(-150.0 * px, -(maxf(d.radius * 1.2, 6.0 * px) + 8.0 * px))
+	var text := MiningDrone.cargo_words(d.cargo, d.capacity)
+	draw_string_outline(font, at, text, HORIZONTAL_ALIGNMENT_CENTER, 300.0 * px, size, int(4.0 * px), Palette.VOID)
+	draw_string(font, at, text, HORIZONTAL_ALIGNMENT_CENTER, 300.0 * px, size, Palette.ICE)
 
 
 ## A repair drone: a green plus sign (on a Cinder drone: a small green plus
@@ -574,6 +602,69 @@ func _draw_ward(px: float, col: Color) -> void:
 		draw_arc(Vector2.ZERO, w.vision_radius, 0.0, TAU, 64, Palette.with_alpha(col, 0.12), 1.5 * px, true)
 
 
+## A practice range's target drone, the "Bullseye": a dark disc with a grey band, a light inner
+## ring and a white dot set forward of the centre so it shows which way the drone faces. The disc is
+## as big as the drone's hit circle, but never smaller than half the ships' 16 pixel floor
+## (ShipVisual.MIN_PX), read from the drone's radius every frame. Drawn in this order, one drawing
+## command for each thing: the wake of a drone that moves (a short faint line behind it), the disc,
+## the band (it flashes toward white when the drone is hit, from a grey, never white, base), the
+## ticks between sections (only while the disc is 16 pixels across or more), the inner ring, the dot
+## (it swells for a moving drone and blinks for the capital drone) and, on the capital drone only,
+## four small diamond part sockets. Only the palette's ICE, MIST, VOID with alpha or a lerp are used;
+## the motion reads the match clock only, no random number, tween or timer. A still drone costs 4
+## drawing commands (5 with the ticks), a moving one 5 (6), the capital drone 7.
+func _draw_practice_drone(px: float) -> void:
+	var d := unit as PracticeDrone
+	var big := d.row_id == "capital"
+	var rad := maxf(d.radius, 0.5 * ShipVisual.MIN_PX * px)
+	var f := Vector2.from_angle(d.rotation)
+	var flash := _flash()
+	var t := (d.world.time if d.world != null else 0.0) + float(d.uid) * 0.37
+	# The wake of a drone that moves: behind it, along the way it flies.
+	if d.speed > 0.0:
+		var v := d.velocity.normalized() if d.velocity.length_squared() > 0.0001 else f
+		var wake := Palette.with_alpha(Palette.MIST, 0.35)
+		if big:
+			draw_line(-v * 1.1 * rad, -v * 1.6 * rad, wake, maxf(px, 0.06 * rad))
+		else:
+			draw_line(-v * 1.15 * rad, -v * 2.6 * rad, wake, maxf(px, 0.12 * rad))
+	# The disc, then the band round its edge (the part that flashes on a hit).
+	draw_circle(Vector2.ZERO, rad, Palette.VOID)
+	var band_w := maxf(px, (0.12 if big else 0.18) * rad)
+	draw_arc(Vector2.ZERO, (0.9 if big else 0.88) * rad, 0.0, TAU, 32, Palette.hit_edge(Palette.MIST, flash), Palette.hit_width(band_w, flash))
+	# The ticks between sections (four, at the shield zones' edges, while the drone has fewer): only when big enough to see.
+	if rad >= 16.0 * px:
+		var n := maxi(d.sections, 4)
+		var ticks := PackedVector2Array()
+		for i in n:
+			var dir := Vector2.from_angle(d.rotation + PI * 0.25 + TAU * float(i) / float(n))
+			ticks.append(dir * 0.78 * rad)
+			ticks.append(dir * 0.98 * rad)
+		draw_multiline(ticks, Palette.VOID, maxf(px, 0.06 * rad))
+	# The inner ring, half way between the band's grey and white.
+	draw_arc(Vector2.ZERO, 0.5 * rad, 0.0, TAU, 24, Palette.MIST.lerp(Palette.ICE, 0.5), maxf(px, (0.05 if big else 0.12) * rad))
+	# The dot, forward of the centre. A moving drone's swells; the capital drone's blinks.
+	var dot_r := (0.12 if big else 0.2) * rad
+	var dot := Palette.ICE
+	if big:
+		dot = Palette.with_alpha(dot, 0.6 + 0.4 * sin(PI * t))
+	elif d.speed > 0.0:
+		dot_r *= 1.0 + 0.2 * sin(TAU * t / 0.8)
+	draw_circle(f * 0.25 * rad, dot_r, dot)
+	# The capital drone's part sockets: four small diamonds, one multiline.
+	if big:
+		var sockets := PackedVector2Array()
+		var s := 0.06 * rad
+		for k in 4:
+			var c := Vector2.from_angle(d.rotation + PI * 0.5 * float(k)) * 0.68 * rad
+			var up := c + Vector2(0.0, -s)
+			var right := c + Vector2(s, 0.0)
+			var down := c + Vector2(0.0, s)
+			var left := c + Vector2(-s, 0.0)
+			sockets.append_array(PackedVector2Array([up, right, right, down, down, left, left, up]))
+		draw_multiline(sockets, Palette.ICE, px)
+
+
 ## A turret: a lane tower, faded while still being built, with its gun head on
 ## top (the head turns to the way it shoots), hull and shield bars, a line to
 ## what it is shooting, and a "BUILDING" countdown while unfinished. The point-defense
@@ -591,7 +682,7 @@ func _draw_turret(px: float, col: Color) -> void:
 	# (The body is on the kept picture: _draw_turret_body().)
 	TurretPaint.draw_unit_mounts(self, t.mounts, t.team, float(TurretShapes.HULL_TU[id]) * u, px, t.rotation, built_a, _look_kicks(t.mounts))
 	# Bars.
-	_bar(s + 6.0 * px, s * 2.4, t.hull_frac(), col, px)
+	_bar(s + 6.0 * px, s * 2.4, t.hull_frac(), col, px, 0.9, t.team)
 	if t.shields != null:
 		_bar(s + 11.0 * px, s * 2.4, t.shields.fraction(), Palette.SHIELD, px)
 	# Aggro tether: who this turret is shooting (brighter for pilot ships).
@@ -655,7 +746,7 @@ func _draw_post(px: float, col: Color) -> void:
 	draw_arc(Vector2.ZERO, s * 0.5, 0.0, TAU, 24, Palette.with_alpha(col, a), 1.6 * px, true)
 	for i in 5:
 		draw_circle(Vector2(s * 0.78, (float(i) - 2.0) * s * 0.26).rotated(p.rotation), maxf(s * 0.07, 1.5 * px), Palette.with_alpha(col, a))
-	_bar(s + 6.0 * px, s * 2.4, p.hull_frac(), col, px)
+	_bar(s + 6.0 * px, s * 2.4, p.hull_frac(), col, px, 0.9, p.team)
 	if not p.is_built():
 		var font := ThemeDB.fallback_font
 		draw_string(font, Vector2(-70.0 * px, -s - 8.0 * px), "REBUILDING %ds" % int(ceil(p.build_left)), HORIZONTAL_ALIGNMENT_CENTER, 140.0 * px, int(10.0 * px), col)
@@ -677,7 +768,7 @@ func _draw_bay(px: float, col: Color) -> void:
 		draw_arc(Vector2.ZERO, float(Structures.REPAIR_BAY["range"]), 0.0, TAU, 64, Palette.with_alpha(Palette.REPAIR, 0.15 if b.can_repair() else 0.05), 2.0 * px, true)
 	else:
 		draw_line(Vector2.ZERO, b.anchor - b.global_position, Palette.with_alpha(col, 0.25), 1.0 * px)
-	_bar(s + 6.0 * px, s * 2.4, b.hull_frac(), col, px)
+	_bar(s + 6.0 * px, s * 2.4, b.hull_frac(), col, px, 0.9, b.team)
 
 
 ## A Scum den ship (a "derelict" camp in the code): the Scum Raider, or the Scum Carrier for the
@@ -710,7 +801,7 @@ func _draw_mothership(px: float, col: Color) -> void:
 		TurretPaint.draw_unit_mounts(self, ms.mounts, ms.team, float(TurretShapes.HULL_TU["mothership"]) * u, px, ms.rotation, 1.0, _look_kicks(ms.mounts))
 	# Bars (900 world units wide) and the move line.
 	var w := 900.0
-	_bar(ms.beam * 0.5 + 40.0, w, ms.hull_frac(), col, px * 2.0)
+	_bar(ms.beam * 0.5 + 40.0, w, ms.hull_frac(), col, px * 2.0, 0.9, ms.team)
 	_bar(ms.beam * 0.5 + 40.0 + 9.0 * px, w, ms.shields.fraction(), Palette.SHIELD, px * 2.0)
 	if ms.move_target != Vector2.INF:
 		draw_line(Vector2.ZERO, ms.move_target - ms.global_position, Palette.with_alpha(col, 0.3), 2.0 * px)

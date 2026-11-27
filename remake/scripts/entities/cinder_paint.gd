@@ -145,7 +145,7 @@ static func prepare(raw: Dictionary) -> Dictionary:
 static func hull(id: String) -> Dictionary:
 	var rec = _hulls.get(id)
 	if rec == null:
-		rec = prepare(CinderShapes.HULLS.get(id, CinderShapes.HULLS["fighter"]))
+		rec = prepare(CinderShapes.HULLS.get(id, CinderShapes.HULLS[Ships.DEFAULT_HULL]))
 		_hulls[id] = rec
 	return rec
 

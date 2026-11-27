@@ -92,7 +92,7 @@ func _tick(dt: float) -> void:
 		return
 	_look_t = 1.0
 	for t in 2:
-		if not AdmiralWeak.ai_acts(world, t):
+		if not AdmiralWeak.ai_acts_seat(world, t):
 			continue
 		# Step 1: remember the enemy pilot ships this team sees right now,
 		# and forget the old ones.
@@ -200,15 +200,15 @@ static func wish_list(brain: PilotAI, call: String, base: Array) -> Array:
 		match brain.temperament:
 			"striker":
 				# Two strikers fly bombers, the third a lance.
-				return ["lance", "bomber", "fighter"] if slot == 10 else ["bomber", "lance", "fighter"]
+				return (Ships.WISH_CALL["striker_seat10"] as Array).duplicate() if slot == 10 else (Ships.WISH_CALL["striker"] as Array).duplicate()
 			"lancer":
-				return ["bomber", "lance", "fighter"]
+				return (Ships.WISH_CALL["lancer"] as Array).duplicate()
 			"dog":
 				# One dogfighter (seat 8) switches to a bomber.
 				if slot == 8:
-					return ["bomber", "fighter"]
+					return (Ships.WISH_CALL["dog_seat8"] as Array).duplicate()
 	elif call == "anti_strike":
 		# Dogfighters go to flak frigates from 15:00 (the base game: 20:00).
 		if brain.temperament == "dog" and brain.world.time > FLAK_FROM:
-			return ["flak"] + base
+			return [Ships.WISH_CALL_FIRST] + base
 	return []

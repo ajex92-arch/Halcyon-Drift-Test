@@ -144,7 +144,7 @@ static func launch(h: Hangar) -> bool:
 		return false
 	# Step 1: no ship chosen yet: take the free Scout.
 	if h.profile.hull_id == "":
-		HumanCmd.run(h.world, "buy_hull", ["scout"])
+		HumanCmd.run(h.world, "buy_hull", [Ships.FREE_HULL])
 	# Step 2: launch, and close the hangar if it worked.
 	var launch_err := HumanCmd.run(h.world, "launch")
 	if launch_err != "":
@@ -163,7 +163,7 @@ static func launch_at(h: Hangar, bay: RepairBay) -> void:
 	if h.mode() != "dock":
 		return
 	if h.profile.hull_id == "":
-		HumanCmd.run(h.world, "buy_hull", ["scout"])
+		HumanCmd.run(h.world, "buy_hull", [Ships.FREE_HULL])
 	var err := HumanCmd.run(h.world, "hyperspace", [bay.uid])
 	if err != "":
 		Events.toast.emit(err)

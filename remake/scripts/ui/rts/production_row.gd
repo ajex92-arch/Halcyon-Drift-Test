@@ -116,6 +116,12 @@ func fit(w: float) -> void:
 	_sig = ""
 
 
+## The tag a row carries when the deputy ordered its item: " · deputy" when snapshot `d` holds the seat of the deputy,
+## else nothing (a snapshot with no seat key is the human's).
+static func seat_tag(d: Dictionary) -> String:
+	return " · deputy" if int(d.get("seat", Rules.ADMIRAL_SEAT)) == OrderKinds.DEPUTY_SEAT else ""
+
+
 ## Write snapshot `d`: {n, name, price, state, danger, frac (0..1), kind, held, started, picked, can_repeat, repeat, up_ok, down_ok, pending, sure}.
 func show_data(d: Dictionary) -> void:
 	data = d
@@ -134,7 +140,7 @@ func show_data(d: Dictionary) -> void:
 		_name.add_theme_color_override("font_color", Palette.ICE)
 	else:
 		RtsBeat.set_if_changed(_name, "%s   %s" % [d["name"], d["price"]])
-		var state := str(d["state"]) + (" · pending" if bool(d["pending"]) else "")
+		var state := str(d["state"]) + (" · pending" if bool(d["pending"]) else "") + seat_tag(d)
 		RtsBeat.set_if_changed(_state, state)
 		_name.add_theme_color_override("font_color", Palette.with_alpha(Palette.ICE, 0.6) if bool(d["held"]) else Palette.ICE)
 	var danger := bool(d["danger"]) and sure == ""

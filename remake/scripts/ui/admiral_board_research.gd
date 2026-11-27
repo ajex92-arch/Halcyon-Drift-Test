@@ -17,6 +17,9 @@ extends RefCounted
 ## or place in the queue, the price and time, or why it can't be bought
 ## yet. A card that can't be bought is dim (see-through, ignores clicks);
 ## a finished one is selected (green footer).
+## A row of filters and a search box sits above the columns (ResearchBoard:
+## class, can afford, queued, not done, a piece of a name or text): a card
+## that does not match is hidden, never rebuilt.
 ## This is a "static library": plain functions with no state of their
 ## own. As a part of AdmiralBoard it reads the board's fields directly.
 ##
@@ -53,17 +56,24 @@ static func build(b: AdmiralBoard) -> void:
 		b._hover(c, "%s: %s" % [d["label"], Tech.facility_blurb(id)])
 		g.add_child(c)
 		b._cards["fac:" + id] = c
+	# Step 1b: one stat card for each ship class: what research has given it so far (StatCard).
+	b._content.add_child(UiKit.heading("Ship classes · what research has given each one so far"))
+	StatCard.build_row(b)
 	# Step 2: the research columns side by side: 8 columns share the width
 	# after their 7 gaps of 6 pixels.
 	b._content.add_child(UiKit.heading("Research · one at a time, 3 can be queued · each column needs its module"))
+	# The filters and the search box sit above the columns (ResearchBoard).
+	ResearchBoard.build_row(b)
 	var row := UiKit.hbox(6)
 	b._content.add_child(row)
 	var cw := floorf((b._inner_w() - 7.0 * 6.0) / 8.0)
 	for col: String in Tech.COLUMNS:
-		# The column's name, then its "Needs the ..." line.
+		# The column's name, then its "Needs the ..." line. The column is remembered as "col:<column>" so the filters can
+		# hide it whole when none of its cards show.
 		var cv := UiKit.vbox(4)
 		cv.custom_minimum_size = Vector2(cw, 0)
 		row.add_child(cv)
+		b._cards["col:" + col] = cv
 		var h := UiKit.label(String(Tech.COLUMN_LABEL[col]), 14, Palette.ICE)
 		cv.add_child(h)
 		var need := UiKit.label("", 11, Palette.MIST, true)
@@ -97,11 +107,26 @@ static func tech_card(b: AdmiralBoard, id: String, w: float) -> CardButton:
 		if b._ok():
 			b.world.orders.submit(Order.make(OrderKinds.RESEARCH, b.team, Rules.ADMIRAL_SEAT, true, {}, [], "id", tid))
 			b._refresh())
-	# Details line: "Name (cost, time in seconds): blurb". The blurb comes
-	# through Tech.blurb(), so a feature module may have replaced it.
-	b._hover(c, "%s (%d, %ds): %s" % [d["label"], int(d["cost"]), int(d["time"]), Tech.blurb(id)])
+	# Details line: "Name (cost, time in seconds): blurb · the before-and-after
+	# numbers". The blurb comes through Tech.blurb(), so a feature module may
+	# have replaced it; the numbers change as research is done, so the line is
+	# kept on the card (meta "tip") and read when the mouse arrives, and
+	# refresh() rewrites it when it differs.
+	c.set_meta("tip", _tip(b._ts(), id))
+	c.mouse_entered.connect(func() -> void: b._detail.text = str(c.get_meta("tip")))
 	b._cards["tech:" + id] = c
 	return c
+
+
+## The details line of research `id` for team `ts`: "Name (cost, time): blurb", then the plain before-and-after lines of what
+## it gives (TechEffects.lines) joined with " · ", and "Done" first among them once it is finished.
+static func _tip(ts: TeamState, id: String) -> String:
+	var d: Dictionary = Tech.TECHS[id]
+	var parts: Array[String] = []
+	if ts.done.has(id):
+		parts.append("Done")
+	parts.append_array(TechEffects.lines(ts, id))
+	return "%s (%d, %ds): %s · %s" % [d["label"], int(d["cost"]), int(d["time"]), Tech.blurb(id), " · ".join(parts)]
 
 
 ## Update every research-type card on board `b`: module cards ("fac:"),
@@ -116,8 +141,13 @@ static func refresh(b: AdmiralBoard) -> void:
 			_refresh_facility(ts, key.substr(4), node)
 		elif key.begins_with("tech:"):
 			_refresh_tech(ts, key.substr(5), node)
+			_refresh_tip(b, ts, key.substr(5), node)
+		elif key.begins_with("class:"):
+			(node as StatCard).refresh(ts)
 		elif key.begins_with("colneed:"):
 			_refresh_column_need(ts, key.substr(8), node)
+	# Then the filters decide which research cards show (only a card whose answer changed is touched).
+	ResearchBoard.apply(b)
 
 
 ## One module card `c` for facility `id`: "Built" (selected), its progress
@@ -189,6 +219,17 @@ static func _refresh_tech(ts: TeamState, id: String, c: CardButton) -> void:
 	c.foot.visible = true
 	c.foot.add_theme_color_override("font_color", Palette.REPAIR if sel else (Palette.MIST if dim else UiKit.accent()))
 	c.set_state(dim, sel, 0.5)
+
+
+## Keep card `c`'s details line (meta "tip") right for research `id`: rewrite it only when the line differs, and put it on the
+## board's details line at once when the mouse is over the card now.
+static func _refresh_tip(b: AdmiralBoard, ts: TeamState, id: String, c: CardButton) -> void:
+	var tip := _tip(ts, id)
+	if str(c.get_meta("tip", "")) == tip:
+		return
+	c.set_meta("tip", tip)
+	if c._hover:
+		UiKit.set_text(b._detail, tip)
 
 
 ## Column `col`'s "Needs the ..." line `l`: first the Research Module

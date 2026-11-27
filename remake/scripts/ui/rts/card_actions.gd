@@ -6,8 +6,10 @@ extends RefCounted
 ##
 ## HOW IT WORKS: static functions that take the card. Every order goes through the order queue as
 ## `world.orders.submit(Order.make(kind, team, Rules.ADMIRAL_SEAT, true, ...))`: no screen changes the match itself.
-## Orders cells: Move arms the verb (the next left click sends it), Hold and Stop act at once on the selection
-## (RtsSquadOrders); every other verb says "Comes with a later stage". Build cells send PRODUCE like the old Yard tab
+## Orders cells: Move, Defend, Escort, Push lane, Merge and Goal arm a click tool (the next left click sends the order; Goal picks
+## its order by what is clicked), Hold, Stop, Stance (the fire stance only) and Formation act at once on the selection
+## (RtsSquadOrders); Position opens a pick of three (Hold, Manoeuvre, Roam) and the pick sets the chase setting (the move
+## stance) of the selection; every other unbuilt verb says "Comes with a later stage". Build cells send PRODUCE like the old Yard tab
 ## did: the hull, the squadron size from the view's yard choices (never more than the hull allows), repeat and the
 ## rally. Shift on a build key queues up to the list's depth ("to the cap"; the queue refuses what does not fit), Alt
 ## turns repeat on for that order. A locked hull is refused by the queue and the click then opens the research board. Base cells arm the map tools
@@ -31,6 +33,9 @@ static func run(card: CommandCard, page_id: String, id: String, shift: bool = fa
 	# The Capitals opener has just opened its pop-out: after_action() would close it again.
 	if page_id == "build" and id == "capitals":
 		return
+	# The same for Position: its click opened the pick, an entry's click closes it (a refused click left the pick as it was).
+	if page_id == "orders" and id == "position" and card._open == "pop":
+		return
 	card.after_action()
 
 
@@ -53,6 +58,31 @@ static func _orders(card: CommandCard, id: String) -> void:
 			RtsSquadOrders.hold(ov)
 		"stop":
 			RtsSquadOrders.stop(ov)
+		"defend":
+			_arm_verb(ov, "verb_defend")
+		"escort":
+			_arm_verb(ov, "verb_escort")
+		"push_lane":
+			_arm_verb(ov, "verb_push")
+		"merge":
+			_arm_verb(ov, "verb_merge")
+		"goal":
+			_arm_verb(ov, "verb_goal")
+		"stance":
+			RtsSquadOrders.cycle_stance(ov)
+		"position":
+			card.toggle_list("pop")
+		"pos_hold", "pos_manoeuvre", "pos_roam":
+			RtsSquadOrders.set_position(ov, CardPages.POSITIONS.find(id))
+		"formation":
+			RtsSquadOrders.cycle_formation(ov)
+
+
+## Arm the click tool `tool` (a squadron verb) and say what to click.
+static func _arm_verb(ov: CommandOverlay, tool: String) -> void:
+	ov.arm(tool)
+	if ov.tool == tool:
+		ov.say(ov.tool_text(), true)
 
 
 ## A Build cell (or a build key).
@@ -130,8 +160,10 @@ static func _base(card: CommandCard, id: String) -> void:
 			panels.open_board_at("Research")
 		"drone":
 			_drone(card)
-		"deputy", "deputy_preset":
-			ov.say("Comes with the deputy stage", false)
+		"deputy":
+			DeputyToggle.toggle(view)
+		"deputy_preset":
+			DeputyToggle.step(view)
 		"turret", "torpedo", "waypoint", "ward", "move", "rally":
 			# A tool whose research is missing starts no place mode: the notice comes first (the cell is drawn locked).
 			var need := view.world.command.torpedo_research_blocker(view.team) if id == "torpedo" else ""

@@ -44,10 +44,10 @@ const SQUADRON_SIZE := 3
 const BUILD_TICKS_SQUADRON := 1200
 ## One corvette: 25 seconds.
 const BUILD_TICKS_CORVETTE := 1500
-## One frigate: 40 seconds.
-const BUILD_TICKS_FRIGATE := 2400
-## One capital ship: 60 seconds, the last WARP_TICKS of which are the warp streak.
-const BUILD_TICKS_CAPITAL := 3600
+## One frigate: 50 seconds.
+const BUILD_TICKS_FRIGATE := 3000
+## One capital ship: 75 seconds, the last WARP_TICKS of which are the warp streak.
+const BUILD_TICKS_CAPITAL := 4500
 ## The warp streak of a capital ship, in ticks: 4 seconds.
 const WARP_TICKS := 240
 ## One mining drone: 6 seconds (Structures.MINING_DRONE "build").
@@ -102,46 +102,48 @@ const STANDIN_SKILL := 0.77
 
 # --- the computer Admiral's buying ----------------------------------------------------------------
 
+## The numbers and switches of this block are the standard column of AdmiralProfileData (scripts/ai/admiral_profile_data.gd):
+## the computer Admiral reads its own team's AdmiralProfile; these constants are the standard values, for the screens and the tests.
 ## The master switch: false and the computer Admiral buys no fleet ships.
-const COMPUTER_BUYS := true
+const COMPUTER_BUYS := AdmiralProfileData.TABLE["buys"][0] != 0
 ## Switch: the computer holds an unfundable head of the list so the next item can start.
-const COMPUTER_HOLDS_HEAD := true
+const COMPUTER_HOLDS_HEAD := AdmiralProfileData.TABLE["holds_head"][0] != 0
 ## Switch: the computer saves for a capital ship once it can build one.
-const COMPUTER_SAVES_CAPITAL := true
+const COMPUTER_SAVES_CAPITAL := AdmiralProfileData.TABLE["saves_capital"][0] != 0
 ## Switch: the computer keeps Fighter squadrons on repeat while it is below its fill target.
-const COMPUTER_REPEATS := true
+const COMPUTER_REPEATS := AdmiralProfileData.TABLE["repeats"][0] != 0
 ## An item at the head of the list whose price is more than the treasury plus this many seconds
 ## of income is held, so the item behind it can start.
-const HEAD_WAIT_S := 20.0
+const HEAD_WAIT_S := AdmiralProfileData.TABLE["head_wait_s"][0] / 1000.0
 ## The income is the treasury's earnings over this many seconds.
-const INCOME_WINDOW_S := 60.0
+const INCOME_WINDOW_S := AdmiralProfileData.TABLE["income_window_s"][0] / 1000.0
 ## The fill schedule: the match times (seconds) at which the fleet (living, building and waiting
 ## ships) must be at least the matching percent of the fleet limit. Between two times the target
 ## rises in a straight line, from 0 at the start of the match.
-const FILL_SECONDS := [360.0, 720.0, 1080.0]
-const FILL_PERCENT := [30, 70, 90]  # the percents of the fleet limit, one for each time in FILL_SECONDS
+const FILL_SECONDS := [AdmiralProfileData.TABLE["fill_t1_s"][0] / 1000.0, AdmiralProfileData.TABLE["fill_t2_s"][0] / 1000.0, AdmiralProfileData.TABLE["fill_t3_s"][0] / 1000.0]
+const FILL_PERCENT := [AdmiralProfileData.TABLE["fill_p1_pct"][0] / 1000.0, AdmiralProfileData.TABLE["fill_p2_pct"][0] / 1000.0, AdmiralProfileData.TABLE["fill_p3_pct"][0] / 1000.0]  # the percents of the fleet limit, one for each time in FILL_SECONDS
 ## The credits the computer keeps back from its fleet buying, outside a saving goal.
-const RESERVE := 300
+const RESERVE := AdmiralProfileData.TABLE["reserve"][0] / 1000.0
 ## A saving goal for a capital ship is given up after this many seconds.
-const SAVING_LAPSE_S := 180.0
+const SAVING_LAPSE_S := AdmiralProfileData.TABLE["saving_lapse_s"][0] / 1000.0
 ## The mix: one corvette per this many squadrons once the Corvette Facility stands, one frigate per
 ## this many once the Frigate Facility stands, and one squadron in this many a Lance or Bomber
 ## squadron once the research is done.
-const SQUADRONS_PER_CORVETTE := 3
-const SQUADRONS_PER_FRIGATE := 2  # one frigate per this many squadrons
-const SPECIAL_ONE_IN := 3  # one squadron in this many is a special squadron
+const SQUADRONS_PER_CORVETTE := AdmiralProfileData.TABLE["per_corvette"][0] / 1000.0
+const SQUADRONS_PER_FRIGATE := AdmiralProfileData.TABLE["per_frigate"][0] / 1000.0  # one frigate per this many squadrons
+const SPECIAL_ONE_IN := AdmiralProfileData.TABLE["special_one_in"][0] / 1000.0  # one squadron in this many is a special squadron
 ## The most capital ships (alive, building and waiting) the computer keeps, as a percent of the
 ## fleet limit, rounded down (34 percent of a limit of 63 is 21).
-const CAPITAL_MAX_PERCENT := 34
+const CAPITAL_MAX_PERCENT := AdmiralProfileData.TABLE["capital_max_pct"][0] / 1000.0
 
 
 ## The percent of the fleet limit the computer's fleet should be at `seconds` into the match.
-static func fill_percent(seconds: float) -> float:
+static func fill_percent(seconds: float, times: Array = FILL_SECONDS, percents: Array = FILL_PERCENT) -> float:
 	var x0 := 0.0
 	var y0 := 0.0
-	for i in FILL_SECONDS.size():
-		var x1: float = FILL_SECONDS[i]
-		var y1 := float(FILL_PERCENT[i])
+	for i in times.size():
+		var x1: float = times[i]
+		var y1 := float(percents[i])
 		if seconds <= x1:
 			return y0 + (y1 - y0) * (maxf(seconds, 0.0) - x0) / (x1 - x0)
 		x0 = x1
@@ -151,8 +153,8 @@ static func fill_percent(seconds: float) -> float:
 
 ## How many ships the computer's fleet should have at `seconds` into the match, for a fleet limit
 ## of `cap`: the schedule's percent of the limit, rounded up.
-static func fill_target(seconds: float, cap: int = CAP_IN_FORCE) -> int:
-	return ceili(float(cap) * fill_percent(seconds) / 100.0 - 0.0001)
+static func fill_target(seconds: float, cap: int = CAP_IN_FORCE, times: Array = FILL_SECONDS, percents: Array = FILL_PERCENT) -> int:
+	return ceili(float(cap) * fill_percent(seconds, times, percents) / 100.0 - 0.0001)
 
 
 # --- the kinds of hull ------------------------------------------------------------------------
@@ -216,3 +218,15 @@ static func unit_price(hull_id: String) -> int:
 ## What the Admiral pays for an item of `count` ships of `hull_id`, in whole credits.
 static func price_of(hull_id: String, count: int) -> int:
 	return unit_price(hull_id) * count
+
+
+# --- the Admiral's mix -------------------------------------------------------------------------
+
+## The two frigates the Admiral alternates between, the first one first (Ion, then Flak).
+const FRIGATE_PAIR := ["ion", "flak"]
+## The two corvettes the Admiral alternates between: the first one on every second corvette
+## (the odd ones), the second on the others (the parity differs from the frigates' on purpose).
+const CORVETTE_PAIR := ["support", "logistics"]
+## The two special squadrons the Admiral alternates between, the first one first (Lance, then
+## Bomber); when one is not unlocked, the other is bought.
+const SPECIAL_PAIR := ["lance", "bomber"]

@@ -44,7 +44,7 @@ static func install(_world: World) -> void:
 static func skips(ship: Ship) -> bool:
 	if Game.variant(KEY) != "nosmall":
 		return false
-	if ship.is_small() and ship.hull_id != "bomber":
+	if ship.is_small() and not Ships.has_role(ship.hull_id, "siege"):
 		Game.count_usage("small_siege_skips")
 		return true
 	return false

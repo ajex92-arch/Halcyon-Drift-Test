@@ -14,7 +14,11 @@ extends RefCounted
 ##           first) plus small ships that leave the enemy mothership to the
 ##           bombers and the bigger hulls (ms:nosmall: a Scout, Fighter or
 ##           Lance Fighter no longer shoots the mothership or pushes it with
-##           the wave). Within the requirements, except that one switch.
+##           the wave) plus the surrender vote (surrender:vote: from 15:00 a
+##           team that is far behind may hold a vote, which passes at 80% of
+##           the team's seats, 5 of 6, and ends the match; a failed vote is
+##           followed by 3 minutes without one). Within the requirements,
+##           except those two switches.
 ##   within  "Within requirements": minions stop out-scaling pilots
 ##           (minion_cap), the Lance hunts lone big ships (lance_role), two
 ##           Bomber seats fly Fighters and pilot torpedoes hurt small craft
@@ -30,10 +34,11 @@ extends RefCounted
 ##   none    the old standard rules: no pairs at all, so every variant is at
 ##           its default (Rules.VARIANT_DEFAULTS), the game as v0.1.0 played
 ##           it. For comparisons with older results.
-## Only one requirement-changing idea (REQ-CHANGE) is in a preset: ms:nosmall,
-## in "pick" alone (it makes taking a mothership a job for the bombers and the
-## bigger hulls). Every other one stays a single --variant switch, off by
-## default.
+## Only two requirement-changing ideas (REQ-CHANGE) are in a preset, both in
+## "pick" alone: ms:nosmall (it makes taking a mothership a job for the bombers
+## and the bigger hulls) and surrender:vote (the rule that only destroying the
+## mothership ends a match gets a second way: a passed surrender vote). Every
+## other one stays a single --variant switch, off by default.
 ## Three of the keys carry a damage modifier: minion_cap (the cap on a
 ## minion's strength), lance_role (the Lance's x1.35 on a big ship's rear
 ## shield zone) and bomber_role (the x0.6 torpedo number). They do their
@@ -77,7 +82,7 @@ const ORDER := [OLD_RULES, "within", STANDARD]
 const VARIANTS := {
 	"none": "",
 	"within": "minion_cap:on,lance_role:on,bomber_role:both,admiral_sinks:fleet,redeploy:on,gear_mk2:on",
-	"pick": "minion_cap:on,lance_role:on,bomber_role:both,admiral_sinks:fleet,redeploy:on,gear_mk2:on,node_persist:on,ms:nosmall",
+	"pick": "minion_cap:on,lance_role:on,bomber_role:both,admiral_sinks:fleet,redeploy:on,gear_mk2:on,node_persist:on,ms:nosmall,surrender:vote",
 }
 
 ## Each preset's name in the notes (NoteWriter), where a match records which

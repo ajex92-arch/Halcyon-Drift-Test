@@ -381,6 +381,9 @@ func _physics_process(dt: float) -> void:
 		15:
 			if first:
 				cam.target_zoom = 0.0001
+				# The ship stops: the speed zoom backs the view out while a pilot's ship flies fast, and these two limits are the wheel's.
+				if ship != null:
+					ship.velocity = Vector2.ZERO
 			if step_t > 2.0:
 				var lim := cam.zoom_limits()
 				var want := 5200.0 * ZoomMaxFeature.factor() if role == "pilot" else MapLayout.W * 1.1
@@ -389,7 +392,7 @@ func _physics_process(dt: float) -> void:
 				cam.target_zoom = 1000.0
 				_next()
 		# 16: the closest zoom is unchanged: 1,100 units across. Then the C
-		# switch: a pilot has none; an Admiral can follow the ship (and then
+		# switch: a pilot or an Admiral can follow the ship (and then
 		# has a pilot's zoom limit) and go free again.
 		16:
 			if step_t > 2.0:
@@ -401,5 +404,5 @@ func _physics_process(dt: float) -> void:
 				if role == "admiral":
 					_check("Admiral: C follows the ship (pilot zoom limit) and frees it again", not after_one and limited and cam.free, "free after one switch %s, limited %s, free after two %s" % [after_one, limited, cam.free])
 				elif role == "pilot":
-					_check("pilot: C does nothing to the camera", after_one and cam.free, "free after one switch %s" % after_one)
+					_check("pilot: C follows the ship (still the pilot zoom limit) and frees it again", not after_one and limited and cam.free, "free after one switch %s, limited %s, free after two %s" % [after_one, limited, cam.free])
 				_finish()

@@ -19,6 +19,17 @@ const NO_DICE_FILES := [
 	"res://scripts/ui/wing_strip.gd", "res://scripts/ui/wing_marks.gd",
 ]
 
+## The guard pocket of the Destroyer and the Battlecruiser, written out as plain numbers on purpose
+## (not read from the hull data, so a change of the guns' arcs makes this check fail). SquadEngine.guard_cone
+## is 180 minus the widest swing of a hull's aimed guns, kept between 16 and 70; C2 gave the two big
+## hulls' main guns a turret arc of 35 (the chasers are 30), so the cone is 180 - 35 = 145 clamped to 70.
+## The slots stand at 180 -/+ cone/2 degrees from the nose: 145 and 215.
+const BIG_HULL_CONE := 70.0
+## Slot 0 of the two big hulls' guard pocket, degrees from the ward's nose (180 - 70 / 2).
+const BIG_HULL_SLOT_0 := 145.0
+## Slot 1 of the two big hulls' guard pocket, degrees from the ward's nose (180 + 70 / 2).
+const BIG_HULL_SLOT_1 := 215.0
+
 ## How many checks failed.
 var _fails := 0
 
@@ -177,7 +188,7 @@ func _speed() -> void:
 ## Part 5: the guard pocket and its slots.
 func _guard() -> void:
 	var cones := {"scout": 70.0, "fighter": 70.0, "lance": 70.0, "bomber": 70.0, "logistics": 70.0, "support": 50.0, "flak": 20.0,
-		"ion": 70.0, "destroyer": 30.0, "battlecruiser": 30.0}
+		"ion": 70.0, "destroyer": BIG_HULL_CONE, "battlecruiser": BIG_HULL_CONE}
 	for id: String in Ships.ORDER:
 		_check("guard cone of %s" % id, absf(SquadEngine.guard_cone(Ships.get_def(id)) - float(cones[id])) < 0.01, str(SquadEngine.guard_cone(Ships.get_def(id))))
 	# A cone is always inside 16 to 70.
@@ -191,8 +202,8 @@ func _guard() -> void:
 	var d0 := SquadEngine.guard_slot(pos, rot, float(dd["radius"]), dc, 0)
 	var d1 := SquadEngine.guard_slot(pos, rot, float(dd["radius"]), dc, 1)
 	var d2 := SquadEngine.guard_slot(pos, rot, float(dd["radius"]), dc, 2)
-	_check("Destroyer slot 0 at 165 degrees", absf(_deg_from_nose(pos, d0, rot) - 165.0) < 0.01, str(_deg_from_nose(pos, d0, rot)))
-	_check("Destroyer slot 1 at 195 degrees", absf(_deg_from_nose(pos, d1, rot) - 195.0) < 0.01)
+	_check("Destroyer slot 0 at 145 degrees", absf(_deg_from_nose(pos, d0, rot) - BIG_HULL_SLOT_0) < 0.01, str(_deg_from_nose(pos, d0, rot)))
+	_check("Destroyer slot 1 at 215 degrees", absf(_deg_from_nose(pos, d1, rot) - BIG_HULL_SLOT_1) < 0.01, str(_deg_from_nose(pos, d1, rot)))
 	_check("Destroyer slot 2 dead astern", absf(_deg_from_nose(pos, d2, rot) - 180.0) < 0.01)
 	_check("Destroyer slots at 400, 400 and 600", absf(pos.distance_to(d0) - 400.0) < 0.01 and absf(pos.distance_to(d1) - 400.0) < 0.01 and absf(pos.distance_to(d2) - 600.0) < 0.01)
 	var bd := Ships.get_def("battlecruiser")
@@ -200,7 +211,7 @@ func _guard() -> void:
 	var b0 := SquadEngine.guard_slot(pos, rot, float(bd["radius"]), bc, 0)
 	var b1 := SquadEngine.guard_slot(pos, rot, float(bd["radius"]), bc, 1)
 	var b2 := SquadEngine.guard_slot(pos, rot, float(bd["radius"]), bc, 2)
-	_check("Battlecruiser slots at 165 and 195 degrees", absf(_deg_from_nose(pos, b0, rot) - 165.0) < 0.01 and absf(_deg_from_nose(pos, b1, rot) - 195.0) < 0.01)
+	_check("Battlecruiser slots at 145 and 215 degrees", absf(_deg_from_nose(pos, b0, rot) - BIG_HULL_SLOT_0) < 0.01 and absf(_deg_from_nose(pos, b1, rot) - BIG_HULL_SLOT_1) < 0.01, "%s and %s" % [_deg_from_nose(pos, b0, rot), _deg_from_nose(pos, b1, rot)])
 	_check("Battlecruiser slots at 460, 460 and 660", absf(pos.distance_to(b0) - 460.0) < 0.01 and absf(pos.distance_to(b1) - 460.0) < 0.01 and absf(pos.distance_to(b2) - 660.0) < 0.01)
 	# The mothership: abeam at 90 and 270 degrees, 570 from the keel line; astern 1,080 (half_len 630 + 450).
 	var m0 := SquadEngine.mothership_slot(pos, rot, 630.0, 340.0, 0)

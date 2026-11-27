@@ -3,7 +3,7 @@ extends RefCounted
 ## WHAT THIS IS: the shapes a pilot's wing can fly in, as plain data. A shape says where each
 ## of the three wingmen sits around the leader, how far a wingman may chase an enemy away from
 ## its place, and what the shape is called on the screen. It also holds the short words the
-## wing strip and the pop-ups use (the fire settings, the hulls' short names).
+## wing strip and the pop-ups use (the fire settings, the move settings, the hulls' short names).
 ##
 ## HOW IT WORKS: only constants and small static functions. A place ("slot") is a pair of
 ## numbers in the leader's own frame, measured in units of S, the wing's spacing (SquadEngine
@@ -54,6 +54,10 @@ const JUNGLE_SCALE := 0.8
 const FIRE_NAMES := ["At will", "Return fire", "Hold fire"]
 ## The pop-up words for each fire setting.
 const FIRE_TOASTS := ["fire at will", "return fire", "hold fire"]
+## The three move settings (SET_STANCE "move", the chase setting), by value: the name on the Position pick.
+const MOVE_NAMES := ["Hold", "Manoeuvre", "Roam"]
+## What each move setting means in a few words, by value: the second line of its entry on the Position pick.
+const MOVE_SUBS := ["stays close", "chases a little", "chases far"]
 
 ## The short name of each hull on the wing strip and in the pop-ups.
 const HULL_SHORT := {

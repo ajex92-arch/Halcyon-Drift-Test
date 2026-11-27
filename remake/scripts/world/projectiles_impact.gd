@@ -44,6 +44,12 @@ static func hit(proj: Projectiles, i: int, at: Vector2, hit_unit: Unit, rock: Di
 			# A torpedo's hit is scaled by the size and speed of what it hit
 			# first (BlastScale); other rounds carry no blast size.
 			var note := info(proj, i, at)
+			# A capsule hull is hit at the true point of the hit (so the shield
+			# zone and the armour section are picked from where the round
+			# touched the hull); every other target keeps the round's
+			# position one tick before.
+			if hit_unit.hit_r > 0.0:
+				note.impact = at
 			BlastScale.apply(note, hit_unit)
 			# A torpedo of a Bomber's run counts the lane it flew in, and what it
 			# hit (counted before the hit, which may destroy the target).
@@ -107,6 +113,7 @@ static func info(proj: Projectiles, i: int, _at: Vector2) -> DamageInfo:
 	# Where it came from, its bonus against small targets and how much of it
 	# skips the shields.
 	d.from_pos = proj.prev[i]
+	d.impact = d.from_pos
 	d.small_bonus = proj.small_bonus[i]
 	d.pierce = proj.pierce[i]
 	# The weapon's blast numbers, for BlastScale (0 for a weapon with none).

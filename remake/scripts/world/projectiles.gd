@@ -61,20 +61,30 @@ extends Node2D
 ## How far (world units) around a round's line we search the spatial hash:
 ## enough for units up to this radius (60); the size shots see, hit_radius(),
 ## is the radius, except for the small pilot ships, which count 1.1 times
-## bigger (at most 18.7), far inside it. Units bigger than this also go
+## bigger (at most 18.7), far inside it. Units whose hit shape reaches farther
+## than this from the centre (Unit.hit_reach()) also go
 ## into World.big_hash (WorldRegistry uses this same number), which we
 ## search BIG_PAD further. That keeps the main search to 1-2 hash cells.
 const HASH_PAD := 60.0
 ## Extra search distance (world units) for World.big_hash. HASH_PAD plus this
-## (260) must be at least the radius of the biggest hull (the Battlecruiser,
-## 240), or a round that only grazes the rim of that hull's hit circle is not
-## found.
-const BIG_PAD := 200.0
-## The radius (world units) of the biggest unit the spatial hashes must still
-## find by its edge: HASH_PAD plus BIG_PAD. A search that adds a unit's radius
-## to its range (to see a unit whose edge is in range but whose centre is not)
-## uses this as the margin it leaves for that radius.
+## (470) must be at least the farthest a hull's hit shape reaches from its
+## centre (Unit.hit_reach()) plus a round's own radius, or a round that only
+## grazes the tip of that shape is not found. The longest reach is the
+## Battlecruiser's capsule: its spine's far end is 9 + 259 = 268 from the centre
+## and its radius is 170, 438 in all, and a round adds up to 30: 468.
+const BIG_PAD := 410.0
+## The farthest reach (world units) of the biggest unit the spatial hashes must
+## still find by its edge: HASH_PAD plus BIG_PAD. A search that adds a unit's
+## reach to its range (to see a unit whose edge is in range but whose centre is
+## not) uses this as the margin it leaves for it.
 const MAX_UNIT_RADIUS := HASH_PAD + BIG_PAD
+## The farthest (world units) a unit's body (its collision circle, or its hit circle
+## for a unit with no capsule) reaches from its centre: the old margin, before the
+## capsule hulls. A search that only needs bodies or circles (ships pushing each
+## other apart, a turret picking a target by hit_radius(), the pilot fan's look at
+## who stands in it) adds this, not MAX_UNIT_RADIUS, so it covers far fewer cells.
+## A hit test, which a capsule's tip reaches, keeps MAX_UNIT_RADIUS.
+const BODY_UNIT_RADIUS := 260.0
 
 ## The world this belongs to (set by setup()).
 var world: World

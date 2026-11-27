@@ -31,6 +31,20 @@ extends RefCounted
 ## routing changes, specials starting or ending).
 
 
+## Work out the armour points the pilot's gear adds to `ship`'s sections (one
+## ArmourSections.gear_a per gear item with a hull resist, added up) and hand them to the
+## sections, so a bought or lost item changes the armour value at once (the pool and the
+## sections' armour do not move). A ship with no sections, or no gear, adds 0.
+static func apply_gear_armour(ship: Ship) -> void:
+	if ship.armour == null:
+		return
+	var points := 0
+	if ship.profile != null:
+		for g: float in ship.profile.gear_resists():
+			points += ArmourSections.gear_a(ship.armour.armour_base, g)
+	ship.armour.set_gear(points)
+
+
 ## Rebuild all of `ship`'s worked-out numbers (see HOW IT WORKS). With
 ## `full_heal`, also fill the hull, shields and battery to the top (used at
 ## launch).
@@ -95,10 +109,13 @@ static func recompute(ship: Ship, full_heal: bool) -> void:
 		ship.f_reverse = ship.f_accel * float(line["reverse_share"])
 		ship.f_strafe = ship.f_accel * float(line["strafe_share"]) * stats.mul("strafe_pct") / stats.mul("accel_pct")
 		ship.f_swivel_max = float(line["swivel_max"])
+		ship.f_brake_split = float(line["brake_split"])
+		ship.f_kick_cap = float(line["kick_cap"])
 		ship.f_swivel_rate = float(line["swivel_rate"])
 		ship.f_eng_arm = float(line["engine_arm"]) * length
 		ship.f_side_arm = float(line["side_arm"]) * length
 		ship.f_gyr2 = pow(float(line["gyration"]) * length, 2.0)
+		ship.f_trim = float(line["trim"])
 
 	# Step 4: boost. Hulls built with a booster use their own numbers; any
 	# other hull can boost only with a Boost Cell module, which gives
@@ -115,6 +132,10 @@ static func recompute(ship: Ship, full_heal: bool) -> void:
 		ship.f_accel *= 0.35
 		ship.f_reverse *= 0.35
 		ship.f_strafe *= 0.35
+	# The engine pods (big hulls with parts): their state sets the main push, the top speed and the
+	# turning (reverse and the side thrusters are not pods and keep their numbers).
+	if ship.parts != null:
+		ship.parts.apply_pods(ship)
 	# The strongest braking: the reverse thrusters, and for a ship of the line
 	# the main engines swung right round to push back as well, which takes a
 	# while (the AI plans its stops with both numbers).
@@ -123,10 +144,13 @@ static func recompute(ship: Ship, full_heal: bool) -> void:
 	if ship.f_line:
 		ship.f_brake = ShipLineFlight.brake_accel(ship)
 		ship.f_brake_lag = ship.f_swivel_max / ship.f_swivel_rate
+		if ship.f_brake_split > 0.0:
+			ship.f_brake_lag = ShipLineFlight.toe_target(ship) / ship.f_swivel_rate
 
 	# Step 5: guns. Buffs, then the specials that boost them while active:
 	# Overload (Lance) +60% damage, Overcharge (Destroyer) double fire
-	# rate, Broadside (Battlecruiser) +50% fire rate.
+	# rate (it runs after the 1 s warning). The Broadside's +50% fire rate is not
+	# here: it is for the charged side only, so Ship._weapons() hands it to those guns.
 	ship.fire_mult = energy.m("fire") * stats.mul("fire_rate_pct")
 	ship.dmg_mult = stats.mul("damage_pct")
 	if ship.ace_t > 0.0:
@@ -134,12 +158,10 @@ static func recompute(ship: Ship, full_heal: bool) -> void:
 	if ship.support_t > 0.0:
 		ship.dmg_mult *= 1.06
 	ship.range_mult = 1.0 + (t.team_range if t != null else 0.0) + (0.08 if ship.support_t > 0.0 else 0.0)
-	if ship.hull_id == "lance" and ship.special_t > 0.0:
+	if ship.special_t > 0.0 and String(ship.def.get("special", "")) == "overload":
 		ship.dmg_mult *= 1.6
-	if (ship.hull_id == "destroyer" and ship.special_t > 0.0):
+	if (ship.special_t > 0.0 and String(ship.def.get("special", "")) == "overcharge"):
 		ship.fire_mult *= 2.0
-	if ship.hull_id == "battlecruiser" and ship.special_t > 0.0:
-		ship.fire_mult *= 1.5
 
 	# Step 6: shield refill, crash armour and how well we take repairs.
 	ship.regen_mult = energy.m("regen") * stats.mul("shield_regen_pct") * (Rules.WAYPOINT_SHIELD_REGEN if in_wp else 1.0)
@@ -159,9 +181,19 @@ static func recompute(ship: Ship, full_heal: bool) -> void:
 		var frac := ship.hull / ship.hull_max if ship.hull_max > 0.0 else 1.0
 		ship.hull_max = new_hull_max
 		ship.hull = ship.hull_max * frac
+		# The armour pool follows the hull: all the sections together stay 60% of
+		# hull_max, and each section keeps its share of armour (a black one stays black).
+		if ship.armour != null:
+			ship.armour.resize_pool(ship.hull_max)
 	if full_heal:
 		ship.hull = ship.hull_max
-	ship.hull_resist = clampf(float(def["hull_resist"]) + stats.g("hull_resist"), 0.0, 0.75)
+	# A hull with armour sections takes its gear's resist as armour points (below) and
+	# not as a cut after the armour; any other hull keeps the cut.
+	if def.has("sections"):
+		ship.hull_resist = clampf(float(def["hull_resist"]), 0.0, 0.75)
+	else:
+		ship.hull_resist = clampf(float(def["hull_resist"]) + stats.g("hull_resist"), 0.0, 0.75)
+	apply_gear_armour(ship)
 	# Shields and battery: resize only when the size really changed.
 	var new_shield := float(def["shield"]) * stats.mul("shield_pct")
 	if absf(new_shield - shields.max_total) > 0.01:
@@ -181,10 +213,14 @@ static func recompute(ship: Ship, full_heal: bool) -> void:
 		vis *= Rules.WAYPOINT_VISION
 	ship.vision_radius = vis
 
-	# Step 9: at launch, top everything up.
+	# Step 9: at launch, top everything up (and the two main engines fly
+	# together).
 	if full_heal:
 		shields.fill()
 		energy.value = energy.max_value
+		ship.toe = 0.0
+		ship.engine_help = false
+		ship.swivel_hold_t = 0.0
 
 	# Step 10: feature hook (Lane Slipstream): a ship running in the
 	# slipstream gets a higher top speed and no boost. Ship.slip is false

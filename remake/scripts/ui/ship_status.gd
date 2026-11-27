@@ -16,7 +16,11 @@ extends Control
 ##   red (no hull). Under it: the shield focus and its cooldown.
 ##   Right: hull / shields / energy bars, the four energy routing buttons
 ##   (keys 1-4) with a thin cooldown bar, the ability's state, then speed,
-##   boost and warnings.
+##   boost and warnings. The energy bar shows the hard part (blocked shield
+##   damage the battery holds) in teal from its right end, with "held" in its
+##   text, and "Overloaded 4.2 s" or "Venting" on its right; the Vent button
+##   sits at the bottom right, under the speed line, so that no line of text reaches it. The ability
+##   line says "offline" (not "ready") during a lockout or a Vent.
 ## The readout takes the mouse (T-114, mouse-only play): a left click on an
 ## energy button, on a shield zone or on the ship icon does what the key does,
 ## through HudInput.click() (the zone's arrow key again means balanced; the
@@ -26,6 +30,8 @@ extends Control
 ## left press anywhere on the readout is used up here, so it never fires the
 ## guns; the wheel still passes through to the camera's zoom. The right button
 ## over the readout no longer uses the ability (as over the wing strip).
+## RT7: while the Admiral's ship is under fire (a hull hit under 3 seconds ago, FIRE_EDGE_S) the readout wears a steady 2 pixel
+## edge in the danger colour, the mark of the "Under Fire!" alert (set from state in _process(); no blink, nothing times it).
 ##
 ## WHO USES IT: Hud makes it from scenes/ui/ship_status.tscn, gives it
 ## `hud` and calls
@@ -33,6 +39,10 @@ extends Control
 ## reads Ship, ShieldZones (ship.shields) and the energy system
 ## (ship.energy).
 
+## RT7: how long (seconds) after a hull hit on the ship the readout wears its danger edge (the mark of the "Under Fire!" alert),
+## and the edge's width (pixels).
+const FIRE_EDGE_S := 3.0
+const FIRE_EDGE_W := 2.0  # the edge's width (pixels)
 ## Width of the readout (pixels).
 const W := 430.0
 ## Height of the readout (pixels).
@@ -69,6 +79,44 @@ const ZONE_OUTER := 62.0
 ## How far (degrees) either side of its direction a zone takes a click: the same 38 degrees the arcs are drawn with.
 const ZONE_HALF_DEG := 38.0
 
+## Radius (pixels) of the armour ring, inside the shield arcs.
+const ARMOUR_R := 30.0
+## Thickness (pixels) of the armour ring.
+const ARMOUR_W := 3.0
+## The gap (radians) left between two neighbouring armour sections.
+const ARMOUR_GAP := 0.05
+## Below this share of its armour a section is drawn in the red end of its colours.
+const ARMOUR_LOW := 0.34
+## How long (seconds) a section pulses after it turns black.
+const ARMOUR_PULSE := 0.4
+## Half the length (pixels) of the part pips' span on the ship icon: the hull's length fills twice this, nose to tail.
+const PIP_SPAN := 14.0
+## The radius (pixels) of a part pip.
+const PIP_R := 1.8
+## The colour of the hard part of the energy bar (blocked shield damage the battery holds):
+## teal, which is neither the bar's amber nor a team colour.
+const HARD_COLOUR := Palette.VEIL
+## Where the Vent button sits: its left edge, from the readout's left edge (pixels).
+const VENT_X := 340.0
+## Where the Vent button sits: its top edge, from the readout's top edge (pixels), on the bottom row,
+## under the speed line (so the ability line, at its longest, and the speed line never reach it).
+const VENT_Y := 115.0
+## How wide the Vent button is (pixels).
+const VENT_W := 80.0
+## How tall the Vent button is (pixels).
+const VENT_H := 16.0
+## How wide (pixels) the box is that the state words ("Overloaded 4.2 s", "Venting") are right-aligned in, on the energy bar's row.
+const STATE_W := 100.0
+## How far left of the energy bar's right end (pixels) the state words' box starts, so the words end inside the readout.
+const STATE_BACK := 104.0
+## Where the ability line starts, from the readout's top edge (pixels): under the routing buttons' thin cooldown bar.
+const ABILITY_Y := 84.0
+## The ability line's text size (pixels).
+const ABILITY_SIZE := 12
+## Where the speed line starts, from the readout's top edge (pixels).
+const SPEED_Y := 100.0
+## The speed line's text size (pixels).
+const SPEED_SIZE := 11
 ## The ship we show, or null (then only the empty background is drawn).
 var ship: Ship = null
 ## The font for all our text (Godot's built-in default font).
@@ -77,6 +125,8 @@ var font: Font
 var hud: Hud = null
 ## The part a left press started on ("" when none): the release acts only on the same part.
 var _press_part := ""
+## RT7: is the danger edge on now (set from the ship's state in _process(): a hull hit under FIRE_EDGE_S seconds ago)?
+var _fire := false
 
 
 ## Called once when the node joins the scene: fix our size, take the mouse (a press on the
@@ -96,7 +146,8 @@ func set_ship(s: Ship) -> void:
 
 
 ## Which clickable part is under point `p` (the readout's own pixels): "energy_0" to "energy_3" (the energy
-## buttons), "shield_0" to "shield_3" (the zones: front, rear, left, right), "balance" (the ship icon) or "".
+## buttons), "vent" (the Vent button), "shield_0" to "shield_3" (the zones: front, rear, left, right), "balance"
+## (the ship icon) or "".
 ## The diamond's rule: within CENTRE_R of the middle is balance; between ZONE_INNER and ZONE_OUTER and within
 ## ZONE_HALF_DEG of a zone's direction is that zone; anything else (the diagonal gaps, the ring between) is
 ## nothing. The rear zone's wedge reaches down over the "Focus" line, so a click on those words picks the rear zone.
@@ -106,6 +157,8 @@ func part_at(p: Vector2) -> String:
 	for i in 4:
 		if Rect2(ROUTE_X + float(i) * (bw + 3.0), ROUTE_Y, bw, ROUTE_H).has_point(p):
 			return "energy_%d" % i
+	if vent_rect().has_point(p):
+		return "vent"
 	var v := p - DIAMOND_C
 	var d := v.length()
 	if d <= CENTRE_R:
@@ -125,6 +178,8 @@ func click_part(part: String) -> void:
 		return
 	if part.begins_with("energy_"):
 		hud.router.click(String(ROUTE_ACTIONS[int(part.substr(7))]))
+	elif part == "vent":
+		hud.router.click("vent")
 	elif part.begins_with("shield_"):
 		hud.router.click(String(ZONE_ACTIONS[int(part.substr(7))]))
 	elif part == "balance" and ship.shields.focus != Rules.FOCUS_BALANCED:
@@ -161,20 +216,42 @@ func _get_tooltip(at_position: Vector2) -> String:
 		return "Reinforce the %s shield (%s). Click it again to balance." % [String(Rules.FOCUS_NAMES[z + 1]).to_lower(), KeyMapText.key_of(String(ZONE_ACTIONS[z]))]
 	if part == "balance":
 		return "Balance the shields"
+	if part == "vent":
+		return "Vent the energy (%s): the battery clears faster, but guns, boost and shields are off until it is clear. Not in a lockout." % KeyMapText.key_of("vent")
 	return ""
 
 
-## Every frame, while visible, ask Godot to redraw us (queue_redraw makes
+## Every frame, set the danger edge from the ship's state and, while visible, ask Godot to redraw us (queue_redraw makes
 ## Godot call _draw() again).
 func _process(_dt: float) -> void:
+	_fire = under_fire()
 	if visible:
 		queue_redraw()
 
 
-## Draw the readout: the background box, then (with a live ship) the
+## RT7: did the ship take a hull hit under FIRE_EDGE_S seconds of match time ago (the readout's danger edge is on)? A shield hit
+## does not count: only last_hull_damage_time does, as for the "Under Fire!" alert. Only the Admiral's readout wears it (the alert
+## is the Admiral's; the pilot's readout is as it was).
+func under_fire() -> bool:
+	if ship == null or not is_instance_valid(ship) or not ship.alive or ship.world == null:
+		return false
+	if hud == null or hud.world == null or hud.world.human_role != "admiral":
+		return false
+	return ship.world.time - ship.last_hull_damage_time < FIRE_EDGE_S
+
+
+## RT7: is the danger edge on (the check reads it)?
+func fire_edge_on() -> bool:
+	return _fire
+
+
+## Draw the readout: the background box, the danger edge while the ship is under fire, then (with a live ship) the
 ## shield diamond and the bars.
 func _draw() -> void:
 	draw_style_box(UiKit.box(Palette.with_alpha(Palette.PANEL, 0.9), Palette.LINE, 0), Rect2(Vector2.ZERO, size))
+	# The steady danger edge (the colour of the army card's attacked frame): no blink, nothing times it.
+	if _fire:
+		draw_rect(Rect2(1.0, 1.0, size.x - 2.0, size.y - 2.0), Palette.DANGER, false, FIRE_EDGE_W)
 	if ship == null or not is_instance_valid(ship) or not ship.alive:
 		return
 	_draw_diamond()
@@ -211,6 +288,7 @@ func _draw_diamond() -> void:
 		var focused := sh.focus != Rules.FOCUS_BALANCED and sh.focus - 1 == z
 		if focused:
 			draw_arc(c, r + thick * 0.5 + 3.0, mid - half, mid + half, 18, UiKit.accent(), 2.0, true)
+	_draw_armour_ring(c)
 	# Ship icon, nose up. Its colour slides ("lerps", short for linear
 	# interpolation: mixes in a straight line) from green to red as the
 	# hull drops.
@@ -218,12 +296,67 @@ func _draw_diamond() -> void:
 	var hull_col := Palette.REPAIR.lerp(Palette.CINDER, 1.0 - ship.hull_frac())
 	draw_colored_polygon(pts, Palette.with_alpha(hull_col, 0.85))
 	draw_polyline(pts + PackedVector2Array([pts[0]]), Palette.ICE, 1.0, true)
+	_draw_part_pips(c)
 	# The focus line: in the highlight colour when focus can be changed, grey
 	# with the seconds left while it is cooling down.
 	var focus_text := "Focus: %s" % Rules.FOCUS_NAMES[sh.focus]
 	if ship.focus_cd > 0.0:
 		focus_text += " (%.1fs)" % ship.focus_cd
 	_text(Vector2(8, H - 8), focus_text, 11, UiKit.accent() if ship.focus_cd <= 0.0 else Palette.MIST)
+
+
+## Draw the armour ring inside the shield arcs: one tiled arc for each armour section,
+## bright green when whole, then darker red as the armour is lost, then black with a
+## light outline once the section is breached (no armour left). No number and no bar,
+## and a section never gets its colour back. A section that just turned black pulses for
+## ARMOUR_PULSE seconds (once: it can only turn black once).
+func _draw_armour_ring(c: Vector2) -> void:
+	var a := ship.armour
+	if a == null:
+		return
+	var now := ship.world.time if ship.world != null else 0.0
+	for i in a.count:
+		var span := a.section_span(i)
+		# The ship's own angles have the nose at 0; the readout has the nose up.
+		var a0 := span.x - PI * 0.5 + ARMOUR_GAP
+		var a1 := span.y - PI * 0.5 - ARMOUR_GAP
+		var frac := float(a.a_hp[i]) / float(maxi(1, a.a_max[i]))
+		if a.is_black(i):
+			draw_arc(c, ARMOUR_R, a0, a1, 8, Color(0.02, 0.02, 0.03, 0.95), ARMOUR_W, true)
+			draw_arc(c, ARMOUR_R + ARMOUR_W * 0.5, a0, a1, 8, Palette.with_alpha(Palette.ICE, 0.55), 1.0, true)
+			draw_arc(c, ARMOUR_R - ARMOUR_W * 0.5, a0, a1, 8, Palette.with_alpha(Palette.ICE, 0.55), 1.0, true)
+		else:
+			draw_arc(c, ARMOUR_R, a0, a1, 8, _armour_colour(frac), ARMOUR_W, true)
+		var since := now - a.breach_time[i]
+		if since >= 0.0 and since < ARMOUR_PULSE:
+			draw_arc(c, ARMOUR_R, a0, a1, 8, Palette.with_alpha(Palette.ICE, 0.85 * (1.0 - since / ARMOUR_PULSE)), ARMOUR_W + 3.0, true)
+
+
+## The colour of a section holding frac (0..1] of its armour: bright green when whole,
+## fading to a red at ARMOUR_LOW, then to a dark red as the last of it goes (green and red
+## differ in brightness, so the fade reads without telling the hues apart).
+func _armour_colour(frac: float) -> Color:
+	var red := Palette.CINDER.darkened(0.2)
+	if frac >= ARMOUR_LOW:
+		return red.lerp(Palette.REPAIR, clampf((frac - ARMOUR_LOW) / (1.0 - ARMOUR_LOW), 0.0, 1.0))
+	return red.darkened(0.55 * (1.0 - frac / ARMOUR_LOW))
+
+
+## Draw one small pip on the ship icon for each part of a big ship that has parts (PartRings, the own ship: always
+## visible): placed by the part's offset over the hull's length, green when working, dark red when hurt, black when
+## offline; an offline part has a light arc round its pip that grows to a full circle as it climbs back to its
+## 15 percent line. No number and no text.
+func _draw_part_pips(c: Vector2) -> void:
+	var list := PartRings.rings(ship, ship.team)
+	if list.is_empty():
+		return
+	var k := PIP_SPAN / maxf(1.0, float(ship.def.get("length", 26.0)))
+	for r: Dictionary in list:
+		var off: Vector2 = r["off"]
+		var p := c + Vector2(off.y, -off.x) * k
+		draw_circle(p, PIP_R, r["colour"])
+		if int(r["state"]) == ShipSystems.OFF:
+			draw_arc(p, PIP_R + 1.5, -PI * 0.5, -PI * 0.5 + TAU * float(r["climb"]), 10, Palette.with_alpha(Palette.ICE, 0.8), 1.0, true)
 
 
 ## Draw the right half, top to bottom: three bars, the energy routing
@@ -247,7 +380,21 @@ func _draw_bars() -> void:
 	# The energy bar is amber for both teams: amber means energy here, it is not
 	# the interface's highlight colour.
 	_bar(Rect2(x, y, w, 13), ship.energy.fraction(), Palette.AMBER)
-	_text(Vector2(x + 4, y + 10), "Energy %d / %d" % [int(ship.energy.value), int(ship.energy.max_value)], 10, Palette.ICE, true)
+	# The part of the battery held by blocked shield damage (hard energy) in its own colour,
+	# from the right end of the bar.
+	if ship.energy.hard > 0.0 and ship.energy.max_value > 0.0:
+		var hw := w * clampf(ship.energy.hard / ship.energy.max_value, 0.0, 1.0)
+		draw_rect(Rect2(x + w - hw, y, hw, 13), HARD_COLOUR)
+		draw_rect(Rect2(x, y, w, 13), Palette.LINE, false, 1.0)
+	var energy_text := "Energy %d / %d" % [int(ship.energy.value), int(ship.energy.max_value)]
+	if ship.energy.hard > 0.0:
+		energy_text += "  held %d" % int(ship.energy.hard)
+	_text(Vector2(x + 4, y + 10), energy_text, 10, Palette.ICE, true)
+	var state := state_text(ship)
+	if state != "":
+		var box := state_box(x, y, w)
+		draw_string(font, Vector2(box.position.x, y + 10), state, HORIZONTAL_ALIGNMENT_RIGHT, box.size.x, 10, Palette.VOID)
+		draw_string(font, Vector2(box.position.x - 1.0, y + 9), state, HORIZONTAL_ALIGNMENT_RIGHT, box.size.x, 10, Palette.ICE)
 	y += 18.0
 	# Step 3: energy routing: four buttons with 3-pixel gaps; the active
 	# one is filled with the highlight colour. They are clickable (part_at()).
@@ -265,25 +412,13 @@ func _draw_bars() -> void:
 		var total := float(Rules.ENERGY_COOLDOWN[Rules.size_index(ship.size_class)])
 		var k := clampf(ship.energy_cd / total, 0.0, 1.0)
 		draw_rect(Rect2(x, y + ROUTE_H + 1.0, w * k, 2), Palette.MIST)
-	y += 32.0
-	# Step 4: the ability: active (seconds left), cooling down, not enough
-	# energy, or ready.
-	var sp_label: String = ship.def.get("special_label", "Ability")
-	var sp_text: String
-	var sp_col := Palette.ICE
-	if ship.special_t > 0.0:
-		sp_text = "%s: active %.1fs" % [sp_label, ship.special_t]
-		sp_col = UiKit.accent()
-	elif ship.special_cd > 0.0:
-		sp_text = "%s: %.1fs" % [sp_label, ship.special_cd]
-		sp_col = Palette.MIST
-	elif ship.energy.value < float(ship.def["special_energy"]):
-		sp_text = "%s: needs %d energy" % [sp_label, int(ship.def["special_energy"])]
-		sp_col = Palette.MIST
-	else:
-		sp_text = "%s: ready (right-click / G)" % sp_label
-	_text(Vector2(x, y + 10), sp_text, 12, sp_col)
-	y += 18.0
+	_draw_vent_button()
+	y = ABILITY_Y
+	# Step 4: the ability: active (seconds left), cooling down, systems off,
+	# not enough energy, or ready (see ability_line()).
+	var line := ability_line(ship)
+	_text(Vector2(x, y + 10), String(line["text"]), ABILITY_SIZE, line["col"] as Color)
+	y = SPEED_Y
 	# Step 5: speed (world units per second, now / top speed), then boost,
 	# flight assist off, the ACE bonus timer and an EMP stall warning.
 	var spd := "Speed %d / %d" % [int(ship.velocity.length()), int(ship.f_max)]
@@ -301,7 +436,73 @@ func _draw_bars() -> void:
 		extra += "  ·  ENGINES STALLED"
 	if ship.slip:
 		extra += "  ·  SLIPSTREAM"
-	_text(Vector2(x, y + 10), spd + boost + extra, 11, Palette.MIST)
+	_text(Vector2(x, y + 10), spd + boost + extra, SPEED_SIZE, Palette.MIST)
+
+
+## The words for the state of ship `s`'s systems: "Overloaded 4.2 s" in a lockout, "Venting"
+## in a Vent, else "". A static function so a check can call it.
+static func state_text(s: Ship) -> String:
+	if s == null:
+		return ""
+	if s.overload_left > 0.0:
+		return "Overloaded %.1f s" % s.overload_left
+	if s.venting:
+		return "Venting"
+	return ""
+
+
+## The box (readout pixels) the state words are drawn right-aligned in, on the energy bar's row: the bar's left
+## edge `x`, its row's top `y` and its width `w` go in. The box is STATE_W wide, 13 tall (the bar's height) and
+## starts STATE_BACK left of the bar's right end, so the words end inside the readout. A static function so
+## the drawing and a check use one number.
+static func state_box(x: float, y: float, w: float) -> Rect2:
+	return Rect2(Vector2(x + w - STATE_BACK, y), Vector2(STATE_W, 13.0))
+
+
+## The ability line of ship `s`: {"text": the words, "col": their colour}. A charge (the Broadside's, the
+## Overcharge's warning) shows "charging" and its seconds left. Active shows the seconds left
+## (highlight colour), a cooldown shows its seconds, a lockout or a Vent (systems_off()) says "offline"
+## (the unavailable colour: the special cannot be used then, whatever the energy), too little energy says
+## what it needs, and only a ship that can use it now says "ready". A static function so a check can call it.
+static func ability_line(s: Ship) -> Dictionary:
+	var label: String = s.def.get("special_label", "Ability")
+	if s.charge_t > 0.0:
+		return {"text": "%s: charging %.1fs" % [label, s.charge_t], "col": UiKit.accent()}
+	if s.special_t > 0.0:
+		return {"text": "%s: active %.1fs" % [label, s.special_t], "col": UiKit.accent()}
+	if s.special_cd > 0.0:
+		return {"text": "%s: %.1fs" % [label, s.special_cd], "col": Palette.MIST}
+	if s.systems_off():
+		return {"text": "%s: offline" % label, "col": Palette.MIST}
+	if s.energy.value < float(s.def["special_energy"]):
+		return {"text": "%s: needs %d energy" % [label, int(s.def["special_energy"])], "col": Palette.MIST}
+	return {"text": "%s: ready (right-click / G)" % label, "col": Palette.ICE}
+
+
+## The rectangle (readout pixels) that the ability line's text `t` covers when drawn with `font`: from the
+## routing buttons' left edge, on the line's baseline, as tall as the font's ascent and descent.
+static func ability_text_rect(t: String, font: Font) -> Rect2:
+	var base := ABILITY_Y + 10.0
+	var asc := font.get_ascent(ABILITY_SIZE)
+	var width := font.get_string_size(t, HORIZONTAL_ALIGNMENT_LEFT, -1, ABILITY_SIZE).x
+	return Rect2(ROUTE_X, base - asc, width, asc + font.get_descent(ABILITY_SIZE))
+
+
+## The Vent button's rectangle (readout pixels): the click part and the drawing.
+static func vent_rect() -> Rect2:
+	return Rect2(VENT_X, VENT_Y, VENT_W, VENT_H)
+
+
+## Draw the Vent button (a click part, see part_at()): filled in the highlight colour while
+## the Vent runs, plain while a Vent can start, dim when it cannot (a lockout, or nothing to
+## clear). The key shows in brackets.
+func _draw_vent_button() -> void:
+	var r := vent_rect()
+	var can := not ship.systems_off() and ship.energy.load_frac() > 0.0
+	draw_rect(r, UiKit.accent() if ship.venting else Palette.INK)
+	draw_rect(r, Palette.LINE, false, 1.0)
+	var col := Palette.VOID if ship.venting else (Palette.ICE if can else Palette.MIST)
+	_text(r.position + Vector2(5, 12), "Vent (%s)" % KeyMapText.key_of("vent"), 10, col)
 
 
 ## Draw one bar in rectangle `r`: a dark background, the filled part

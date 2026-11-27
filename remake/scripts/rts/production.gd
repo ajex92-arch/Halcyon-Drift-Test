@@ -314,6 +314,7 @@ func tick(_dt: float) -> void:
 	_progress_ships()
 	_ore_turn()
 	Standin.keep_alive(world, self)
+	SquadronThink.tick_team(world, team)
 
 
 ## Step 1: an item that was building in the team's old queue and is not there any more
@@ -519,7 +520,7 @@ func _make_squad(it: Dictionary) -> void:
 	s.fire_stance = int(it["fire"])
 	s.move_stance = int(it["move"])
 	s.state = 6
-	s.brain = "standin"
+	s.brain = SquadronRules.BRAIN_SQUAD if SquadronRules.use_squad_brain else SquadronRules.BRAIN_STANDIN
 	s.created_tick = world.tick_count
 	world.squads[s.id] = s
 	it["squad"] = s.id
@@ -613,11 +614,18 @@ func rally_point(kind: String, rx: int, ry: int) -> Vector2i:
 	if kind == "lane":
 		if _lanes == null:
 			_lanes = AdmiralLanes.new(world, team)
-		var lane := _lanes.push_lane()
+		# With the fleet layer on (RT8 build 8b) the lane is the fleet's goal lane once it has chosen one.
+		var ai: AdmiralAI = null
+		if world.admiral_ai.size() > team:
+			ai = world.admiral_ai[team] as AdmiralAI
+		var lane := ""
+		if ai != null and ai.fleet != null:
+			lane = ai.fleet.influence.goal
+		if lane == "":
+			lane = _lanes.push_lane()
 		if lane == "":
 			lane = MapLayout.LANE_ORDER[int(world.time / 60.0) % 3]
-		var frac := clampf(_lanes.front_frac(lane) - 0.04, 0.10, 0.85)
-		return Order.point(_lanes.lane_point(lane, frac))
+		return _lanes.front_point(lane)
 	if ms == null:
 		return Vector2i.ZERO
 	return Order.point(ms.global_position + Vector2.from_angle(ms.rotation) * (ms.half_len + ms.beam * 0.5 + RtsHulls.RALLY_AHEAD))

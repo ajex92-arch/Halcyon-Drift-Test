@@ -86,6 +86,11 @@ var phase := "play"
 var winner := -1
 ## What the human at the keyboard plays: "pilot" | "admiral" | "spectator".
 var human_role := "pilot"
+## True for the whole of a practice match (the start screen's Practice range
+## button). WorldSetup sets it once, when the match is built, from the start choice
+## (Game.practice_start), and nothing writes it again. Every part of the range asks
+## only this flag; with it false (every normal match) none of the range's code runs.
+var practice := false
 ## Team whose fog the screen shows (-1 = see everything).
 var viewer_team := 0
 ## The team the human plays for: Rules.HALCYON (Aurelian) or Rules.CINDER (Vhorr), from
@@ -98,8 +103,13 @@ var human_team := Rules.HALCYON
 ## spectator.
 var human: PilotProfile = null
 ## True while the human Admiral's board is showing. The HUD keeps it up to
-## date (HudPanels.toggle_board()); BoardHold and the camera read it.
+## date (HudPanels.toggle_board()). It means the board only; "mode 3" (the command view open while
+## flying) is mode3().
 var board_open := false
+## True while the flying Admiral has the command view open (Tab while flying; Tab or Esc close it). A
+## screen flag: the HUD sets it, and it is cleared when the Admiral docks or loses the ship. With
+## board_open it makes "mode 3" (mode3()).
+var view_open := false
 ## True while the pilot's order wheel is open (WingWheel sets it). The human's aim and face
 ## points then keep the values they had when the wheel opened (PlayerController), so a click on
 ## the wheel never moves the ship.
@@ -196,6 +206,13 @@ var by_uid := {}
 ## turrets and big derelicts. Rebuilt each tick; Projectiles uses it for
 ## hit tests.
 var big_hash: SpatialHash
+## A third spatial hash with only the pilot ships (World.ships: human, AI and
+## the bought fleets' crews), filed in the same order as in unit_hash, so a
+## search here gives exactly the ships a unit_hash search would, in the same
+## order, without stepping over every minion and drone in those cells.
+## Rebuilt each tick; WorldSeparation and PilotSenses use it (F311: with
+## 63-ship fleets a crowded rally put a hundred units in every search).
+var ship_hash: SpatialHash
 ## How many units went into big_hash this tick.
 var big_count := 0
 ## Pilot ships (human and AI).
@@ -218,6 +235,11 @@ var mining_drones: Array[MiningDrone] = []
 var repair_drones: Array[RepairDrone] = []
 ## Jungle monsters: derelicts and their snub fighters.
 var monsters: Array[Unit] = []
+## A practice range's target drones (empty in every normal match).
+var practice_drones: Array[PracticeDrone] = []
+## The practice range's own rules and state (default drones, replacements, trials), or
+## null in every normal match. WorldSetup makes it for a practice match only.
+var practice_range: PracticeRange = null
 
 # --- scene and input --------------------------------------------------------------------
 
@@ -243,6 +265,8 @@ var tick_usec := 0
 ## "u_<kind>" entry per unit kind. Only filled while `profiling` is on;
 ## Ship and Minion code add a few entries of their own.
 var prof := {}
+## The profile keys of the two computer Admirals' time marks (one per team).
+const AI_MARKS := ["ai0", "ai1"]
 ## Turn on to measure the tick sections into `prof` (main.gd and the
 ## performance test set it).
 var profiling := false
@@ -432,6 +456,12 @@ func spawn_ward(team: int, target: Vector2) -> Ward:
 	return spawner.spawn_ward(team, target)
 
 
+## Make a practice range's target drone of kind `kind_id` (a key of
+## PracticeDrones.ROWS) at `at`. The real code is WorldSpawner.spawn_practice_drone().
+func spawn_practice_drone(kind_id: String, at: Vector2) -> PracticeDrone:
+	return spawner.spawn_practice_drone(kind_id, at)
+
+
 ## Make the derelict (jungle monster) of camp `camp_id` at `at`.
 func spawn_derelict(camp_id: String, type_id: String, at: Vector2) -> Derelict:
 	return spawner.spawn_derelict(camp_id, type_id, at)
@@ -602,6 +632,8 @@ func _physics_process(dt: float) -> void:
 
 	# Steps 5 and 6: push overlapping ships apart, then move the projectiles.
 	separation.separate(dt)
+	# ("sep" is the shove alone; it is also inside "projectiles".)
+	_prof_mark("sep", tp)
 	projectiles.tick(dt)
 	tp = _prof_mark("projectiles", tp)
 
@@ -622,7 +654,12 @@ func _physics_process(dt: float) -> void:
 				if t == 0:
 					orders.replay_ai(t)
 			else:
+				# The AI's own time mark, one per team (--profile shows it as ai0 and ai1, in ms per game second):
+				# the cost of the Admiral's think, the team view's records included.
+				var ta := Time.get_ticks_usec() if profiling else 0
 				(admiral_ai[t] as AdmiralAI).tick(dt)
+				if profiling:
+					prof[AI_MARKS[t]] = int(prof.get(AI_MARKS[t], 0)) + (Time.get_ticks_usec() - ta)
 	# Step 8: the feature modules' tick hooks (none unless a feature is on).
 	for f: Callable in tick_hooks:
 		f.call(dt)
@@ -642,15 +679,24 @@ func _prof_mark(key: String, since: int) -> int:
 
 # --- mouse input that must respect the GUI ------------------------------------------------------
 
+## Mode 3: the human Admiral has the command view (view_open) or the Admiral board (board_open) open while
+## flying their own ship. The ship coasts (CoastController), the camera is free, and map clicks select
+## instead of firing. The one question every reader of "mode 3" asks; board_open alone means the board.
+func mode3() -> bool:
+	return board_open or view_open
+
+
 ## Mouse presses the GUI did not use (Godot only sends a click here when no
-## button or panel took it). Left button = fire, right button = special.
+## button or panel took it). Left button = fire, right button = special. In mode 3 a press fires nothing and
+## uses no special (G keeps the special); a release always counts, so a button held across Tab is let go.
 func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventMouseButton:
 		var mb := event as InputEventMouseButton
+		var quiet := CoastController.holding(self)
 		if mb.button_index == MOUSE_BUTTON_LEFT:
-			mouse_fire = mb.pressed
+			mouse_fire = mb.pressed and not quiet
 		elif mb.button_index == MOUSE_BUTTON_RIGHT:
-			mouse_special = mb.pressed
+			mouse_special = mb.pressed and not quiet
 
 
 ## Every mouse event, even over the GUI. Releases are always honoured here,

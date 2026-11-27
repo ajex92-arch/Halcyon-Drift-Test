@@ -22,10 +22,13 @@ extends RefCounted
 ##                  turrets: Unit.heal() refuses them).
 ##       jam        (Support) jam enemy vision around us for 7 s.
 ##       brace      (Flak) take only 62% damage for 5 s.
-##       overcharge (Destroyer) double fire rate for 5 s.
-##       broadside  (Battlecruiser) +50% fire rate for 6 s.
+##       overcharge (Destroyer) a 1 s warning ring, then double fire rate for 5 s.
+##       broadside  (Battlecruiser) a 1.2 s charge for the side of the reticle (that
+##                  side's battery guns held, then fired together), then that side
+##                  fires 50% faster for 4 s. The reticle crossing to the other side
+##                  during the charge loses it: no refund. A low sound marks the press.
 ##     (The timed effects are read elsewhere: ShipStats, ShipFlight,
-##     Ship.incoming_mult() and World's vision code.)
+##     Ship._weapons(), Ship.incoming_mult() and World's vision code.)
 ##   - use_repair_kit(): spend one repair kit from the pilot's inventory to
 ##     launch a weak repair drone that heals only this ship.
 ##   - manage_escort_drones(): hulls with "repair_drones" in their data (the
@@ -43,6 +46,15 @@ extends RefCounted
 ## sorts units into a grid of cells so "who is near this point?" is quick to
 ## answer.) The query empties it before filling it.
 static var _scratch: Array = []
+
+## How long the Battlecruiser's Broadside charges before the chosen side fires, in seconds.
+const BROADSIDE_CHARGE := 1.2
+## How long the charged side then fires 50% faster, in seconds.
+const BROADSIDE_WINDOW := 4.0
+## How long the Destroyer's Overcharge warns before it starts, in seconds.
+const OVERCHARGE_CHARGE := 1.0
+## How long the double fire rate of the Overcharge lasts, in seconds.
+const OVERCHARGE_WINDOW := 5.0
 
 
 ## Use `ship`'s special ability now (the caller has checked that it is
@@ -83,11 +95,33 @@ static func use_special(ship: Ship) -> void:
 		"jam":
 			ship.jam_t = 7.0
 			world.effects.pulse(ship.global_position, 1400.0, 0.8, Palette.VEIL)
-		"brace", "overcharge", "broadside":
-			ship.special_t = 5.0 if sp != "broadside" else 6.0
+		"brace":
+			ship.special_t = 5.0
 			ship.stats_dirty = true
+		"overcharge":
+			# A 1 s warning ring first; the double fire rate starts when it ends.
+			ship.charge_t = OVERCHARGE_CHARGE
+			ship.charge_side = 0
+			world.effects.pulse(ship.global_position, ship.radius * 1.8, OVERCHARGE_CHARGE, Palette.team(ship.team))
+		"broadside":
+			# A charge of 1.2 s for the side the reticle is on: that side's battery is held,
+			# a running ion burst stops, and the lock watches the reticle (Ship._charge_step).
+			ship.charge_t = BROADSIDE_CHARGE
+			ship.charge_side = ship.side_of(ship.controls.aim_point)
+			for m in ship.mounts:
+				if m.battery and int(signf(m.offset.y)) == ship.charge_side:
+					m.beam_on = 0.0
+			Events.cue.emit("broadside_charge", ship.global_position)
 	# Step 3: play the sound.
 	Events.cue.emit("special", ship.global_position)
+
+
+## The charge of `ship`'s special has run out (Ship._charge_step calls it): start the lasting
+## effect. The Broadside's faster fire lasts BROADSIDE_WINDOW seconds (Ship._weapons gives it to
+## the charged side), the Overcharge's double fire rate OVERCHARGE_WINDOW seconds (ShipStats).
+static func charge_done(ship: Ship) -> void:
+	ship.special_t = BROADSIDE_WINDOW if ship.def["special"] == "broadside" else OVERCHARGE_WINDOW
+	ship.stats_dirty = true
 
 
 ## True while a repair-kit drone of `ship` is still alive. Drones that are

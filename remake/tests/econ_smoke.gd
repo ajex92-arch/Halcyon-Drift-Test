@@ -8,8 +8,10 @@ extends Node
 ## HOW IT WORKS: the nudges are the only thing that is not "natural" play,
 ## and they only create situations (they never touch the features):
 ##   +0.5 s   two Cinder turrets are removed quietly, so Cinder's deficit D
-##            (turrets standing) is 4 and, after 60 s, Cinder is "behind"
-##            (ComebackDirector);
+##            (turrets standing) is 3 or more and, after 60 s, Cinder is
+##            "behind" (ComebackDirector); every second until +66 s any
+##            Cinder turret the match has rebuilt is removed again, so D
+##            holds (the match rebuilds them in less than 60 s);
 ##   +8 s     every pilot is given 15,000 credits (the late pile-up of idle
 ##            money that the sinks are meant for);
 ##   +62.5 s  Cinder's flex pilot and jungler are moved to 3,500 world units
@@ -47,6 +49,8 @@ var t0 := 0.0
 var stage := 0
 ## The Halcyon turret destroyed at +66 s.
 var target_turret: Turret = null
+## The match time (seconds after the start) of the next check that Cinder is still down in turrets.
+var _keep_next := 0.0
 
 
 ## main.gd calls this once after the World is built: read the options and
@@ -87,6 +91,9 @@ func _physics_process(_dt: float) -> void:
 	elif stage == 6 and t >= 100.0:
 		stage = 7
 		_move_hunter_next_to_extractor()
+	if stage >= 1 and stage <= 3 and t >= _keep_next:
+		_keep_next = t + 1.0
+		_keep_cinder_behind()
 	if t >= secs or world.phase != "play":
 		_finish()
 
@@ -139,6 +146,23 @@ func _cinder_ship() -> Ship:
 		if s.team == Rules.CINDER and s.alive:
 			return s
 	return null
+
+
+## Once a second until the turret kill: put Cinder back to at most Halcyon's turret count minus 4. The match rebuilds the two
+## turrets taken at +0.5 s well inside the 60 s that D must hold at 3 or more, so without this Cinder is never "behind" and
+## the structure bounty is never due.
+func _keep_cinder_behind() -> void:
+	var halcyon := 0
+	var cinder: Array[Turret] = []
+	for tr: Turret in world.turrets:
+		if not tr.alive:
+			continue
+		if tr.team == Rules.HALCYON:
+			halcyon += 1
+		elif tr.team == Rules.CINDER:
+			cinder.append(tr)
+	while cinder.size() > halcyon - 4 and not cinder.is_empty():
+		world.combat.kill_silently(cinder.pop_back())
 
 
 ## Move Cinder's flex pilot and jungler next to a Halcyon turret (3,500

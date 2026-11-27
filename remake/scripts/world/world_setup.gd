@@ -24,7 +24,10 @@ extends RefCounted
 ##      human admiral also gets an own profile (the admiral's seat).
 ##   6. Apply the test switches and make the AI admirals, each with its own
 ##      admiral-seat profile (with the team's income multiplier) and pilot
-##      brain (for its field trips).
+##      brain (for its field trips). A practice start (Game.practice_start)
+##      also sets World.practice here and clears the computer pilots its
+##      choice leaves out (PracticeRange); the computer Admirals are then made
+##      only for the choice "both".
 ##   7. Launch the starting mining drones, make the directors and spawn
 ##      the jungle camps.
 ##   8. Set up the map decoration, the fog drawing and the camera, then
@@ -88,6 +91,7 @@ static func build(w: World, role: String) -> void:
 	# (MapLayout.W by MapLayout.H world units).
 	w.unit_hash = SpatialHash.new(MapLayout.W, MapLayout.H)
 	w.big_hash = SpatialHash.new(MapLayout.W, MapLayout.H)
+	w.ship_hash = SpatialHash.new(MapLayout.W, MapLayout.H)
 	w.vision = Vision.new()
 	w.vision.setup(w)
 	# Rocks block sight, so Vision must hear when one is shot apart.
@@ -112,6 +116,8 @@ static func build(w: World, role: String) -> void:
 	# think hook that keeps a bought ship's brain from retreating.
 	ProductionOrders.install(w)
 	Standin.install(w)
+	# The practice range's order (every match has it: outside a range it is refused).
+	PracticeOrders.install(w)
 	# The squad orders (a pilot's wing) get their checker and handler.
 	Squads.register(w)
 	w.alerts = [AlertList.new(0), AlertList.new(1)]
@@ -191,6 +197,12 @@ static func build(w: World, role: String) -> void:
 		for p: PilotProfile in w.pilot_ai.keys():
 			w.profiles.erase(p)
 		w.pilot_ai.clear()
+	# A practice match (the start screen's Practice range button; a spectator cannot start one):
+	# the flag is set here, once, and the start choice "who else is on the map" clears the
+	# seats it leaves out (PracticeRange).
+	if Game.practice_start and role != "spectator":
+		w.practice = true
+		PracticeRange.clear_seats(w, Game.practice_others)
 	# The test wings (--wingmen, the start screen's two switches): after the switch above, so a pilot it
 	# removed gets none. Nothing happens when no wing is asked for.
 	Squads.make_test_wings(w)
@@ -200,7 +212,7 @@ static func build(w: World, role: String) -> void:
 	# the field (AdmiralField). The brain is made after the "no-pilots" clear
 	# above, so that switch leaves it alone.
 	for t in 2:
-		if w.teams[t].admiral == "ai" and not Game.opt("no-admiral-ai", false):
+		if w.teams[t].admiral == "ai" and not Game.opt("no-admiral-ai", false) and (not w.practice or PracticeRange.admirals_wanted(Game.practice_others)):
 			var ap := PilotProfile.new(Roster.callsign(t, Rules.ADMIRAL_SEAT), t, Rules.ADMIRAL_SEAT, false)
 			ap.income_mult = w.teams[t].income_mult
 			ap.role = "admiral"
@@ -208,6 +220,8 @@ static func build(w: World, role: String) -> void:
 			w.admiral_profile[t] = ap
 			w.pilot_ai[ap] = PilotAI.new(w, ap)
 			w.admiral_ai[t] = AdmiralAI.new(w, t)
+	# The deputy of a human Admiral (nothing in a match without one); the seats are known only now.
+	Deputy.install(w)
 
 	# Step 7: the starting mining drones (Structures.MINING_DRONE "start",
 	# 4 per team), Aurelian's first. Each one uses a random number.
@@ -219,6 +233,9 @@ static func build(w: World, role: String) -> void:
 	w.jungle_director = JungleDirector.new(w)
 	if not Game.opt("no-jungle", false):
 		w.jungle_director.setup()
+	# A practice match gets its range: the default target drones and the tick hook (PracticeRange).
+	if w.practice:
+		PracticeRange.install(w)
 
 	# Step 8: the map decoration, the fog drawing and the camera...
 	w.get_node("MapDecor").setup(w)

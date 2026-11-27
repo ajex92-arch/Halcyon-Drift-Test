@@ -243,7 +243,7 @@ func _squad_item(rec: Squad) -> Dictionary:
 	var frac := _hull_of(ships)
 	var state := str(STATE_WORDS[clampi(rec.state, 0, STATE_WORDS.size() - 1)])
 	var short := Formations.short_hull(rec.hull_id)
-	return {"ids": [rec.id], "text": "%s  %s" % [short, state], "tiny": short.left(4), "ships": ships.size(), "pips": mini(3, rec.max_members), "hull": frac, "on": false,
+	return {"ids": [rec.id], "text": "%s  %s" % [short, state], "tiny": short.left(4), "ships": ships.size(), "pips": mini(3, rec.max_members), "hull": frac, "on": false, "badge": _badge_of([rec.id]),
 		"tip": "%s: %d of %d ships, hull %d%%, %s. Click to select only this squadron; Shift+click or the x takes it out." % [str(Ships.HULLS[rec.hull_id]["label"]), ships.size(), rec.max_members, int(frac * 100.0), state]}
 
 
@@ -259,8 +259,20 @@ func _class_item(hull: String, recs: Array) -> Dictionary:
 		frac += _hull_of(s)
 	frac /= float(maxi(1, recs.size()))
 	var label := str(Ships.HULLS[hull]["label"])
-	return {"ids": ids, "text": "%s x%d" % [Formations.short_hull(hull), recs.size()], "tiny": "%s x%d" % [Formations.short_hull(hull).left(3), recs.size()], "ships": mini(3, ships), "pips": 3, "hull": frac, "on": false,
+	return {"ids": ids, "text": "%s x%d" % [Formations.short_hull(hull), recs.size()], "tiny": "%s x%d" % [Formations.short_hull(hull).left(3), recs.size()], "ships": mini(3, ships), "pips": 3, "hull": frac, "on": false, "badge": _badge_of(ids),
 		"tip": "%d %s squadrons (%d ships), hull %d%%. Click to select only these; Shift+click or the x takes them out." % [recs.size(), label, ships, int(frac * 100.0)]}
+
+
+## The badge of a tag standing for squadrons `ids`: the key label of their group (from the key map, "F1") when they are all
+## in the same group, "" when one is in none or they are in different groups.
+func _badge_of(ids: Array) -> String:
+	var n := 0
+	for id: int in ids:
+		var gn := view.groups.group_of(id)
+		if gn == 0 or (n != 0 and gn != n):
+			return ""
+		n = gn
+	return KeyMap.first_key("shared", "group_%d" % n) if n > 0 else ""
 
 
 ## The mean hull of `ships` (0 with none).

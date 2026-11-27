@@ -44,21 +44,25 @@ extends RefCounted
 const ADVANCE_LANE := "mid"
 ## How far up the mid lane the mothership advances, as a fraction of the
 ## lane's length from our end (0.35 = 35%; tuned "mothership_advance_frac").
-const ADVANCE_FRAC := 0.35
+const ADVANCE_FRAC := AdmiralProfileData.TABLE["advance_frac"][0] / 1000.0
 ## The fewest seconds between two "advance" move orders (tuned
 ## "mothership_move_gap").
-const MOVE_GAP := 120.0
+const MOVE_GAP := AdmiralProfileData.TABLE["move_gap_s"][0] / 1000.0
 ## The fall-back is due when the mothership's hull is under this fraction...
-const FALLBACK_HULL := 0.5
+const FALLBACK_HULL := AdmiralProfileData.TABLE["fallback_hull"][0] / 1000.0
 ## ...and it is farther than this (world units) from its home spot.
-const FALLBACK_FAR := 2000.0
+const FALLBACK_FAR := AdmiralProfileData.TABLE["fallback_far"][0] / 1000.0
 
-## The game world (motherships, teams, the map, match time).
+## The game world (teams, the map, match time; the motherships are read through the team view).
 var world: World
 ## Our team: 0 = Aurelian, 1 = Vhorr.
 var team := 0
 ## The admiral's lane helper (fleet strength, lane points).
 var lanes: AdmiralLanes
+## What our team knows (our own mothership exactly: TeamView).
+var view: TeamView
+## This admiral's numbers (AdmiralProfile); the constants above are its standard values.
+var prof: AdmiralProfile
 ## Match time (seconds) of our last "advance" move order (not counting the
 ## fall-back when hurt). Starts far in the past (-999) so the first move
 ## can happen at once.
@@ -67,22 +71,26 @@ var last_move_t := -999.0
 
 ## Remember the world, our team and the lane helper. AdmiralAI makes this
 ## part once.
-func _init(w: World, t: int, l: AdmiralLanes) -> void:
+func _init(w: World, t: int, l: AdmiralLanes, p: AdmiralProfile = null) -> void:
 	world = w
 	team = t
 	lanes = l
+	prof = p if p != null else AdmiralProfile.for_team(t, Game.options)
+	view = TeamView.of(w, t, prof)
 
 
 ## Is team `team`'s fall-back due? True when its mothership is alive, under
 ## half hull (FALLBACK_HULL) and more than FALLBACK_FAR from its home spot:
 ## the one move the mover makes whatever else is going on. maybe_move() uses
 ## it for the order; AdmiralField uses it to keep the admiral in the chair.
-static func fallback_due(world: World, team: int) -> bool:
-	var ms := world.mothership(team)
+static func fallback_due(world: World, team: int, prof: AdmiralProfile = null) -> bool:
+	var ms := TeamView.of(world, team).own_ms()
 	if ms == null or not ms.alive:
 		return false
 	var home: Vector2 = world.map.mothership_pos[team]
-	return ms.hull_frac() < FALLBACK_HULL and ms.global_position.distance_to(home) > FALLBACK_FAR
+	var hull_limit := FALLBACK_HULL if prof == null else prof.f("fallback_hull")
+	var far := FALLBACK_FAR if prof == null else prof.f("fallback_far")
+	return ms.hull_frac() < hull_limit and ms.global_position.distance_to(home) > far
 
 
 ## Decide whether to move our mothership now, and order the move if so.
@@ -90,7 +98,7 @@ static func fallback_due(world: World, team: int) -> bool:
 func maybe_move() -> void:
 	# Step 1: no mothership, or it is still flying to its last target
 	# (move_target is "INF", meaning "none", when it isn't moving).
-	var ms := world.mothership(team)
+	var ms := view.own_ms()
 	if ms == null or ms.move_target != Vector2.INF:
 		return
 	var ts := world.teams[team]
@@ -100,8 +108,10 @@ func maybe_move() -> void:
 	# Step 2: under attack or badly hurt: fall back to the home position
 	# (where it started the match).
 	var home: Vector2 = world.map.mothership_pos[team]
-	if ms.hull_frac() < FALLBACK_HULL or ts.defending(world.time):
-		if fallback_due(world, team):
+	if ms.hull_frac() < prof.f("fallback_hull") or ts.defending(world.time):
+		if fallback_due(world, team, prof):
+			AdmiralLog.of(world).expect(team, "MOTHERSHIP_MOVE", "mover.fallback", "pulls the mothership back home", "staying and fighting", "its hull is at %d%% and it is far from home" % roundi(ms.hull_frac() * 100.0))
+			AdmiralLog.of(world).feed(world, team, "The %s mothership is falling back to its home position." % Rules.TEAM_DISPLAY[team])
 			world.command.move_mothership(team, home)
 		return
 	# Step 3: advance up the mid lane (ADVANCE_LANE) when we're at least
@@ -111,11 +121,18 @@ func maybe_move() -> void:
 	# at home, 50-minute matches never ended. And when the lane followed the
 	# push or siege lane, it hopped lanes as that flickered, and pilots
 	# flying home chased it across the map for minutes.)
-	if lanes.fleet_power(team) < lanes.fleet_power(1 - team):
+	if lanes.measure(team) < lanes.measure(1 - team) * prof.f("mover_edge"):
+		var lg := AdmiralLog.of(world)
+		if lg.wants(team):
+			lg.not_yet(team, "mover.hold", "weaker", "holds the mothership: %s%s, it needs %.1f times" % [lanes.versus(), lanes.measure_tag(), prof.f("mover_edge")])
 		return
 	# Step 4: the spot 35% up that lane (ADVANCE_FRAC). Go if it is over
 	# 2,500 away, at most one new move every 2 minutes (MOVE_GAP).
-	var p := lanes.lane_point(ADVANCE_LANE, float(Rules.tune("mothership_advance_frac", ADVANCE_FRAC)))
-	if ms.global_position.distance_to(p) > 2500.0 and world.time - last_move_t > float(Rules.tune("mothership_move_gap", MOVE_GAP)):
+	var p := lanes.lane_point(ADVANCE_LANE, float(Rules.tune("mothership_advance_frac", prof.f("advance_frac"))))
+	if ms.global_position.distance_to(p) > prof.f("advance_dist") and world.time - last_move_t > float(Rules.tune("mothership_move_gap", prof.f("move_gap_s"))):
 		last_move_t = world.time
+		var lg2 := AdmiralLog.of(world)
+		if lg2.wants(team):
+			lg2.expect(team, "MOTHERSHIP_MOVE", "mover.advance", "advances the mothership up the %s lane" % ADVANCE_LANE, "staying at home", "%s%s" % [lanes.versus(), lanes.measure_tag()])
+		AdmiralLog.feed(world, team, "The %s mothership is moving up the %s lane." % [Rules.TEAM_DISPLAY[team], ADVANCE_LANE])
 		world.command.move_mothership(team, p)

@@ -80,7 +80,7 @@ func _init(w: World, t: int) -> void:
 ## Called by the feature's tick hook every tick: once a second, think.
 func tick(dt: float) -> void:
 	# Only a computer admiral uses these orders on its own.
-	if not AdmiralWeak.ai_acts(world, team):
+	if not AdmiralWeak.ai_acts_seat(world, team):
 		return
 	think_t -= dt
 	if think_t > 0.0:

@@ -65,25 +65,52 @@ static func marker(o: Dictionary) -> String:
 ## The json is compact and holds subjects, target_kind, target, mode and settings
 ## in that order. A point is [x,y]: whole numbers for a human, the exact decimal
 ## text of the number for the computer's float point.
+## One more word, d<tick>, ends the line of a computer order (marker "a") of the
+## Admiral's seat whose record tick is not its apply tick: a delayed fleet order
+## (OrderQueue.apply_later), where <tick> is the decision tick. The replay of the
+## computer Admirals reads it to queue the order at its decision tick and carry it
+## out at its apply tick, as live play did. It is never written for a human's order
+## (a human's record tick is always the tick before its apply tick).
 static func to_line(o: Dictionary, code: String) -> String:
 	var body := {
 		"subjects": o["subjects"], "target_kind": o["target_kind"], "target": _target_json(o["target"]),
 		"mode": o["mode"], "settings": o["settings"],
 	}
-	return "o %d %d %d %s %d %s %s %s" % [int(o["apply_tick"]), int(o["team"]), int(o["seat"]), marker(o), int(o["id"]), str(o["kind"]), JSON.stringify(body, "", false, true), code]
+	var line := "o %d %d %d %s %d %s %s %s" % [int(o["apply_tick"]), int(o["team"]), int(o["seat"]), marker(o), int(o["id"]), str(o["kind"]), JSON.stringify(body, "", false, true), code]
+	var decided := int(o.get("tick", -1))
+	if marker(o) == "a" and int(o["seat"]) == Rules.ADMIRAL_SEAT and decided >= 0 and decided != int(o["apply_tick"]):
+		line += " d%d" % decided
+	return line
 
 
 ## The result word of a log line made by to_line() ("ok" or a reason code), or "".
 static func result_of(line: String) -> String:
-	var parts := line.split(" ", false, 8)
+	var parts := _without_decided(line).split(" ", false, 8)
 	return parts[8] if parts.size() >= 9 else ""
+
+
+## The decision tick a log line ends with (its d<tick> word), or -1 when it has none.
+static func decided_of(line: String) -> int:
+	var cut := line.rfind(" d")
+	if cut < 0:
+		return -1
+	var word := line.substr(cut + 2)
+	return int(word) if word.length() > 0 and word.is_valid_int() and not word.begins_with("-") and not word.begins_with("+") else -1
+
+
+## `line` without its last word when that word is a d<digits> word (the line itself otherwise).
+static func _without_decided(line: String) -> String:
+	return line.substr(0, line.rfind(" d")) if decided_of(line) >= 0 else line
 
 
 ## Read a log line made by to_line() back into a record. Returns {} for anything
 ## that is not an order line. The tick is worked out: a human's order was submitted
-## one input delay before it was carried out, the others on the same tick.
+## one input delay before it was carried out, the others on the same tick; a computer
+## order with a d<tick> word has that decision tick, and the record is marked
+## o["decided"] = true.
 static func from_line(line: String) -> Dictionary:
-	var parts := line.split(" ", false, 8)
+	var decided := decided_of(line)
+	var parts := _without_decided(line).split(" ", false, 8)
 	if parts.size() < 9 or parts[0] != "o":
 		return {}
 	var body = JSON.parse_string(parts[7])
@@ -98,6 +125,9 @@ static func from_line(line: String) -> Dictionary:
 	o["id"] = int(parts[5])
 	o["apply_tick"] = apply_tick
 	o["tick"] = apply_tick - (INPUT_DELAY if human else 0)
+	if decided >= 0 and mark == "a":
+		o["tick"] = decided
+		o["decided"] = true
 	o["mode"] = str(body.get("mode", "replace"))
 	return o
 

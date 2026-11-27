@@ -1,5 +1,5 @@
 extends Node
-## WHAT THIS IS: the check of the board hold (BoardHold): an Admiral who
+## WHAT THIS IS: the check of the coast (CoastController, once BoardHold): an Admiral who
 ## flies a ship of their own with the Admiral board open does not steer it.
 ## It flies a Flak Frigate (two automatic point-defence guns) at a rock of
 ## the real map and checks, one line each:
@@ -21,6 +21,8 @@ extends Node
 ##     ship stops short of each without touching it;
 ##   - a pilot (no Admiral board) is never held, even with World.board_open
 ##     forced on.
+## RT7: BoardHold became CoastController, keyed on World.mode3() (the board or the command view open while flying). This
+## check keeps the board's lines; coast_check has the command view's (Tab, clicks, the 20 runs, layout A).
 ## A spectator has no ship: the check prints SKIP and passes.
 ##
 ## HOW IT WORKS: setup() gives the human a Flak Frigate. _physics_process()
@@ -41,7 +43,7 @@ extends Node
 ## queue, run_batch.ps1, looks for). 0 failures means every check passed.
 ##
 ## WHO USES IT: main.gd loads it for --test=board_hold_check. It reads
-## BoardHold, World.board_open, CameraRig and PlayerController's effect on
+## CoastController, World.board_open, CameraRig and PlayerController's effect on
 ## the ship.
 
 ## How fast the ship flies at the rock (world units a second).
@@ -148,7 +150,7 @@ func _next() -> void:
 ## how far the search got (for the failure line).
 func _find_rock() -> String:
 	var f := world.asteroids
-	var pad := float(Ships.get_def("flak")["radius"]) + BoardHold.LINE_PAD
+	var pad := float(Ships.get_def("flak")["radius"]) + CoastController.LINE_PAD
 	var seen := [0, 0, 0, 0]
 	for i in f.pos.size():
 		if f.alive[i] == 0 or f.node_rock[i] == 1 or f.rad[i] < 40.0 or f.rad[i] > 250.0:
@@ -301,10 +303,11 @@ func _physics_process(dt: float) -> void:
 			if role == "admiral":
 				hud._toggle_board()
 				_check("the board opens and World.board_open is true", hud.board.visible and world.board_open)
-				_check("the hold applies to the Admiral", BoardHold.holding(world))
+				_check("the hold applies to the Admiral", CoastController.holding(world))
+				_check("the open board is mode 3 (World.mode3)", world.mode3() and not world.view_open)
 			else:
 				world.board_open = true
-				_check("the hold does not apply to a pilot", not BoardHold.holding(world))
+				_check("the hold does not apply to a pilot", not CoastController.holding(world))
 			_next()
 		3:
 			# Hold: board open (or forced), W held, mouse off to the side.
@@ -324,7 +327,7 @@ func _physics_process(dt: float) -> void:
 					_check("hold: the heading stays", turned < 0.02, "turned %.4f rad" % turned)
 					_check("hold: W pans the camera instead", panned > 100.0, "panned %.0f up" % panned)
 					hud._toggle_board()
-					_check("the board closes and World.board_open is false", not hud.board.visible and not world.board_open)
+					_check("the board closes and World.board_open is false", not hud.board.visible and not world.board_open and not world.mode3())
 				else:
 					_check("a pilot is not held: W thrusts with World.board_open on", speed > SLOW + 20.0, "speed %.0f" % speed)
 					world.board_open = false

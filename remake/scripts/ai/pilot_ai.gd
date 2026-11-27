@@ -68,6 +68,7 @@ extends RefCounted
 ##   PilotCombat    (pilot_combat.gd)    every tick: fight the target or fly
 ##   PilotFlight    (pilot_flight.gd)    flying to a point without crashing
 ##   PilotSystems   (pilot_systems.gd)   energy routing and shield facing
+##   PilotVent      (pilot_vent.gd)      when to press Vent
 ##   PilotRun       (pilot_run.gd)       a Bomber's torpedo runs
 ##
 ## WHO USES IT: World.setup() makes one per AI pilot and uses ROLE_PLAN to
@@ -108,7 +109,7 @@ var profile: PilotProfile
 ## target (PilotTargeting.pick_target, and the push, prey and assault
 ## choices in PilotGoals).
 var lock_target: Unit = null
-## What this pilot likes to buy (see PilotShopping.HULL_PREF): "heavy",
+## What this pilot likes to buy (see Ships.HULL_PREF): "heavy",
 ## "heavy_ion", "striker", "support", "lancer", "dog" (dogfighter) or
 ## "jungle". Set once in _init from the seat number.
 var temperament := "dog"
@@ -212,6 +213,8 @@ var combat: PilotCombat
 var flight: PilotFlight
 ## Energy routing and shield focus.
 var systems: PilotSystems
+## When to press Vent.
+var vent: PilotVent
 ## A Bomber's torpedo runs: when to commit, when to let go, how to break off.
 var run: PilotRun
 
@@ -229,6 +232,7 @@ func _init(w: World, p: PilotProfile) -> void:
 	combat = PilotCombat.new(self)
 	flight = PilotFlight.new(self)
 	systems = PilotSystems.new(self)
+	vent = PilotVent.new(self)
 	run = PilotRun.new(self)
 	# Step 1: temperament from the role and the seat number. Junglers get
 	# the jungle temperament; the admiral's seat flies heavy ships (when it
@@ -293,7 +297,7 @@ func update_docked(dt: float) -> void:
 	if ms != null and ms.available():
 		shopping.shop()
 	elif profile.hull_id == "":
-		profile.buy_hull("scout", world.teams[profile.team])
+		profile.buy_hull(Ships.FREE_HULL, world.teams[profile.team])
 	# Step 3: with the Hyperspace Module, jump to the repair bay nearest our
 	# destination when that saves more flying than the 6 s spool costs
 	# (MatchRules finishes the launch; the brain starts its fresh plan now).
@@ -374,6 +378,7 @@ func update(ship: Ship, dt: float) -> void:
 	if think_t <= 0.0:
 		think_t = 0.22 + (1.0 - skill) * 0.25
 		_think(ship)
+		PilotLog.watch(self, ship)
 	# Step 4: every tick, fight or fly (PilotCombat).
 	combat.steer(ship)
 
@@ -404,7 +409,9 @@ func _think(ship: Ship) -> void:
 		soft_retreat = true
 	elif state == "retreat" and soft_retreat and ship.total_frac() >= SOFT_RETREAT_END:
 		want_retreat = false
-	if want_retreat:
+	# (A ship with an engine pod out stands and fights for the recovery instead of starting a retreat:
+	# ShipSystems.captain_holds(); a retreat that is already running is not touched.)
+	if want_retreat and (state == "retreat" or ship.parts == null or not ship.parts.captain_holds()):
 		state = "retreat"
 		if hp < 0.5 and profile.kit_count() > 0 and not ship.has_active_kit():
 			c.use_kit = true
@@ -424,9 +431,10 @@ func _think(ship: Ship) -> void:
 	elif state != "retreat" and state != "home":
 		if profile.role != "admiral":
 			home_reason = shopping.wants_shopping(ship)
-			if home_reason != "":
+			# (No trip starts while an engine pod is out: ShipSystems.captain_holds().)
+			if home_reason != "" and (ship.parts == null or not ship.parts.captain_holds()):
 				state = "home"
-	elif state == "home" and world.teams[ship.team].siege_lane != "" and (not ship.is_small() or ship.hull_id == "bomber"):
+	elif state == "home" and world.teams[ship.team].siege_lane != "" and (not ship.is_small() or Ships.has_role(ship.hull_id, "siege")):
 		# A siege started while we were flying home to shop (big ships and
 		# bombers only): join it instead.
 		state = "jungle" if profile.role == "jungle" else "lane"
@@ -434,9 +442,10 @@ func _think(ship: Ship) -> void:
 	# Step 3: a turret has picked us as its target (the "aggro" rule:
 	# turrets go after a pilot who hurts their side's ships nearby). Small
 	# and medium ships get out of its range for 2.5 seconds, unless they're
-	# already flying home.
+	# already flying home or are a bought ship held by a Move or a Hold order
+	# (SquadronBrain.holds_position(), which answers for the stand-in and the squadron brain).
 	var hunter := senses.turret_targeting(ship)
-	if hunter != null and ship.size_class < Rules.SIZE_LARGE and state != "home":
+	if hunter != null and ship.size_class < Rules.SIZE_LARGE and state != "home" and not SquadronBrain.holds_position(world, profile):
 		evade_t = 2.5
 		evade_from = hunter.global_position
 	# Step 4: outnumbered (odds of -2 or worse) and hurt (below 75% hull) on
@@ -455,6 +464,7 @@ func _think(ship: Ship) -> void:
 		target = null
 		lock_target = null
 		systems.set_energy_and_shields(ship)
+		vent.think(ship)
 		return
 	# Step 6: the normal job for our state (PilotGoals), unless a feature
 	# module with a pilot_think() takes over this think (see
@@ -471,8 +481,9 @@ func _think(ship: Ship) -> void:
 	# they may change the goal and the target chosen above.
 	for f: Callable in world.pilot_think_hooks:
 		f.call(ship, self)
-	# Step 7: set the energy routing and shield focus (PilotSystems).
+	# Step 7: set the energy routing and shield focus (PilotSystems), then Vent (PilotVent).
 	systems.set_energy_and_shields(ship)
+	vent.think(ship)
 
 
 ## Feature hook: does a feature module take over this think? Asks every

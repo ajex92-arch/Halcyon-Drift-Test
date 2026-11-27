@@ -26,8 +26,9 @@ extends RefCounted
 ##      squadrons until the Corvette Facility; then one corvette per three squadrons; after the
 ##      Frigate Facility one frigate per two squadrons; one squadron in three a Lance or Bomber
 ##      squadron when its research is done. New ships gather on the lane being pushed.
-##   5. Repeat: Fighter squadrons are kept on repeat while the fleet is below its target.
-## Every number and switch is a named constant of RtsHulls.
+##   5. Repeat: Fighter squadrons are kept on repeat while the fleet is below its target (with the cap-full
+##      reaction on, not while an item waits for room in the fleet).
+## Every number and switch is a key of the team's AdmiralProfile (AdmiralProfileData).
 ##
 ## WHO USES IT: AdmiralAI makes one per computer team (AdmiralAI.production) and calls run()
 ## in step 8. Its orders are PRODUCE, HOLD_ITEM and SET_REPEAT, sent through the order
@@ -35,11 +36,15 @@ extends RefCounted
 
 ## The game world.
 var world: World
+## What our team knows (our own ships exactly: TeamView).
+var view: TeamView
 ## Our team: 0 = Aurelian, 1 = Vhorr.
 var team := 0
 ## The lane helper (for the lane we are pushing); the rally "lane" of a bought squadron uses it
 ## through Production.
 var lanes: AdmiralLanes
+## This admiral's numbers and switches (AdmiralProfile).
+var prof: AdmiralProfile
 ## The earnings of the last think by think: [match second, credits earned] pairs, whole numbers.
 var _earn: Array = []
 ## The treasury and the credits spent at the last think (to tell earnings from spending).
@@ -64,31 +69,33 @@ var log: Array[String] = []
 
 
 ## Remember the world, our team and the lane helper. AdmiralAI makes this part once.
-func _init(w: World, t: int, l: AdmiralLanes) -> void:
+func _init(w: World, t: int, l: AdmiralLanes, p: AdmiralProfile = null) -> void:
 	world = w
 	team = t
 	lanes = l
+	prof = p if p != null else AdmiralProfile.for_team(t, Game.options)
+	view = TeamView.of(w, t, prof)
 
 
 ## One think. `spare` is the credits the Admiral has to spare after its plan and its drones.
 func run(ts: TeamState, spare: float) -> void:
-	if not RtsHulls.COMPUTER_BUYS:
+	if not prof.on("buys"):
 		return
 	var prod := ts.production
 	_note_income(ts)
 	var income := _income_per_second()
 	for r: Dictionary in prod.take_requeued():
-		_say("repeats %s x%d (%d): Fighter squadrons are on repeat while the fleet is below its target" % [str(Ships.HULLS[str(r["hull"])]["label"]), int(r["count"]), int(r["price"])])
-	if RtsHulls.COMPUTER_HOLDS_HEAD:
+		_say("repeats %s x%d (%d): Fighter squadrons are on repeat while the fleet is below its target" % [str(Ships.HULLS[str(r["hull"])]["label"]), int(r["count"]), int(r["price"])], "yard.repeat")
+	if prof.on("holds_head"):
 		_head_rule(ts, prod, income)
 	var saving := false
-	if RtsHulls.COMPUTER_SAVES_CAPITAL:
+	if prof.on("saves_capital"):
 		saving = _capital_goal(ts, prod, income)
-	var target := RtsHulls.fill_target(world.time, prod.capacity.limit())
+	var target := RtsHulls.fill_target(world.time, prod.capacity.limit(), [prof.f("fill_t1_s"), prof.f("fill_t2_s"), prof.f("fill_t3_s")], [prof.f("fill_p1_pct"), prof.f("fill_p2_pct"), prof.f("fill_p3_pct")])
 	var total := prod.capacity.alive() + prod.ships_in_list()
 	if not saving:
 		_fill(ts, prod, income, spare, target, total)
-	if RtsHulls.COMPUTER_REPEATS:
+	if prof.on("repeats"):
 		_repeat(prod, total < target)
 
 
@@ -101,7 +108,7 @@ func _note_income(ts: TeamState) -> void:
 		_earn.append([int(world.time), maxi(0, roundi(gained))])
 	_last_treasury = ts.treasury
 	_last_spent = ts.spent
-	while not _earn.is_empty() and world.time - float((_earn[0] as Array)[0]) > RtsHulls.INCOME_WINDOW_S:
+	while not _earn.is_empty() and world.time - float((_earn[0] as Array)[0]) > prof.f("income_window_s"):
 		_earn.pop_front()
 
 
@@ -110,12 +117,12 @@ func _income_per_second() -> float:
 	var sum := 0
 	for e: Array in _earn:
 		sum += int(e[1])
-	return float(sum) / maxf(1.0, minf(RtsHulls.INCOME_WINDOW_S, world.time))
+	return float(sum) / maxf(1.0, minf(prof.f("income_window_s"), world.time))
 
 
 ## Can an item of `price` be paid within HEAD_WAIT_S seconds, from the money `have` and the income?
 func _fundable(price: float, have: float, income: float) -> bool:
-	return price <= have + income * RtsHulls.HEAD_WAIT_S
+	return price <= have + income * prof.f("head_wait_s")
 
 
 # --- the fundable head -----------------------------------------------------------------------
@@ -133,6 +140,7 @@ func _head_rule(ts: TeamState, prod: Production, income: float) -> void:
 		if it.is_empty() or not it["held"]:
 			_held.erase(id)
 		elif float(it["price"]) <= ts.treasury or waiting == 0:
+			AdmiralLog.of(world).expect(team, "HOLD_ITEM", "yard.head", "goes on with %s (%d)" % [prod.label(it), int(it["price"])], "keeping it on hold", "the treasury %d pays it now or nothing else waits" % int(ts.treasury))
 			if _send(OrderKinds.HOLD_ITEM, {"hold": 0}, "item", id) == "":
 				_say("goes on with %s (%d): the treasury %d pays it now or nothing else waits" % [prod.label(it), int(it["price"]), int(ts.treasury)])
 				_held.erase(id)
@@ -140,9 +148,10 @@ func _head_rule(ts: TeamState, prod: Production, income: float) -> void:
 		if it["running"] or it["held"] or it["started"] or it["why"] != "ore":
 			continue
 		if waiting > 1 and not _fundable(float(it["price"]), ts.treasury, income):
+			AdmiralLog.of(world).expect(team, "HOLD_ITEM", "yard.head", "holds %s (%d)" % [prod.label(it), int(it["price"])], "letting the next item start", "the treasury %d and the income %d a second do not pay it within %d seconds" % [int(ts.treasury), roundi(income), int(prof.f("head_wait_s"))])
 			if _send(OrderKinds.HOLD_ITEM, {"hold": 1}, "item", str(it["id"])) == "":
 				_held[str(it["id"])] = true
-				_say("holds %s (%d): the treasury %d and the income %d a second do not pay it within %d seconds, so the next item may start" % [prod.label(it), int(it["price"]), int(ts.treasury), roundi(income), int(RtsHulls.HEAD_WAIT_S)])
+				_say("holds %s (%d): the treasury %d and the income %d a second do not pay it within %d seconds, so the next item may start" % [prod.label(it), int(it["price"]), int(ts.treasury), roundi(income), int(prof.f("head_wait_s"))])
 		break
 
 
@@ -152,7 +161,9 @@ func _head_rule(ts: TeamState, prod: Production, income: float) -> void:
 func _capital_hull(ts: TeamState) -> String:
 	if not ts.facilities.has("capital"):
 		return ""
-	for hull: String in ["destroyer", "battlecruiser"]:
+	for hull: String in Ships.ORDER:
+		if not RtsHulls.is_capital(hull):
+			continue
 		if ts.ship_unlocked(hull):
 			return hull
 	return ""
@@ -166,16 +177,13 @@ func _capital_goal(ts: TeamState, prod: Production, income: float) -> bool:
 		_saving_since = -1.0
 		return false
 	# One at a time, and not past the share of the fleet limit.
-	var capitals := 0
+	var capitals := view.own_capitals()
 	var listed := 0
-	for s: Ship in world.ships:
-		if s.team == team and s.alive and s.profile != null and s.profile.is_crew and RtsHulls.is_capital(s.hull_id):
-			capitals += 1
 	for it: Dictionary in prod.items:
 		if it["kind"] == Production.SHIP and RtsHulls.is_capital(str(it["what"])):
 			capitals += 1
 			listed += 1
-	var most := maxi(1, floori(float(prod.capacity.limit()) * float(RtsHulls.CAPITAL_MAX_PERCENT) / 100.0))
+	var most := maxi(1, floori(float(prod.capacity.limit()) * prof.f("capital_max_pct") / 100.0))
 	if capitals >= most or listed > 0:
 		_saving_since = -1.0
 		return false
@@ -185,16 +193,18 @@ func _capital_goal(ts: TeamState, prod: Production, income: float) -> bool:
 	var price := float(RtsHulls.price_of(hull, 1))
 	if _saving_since < 0.0:
 		_saving_since = world.time
-		_say("saves for a %s (%d): the treasury %d" % [str(Ships.HULLS[hull]["label"]), int(price), int(ts.treasury)])
+		_say("saves for a %s (%d): the treasury %d" % [str(Ships.HULLS[hull]["label"]), int(price), int(ts.treasury)], "yard.save")
+		AdmiralLog.feed(world, team, "The %s Admiral is saving for a %s." % [Rules.TEAM_DISPLAY[team], str(Ships.HULLS[hull]["label"])])
 	if _fundable(price + _claims(prod), ts.treasury, income):
+		AdmiralLog.of(world).expect(team, "PRODUCE", "yard.capital", "buys a %s (%d)" % [str(Ships.HULLS[hull]["label"]), int(price)], "more fleet filling", "the treasury %d and the income %d a second pay it within %d seconds" % [int(ts.treasury), roundi(income), int(prof.f("head_wait_s"))])
 		if _send(OrderKinds.PRODUCE, {"hull": hull, "count": 1, "rally": "lane"}, "none", 0) == "":
-			_say("buys a %s (%d): the treasury %d and the income %d a second pay it within %d seconds" % [str(Ships.HULLS[hull]["label"]), int(price), int(ts.treasury), roundi(income), int(RtsHulls.HEAD_WAIT_S)])
+			_say("buys a %s (%d): the treasury %d and the income %d a second pay it within %d seconds" % [str(Ships.HULLS[hull]["label"]), int(price), int(ts.treasury), roundi(income), int(prof.f("head_wait_s"))])
 			_saving_since = -1.0
 			return false
-	if world.time - _saving_since > RtsHulls.SAVING_LAPSE_S:
-		_say("gives up saving for a %s after %d seconds: the money goes to the fleet" % [str(Ships.HULLS[hull]["label"]), int(RtsHulls.SAVING_LAPSE_S)])
+	if world.time - _saving_since > prof.f("saving_lapse_s"):
+		_say("gives up saving for a %s after %d seconds: the money goes to the fleet" % [str(Ships.HULLS[hull]["label"]), int(prof.f("saving_lapse_s"))], "yard.save")
 		_saving_since = -1.0
-		_no_saving_until = world.time + RtsHulls.SAVING_LAPSE_S
+		_no_saving_until = world.time + prof.f("saving_lapse_s")
 		return false
 	return true
 
@@ -231,8 +241,11 @@ func _fill(ts: TeamState, prod: Production, income: float, spare: float, target:
 		return
 	var price := float(RtsHulls.price_of(hull, count))
 	var money := minf(spare, ts.treasury)
-	if _claims(prod) + price > money + income * RtsHulls.HEAD_WAIT_S - float(RtsHulls.RESERVE):
+	if _claims(prod) + price > money + income * prof.f("head_wait_s") - prof.f("reserve"):
 		return
+	AdmiralLog.of(world).expect(team, "PRODUCE", "yard.fill", "buys %s x%d (%d)" % [str(Ships.HULLS[hull]["label"]), count, int(price)],
+		"a Fighter squadron" if hull != Ships.DEFAULT_HULL else "a larger ship (none is due or unlocked)",
+		"the fleet is %d of %d wanted by %s, the treasury %d, %d to spare, the income %d a second" % [total, target, Util.clock(world.time), int(ts.treasury), int(spare), roundi(income)])
 	if _send(OrderKinds.PRODUCE, {"hull": hull, "count": count, "rally": "lane"}, "none", 0) != "":
 		return
 	_note_bought(hull)
@@ -241,21 +254,21 @@ func _fill(ts: TeamState, prod: Production, income: float, spare: float, target:
 
 ## The next hull of the mix and how many ships it has: ["", 0] when nothing can be bought.
 func _next_hull(ts: TeamState) -> Array:
-	if ts.facilities.has("frigate") and _since_frigate >= RtsHulls.SQUADRONS_PER_FRIGATE:
-		var frigate := "ion" if (_flip_frigate % 2 == 0 and ts.ship_unlocked("ion")) else "flak"
+	if ts.facilities.has("frigate") and _since_frigate >= prof.i("per_frigate"):
+		var frigate: String = RtsHulls.FRIGATE_PAIR[0] if (_flip_frigate % 2 == 0 and ts.ship_unlocked(RtsHulls.FRIGATE_PAIR[0])) else RtsHulls.FRIGATE_PAIR[1]
 		if ts.ship_unlocked(frigate):
 			return [frigate, 1]
-	if ts.facilities.has("corvette") and _since_corvette >= RtsHulls.SQUADRONS_PER_CORVETTE:
-		var corvette := "support" if (_flip_corvette % 2 == 1 and ts.ship_unlocked("support")) else "logistics"
+	if ts.facilities.has("corvette") and _since_corvette >= prof.i("per_corvette"):
+		var corvette: String = RtsHulls.CORVETTE_PAIR[0] if (_flip_corvette % 2 == 1 and ts.ship_unlocked(RtsHulls.CORVETTE_PAIR[0])) else RtsHulls.CORVETTE_PAIR[1]
 		if ts.ship_unlocked(corvette):
 			return [corvette, 1]
-	if _since_special >= RtsHulls.SPECIAL_ONE_IN - 1:
-		var special := "lance" if _flip_special % 2 == 0 else "bomber"
+	if _since_special >= prof.i("special_one_in") - 1:
+		var special: String = RtsHulls.SPECIAL_PAIR[0] if _flip_special % 2 == 0 else RtsHulls.SPECIAL_PAIR[1]
 		if not ts.ship_unlocked(special):
-			special = "bomber" if special == "lance" else "lance"
+			special = RtsHulls.SPECIAL_PAIR[1] if special == RtsHulls.SPECIAL_PAIR[0] else RtsHulls.SPECIAL_PAIR[0]
 		if ts.ship_unlocked(special):
 			return [special, 3]
-	return ["fighter", 3]
+	return [Ships.DEFAULT_HULL, 3]
 
 
 ## Remember that a ship of `hull` was bought, for the mix.
@@ -264,7 +277,7 @@ func _note_bought(hull: String) -> void:
 		"squadron":
 			_since_corvette += 1
 			_since_frigate += 1
-			if hull == "fighter":
+			if hull == Ships.DEFAULT_HULL:
 				_since_special += 1
 			else:
 				_since_special = 0
@@ -281,9 +294,13 @@ func _note_bought(hull: String) -> void:
 
 ## Keep Fighter squadrons on repeat while the fleet is below its target (`below`), off otherwise.
 func _repeat(prod: Production, below: bool) -> void:
-	if (int(prod.repeat.get("fighter", 0)) == 1) == below:
+	# The cap-full reaction (RT5 build 4a, react_cap_full): while an item waits for room the repeat is not turned back on.
+	if below and prof.on("react_cap_full") and AdmiralReactions.waits_for_room(prod):
+		below = false
+	if (int(prod.repeat.get(Ships.DEFAULT_HULL, 0)) == 1) == below:
 		return
-	_send(OrderKinds.SET_REPEAT, {"repeat": 1 if below else 0}, "id", "fighter")
+	AdmiralLog.of(world).expect(team, "SET_REPEAT", "yard.repeat", "turns the Fighter repeat %s" % ("on" if below else "off"), "", "the fleet is %s its target" % ("below" if below else "at"))
+	_send(OrderKinds.SET_REPEAT, {"repeat": 1 if below else 0}, "id", Ships.DEFAULT_HULL)
 
 
 # --- sending and logging -------------------------------------------------------------------------
@@ -291,13 +308,15 @@ func _repeat(prod: Production, below: bool) -> void:
 ## Send an order of the Admiral's seat through the queue's same-tick door. Returns "" or the
 ## refusal text.
 func _send(kind: String, settings: Dictionary, target_kind: String, target) -> String:
-	return world.orders.apply_now(Order.make(kind, team, Rules.ADMIRAL_SEAT, false, settings, [], target_kind, target))
+	return world.orders.apply_now(Order.make(kind, team, Deputy.computer_seat(world, team), false, settings, [], target_kind, target))
 
 
 ## Write one plain line about a decision: into the log and onto the match's output.
-func _say(text: String) -> void:
+func _say(text: String, rule: String = "") -> void:
 	var line := "YARD t=%d team=%d %s" % [int(world.time), team, text]
 	log.append(line)
 	if log.size() > 200:
 		log.pop_front()
 	print(line)
+	if rule != "":
+		AdmiralLog.of(world).note(team, rule, text)

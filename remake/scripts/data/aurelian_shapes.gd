@@ -468,38 +468,15 @@ const HULLS := {
 	},
 	"destroyer": {
 		"pieces": [
-			{"id": "core", "kind": "core", "shade": 1, "attach": Vector2(0, 0), "mirror": false,
+			{"id": "side_deck", "kind": "wing", "shade": 1, "attach": Vector2(0, 4), "mirror": true,
 				"pts": [
-					Vector2(18, 0), Vector2(16, 0.9), Vector2(13.5, 1.7), Vector2(10, 2.3), Vector2(5, 3), Vector2(-3, 3.5),
-					Vector2(-11, 3.7), Vector2(-17, 3.4), Vector2(-18, 3), Vector2(-18, 0), Vector2(-18, -3), Vector2(-17, -3.4),
-					Vector2(-11, -3.7), Vector2(-3, -3.5), Vector2(5, -3), Vector2(10, -2.3), Vector2(13.5, -1.7), Vector2(16, -0.9),
+					Vector2(10.8, -2.4), Vector2(9.4, 0.4), Vector2(-12, 0.4), Vector2(-12, -2.4),
 				],
 				"marks": [
-					{"kind": "plate", "pts": [Vector2(17, 0), Vector2(13, 1.2), Vector2(8, 1.7), Vector2(8, -1.7), Vector2(13, -1.2)]},
-					{"kind": "plate", "pts": [Vector2(6.5, -1.9), Vector2(6.5, 1.9), Vector2(2.5, 2.2), Vector2(2.5, -2.2)]},
-					{"kind": "plate", "pts": [Vector2(-7, -1.9), Vector2(-7, 1.9), Vector2(-14.5, 2.4), Vector2(-14.5, -2.4)]},
-					{"kind": "glass", "pts": [Vector2(-8.4, -1.2), Vector2(-8.4, 1.2), Vector2(-11.5, 1.5), Vector2(-11.5, -1.5)]},
-					{"kind": "dark", "pts": [Vector2(-2.8, 2.3), Vector2(-8.6, 2.3), Vector2(-8.6, 3.3), Vector2(-2.8, 3.3)]},
-					{"kind": "dark", "pts": [Vector2(-2.8, -3.3), Vector2(-8.6, -3.3), Vector2(-8.6, -2.3), Vector2(-2.8, -2.3)]},
-					{"kind": "line", "pts": [Vector2(8, -3), Vector2(8, 3)]},
-					{"kind": "line", "pts": [Vector2(-1, -3.4), Vector2(-1, 3.4)]},
-					{"kind": "line", "pts": [Vector2(-13, 0), Vector2(-17.4, 0)]},
+					{"kind": "line", "pts": [Vector2(8.6, 0.1), Vector2(-11.6, 0.1)]},
 				],
 			},
-			{"id": "sponson", "kind": "wing", "shade": 2, "attach": Vector2(4.1, 5), "mirror": true,
-				"pts": [
-					Vector2(4.7, -2.6), Vector2(4.1, 0.2), Vector2(2.9, 2), Vector2(0.9, 2.5), Vector2(-2.5, 2.5), Vector2(-3.9, 1.2),
-					Vector2(-3.9, -2.4),
-				],
-				"marks": [
-					{"kind": "stripe", "pts": [Vector2(4.1, -2), Vector2(3.7, 0), Vector2(2.7, 1.6), Vector2(2.1, 1.4), Vector2(2.9, 0), Vector2(3.3, -2)]},
-					{"kind": "dark", "pts": [Vector2(-1.3, -1.8), Vector2(-0.5, -1.8), Vector2(-0.5, -1.3), Vector2(-1.3, -1.3)]},
-					{"kind": "dark", "pts": [Vector2(-2.4, -1.8), Vector2(-1.6, -1.8), Vector2(-1.6, -1.3), Vector2(-2.4, -1.3)]},
-					{"kind": "dark", "pts": [Vector2(-3.5, -1.8), Vector2(-2.7, -1.8), Vector2(-2.7, -1.3), Vector2(-3.5, -1.3)]},
-					{"kind": "light", "pts": [Vector2(0.68, 2.08), Vector2(1.12, 2.08), Vector2(1.12, 2.52), Vector2(0.68, 2.52)]},
-				],
-			},
-			{"id": "aft", "kind": "wing", "shade": 2, "attach": Vector2(-13, 4.3), "mirror": true,
+			{"id": "quarter", "kind": "wing", "shade": 2, "attach": Vector2(-13, 4.3), "mirror": true,
 				"pts": [
 					Vector2(6, -1.3), Vector2(4.5, 0.9), Vector2(2, 1.7), Vector2(-5, 1.7), Vector2(-5, -1.3),
 				],
@@ -509,13 +486,65 @@ const HULLS := {
 					{"kind": "light", "pts": [Vector2(-4.82, 1.28), Vector2(-4.38, 1.28), Vector2(-4.38, 1.72), Vector2(-4.82, 1.72)]},
 				],
 			},
+			{"id": "casemate_fore", "kind": "wing", "shade": 1, "attach": Vector2(4.2, 6), "mirror": true,
+				"pts": [
+					Vector2(3.6, -1.8), Vector2(0.6, 1.5), Vector2(-2.4, 1.5), Vector2(-2.4, 0.9), Vector2(-3, 0.9), Vector2(-3, -1.8),
+				],
+				"marks": [
+					{"kind": "stripe", "pts": [Vector2(3.3, -1.6), Vector2(0.85, 1.1), Vector2(0.65, 1.1), Vector2(3.05, -1.6)]},
+				],
+			},
+			{"id": "casemate_fore_top", "kind": "wing", "shade": 2, "attach": Vector2(4.2, 6), "mirror": true,
+				"pts": [
+					Vector2(2.4, -1.4), Vector2(0.3, 1), Vector2(-2, 1), Vector2(-2, -1.4),
+				],
+				"marks": [
+					{"kind": "dark", "pts": [Vector2(-1.5, -0.8), Vector2(-1.5, 1), Vector2(0.2, 1), Vector2(0.2, -0.8)]},
+				],
+			},
+			{"id": "casemate_aft", "kind": "wing", "shade": 1, "attach": Vector2(-6.4, 6), "mirror": true,
+				"pts": [
+					Vector2(3.6, -1.8), Vector2(0.6, 1.5), Vector2(-2.4, 1.5), Vector2(-2.4, 0.9), Vector2(-3, 0.9), Vector2(-3, -1.8),
+				],
+				"marks": [
+					{"kind": "stripe", "pts": [Vector2(3.3, -1.6), Vector2(0.85, 1.1), Vector2(0.65, 1.1), Vector2(3.05, -1.6)]},
+				],
+			},
+			{"id": "casemate_aft_top", "kind": "wing", "shade": 2, "attach": Vector2(-6.4, 6), "mirror": true,
+				"pts": [
+					Vector2(2.4, -1.4), Vector2(0.3, 1), Vector2(-2, 1), Vector2(-2, -1.4),
+				],
+				"marks": [
+					{"kind": "dark", "pts": [Vector2(-1.5, -0.8), Vector2(-1.5, 1), Vector2(0.2, 1), Vector2(0.2, -0.8)]},
+				],
+			},
+			{"id": "flak_blister", "kind": "wing", "shade": 2, "attach": Vector2(-1.3, 4.8), "mirror": true,
+				"pts": [
+					Vector2(1.3, -0.9), Vector2(1.3, 1.6), Vector2(0.6, 2.5), Vector2(-0.6, 2.5), Vector2(-1.3, 1.6), Vector2(-1.3, -0.9),
+				],
+			},
+			{"id": "core", "kind": "core", "shade": 1, "attach": Vector2(0, 0), "mirror": false,
+				"pts": [
+					Vector2(18, 0), Vector2(16, 0.9), Vector2(13.5, 1.7), Vector2(10, 2.3), Vector2(5, 3), Vector2(-3, 3.5),
+					Vector2(-11, 3.7), Vector2(-17, 3.4), Vector2(-18, 3), Vector2(-18, 0), Vector2(-18, -3), Vector2(-17, -3.4),
+					Vector2(-11, -3.7), Vector2(-3, -3.5), Vector2(5, -3), Vector2(10, -2.3), Vector2(13.5, -1.7), Vector2(16, -0.9),
+				],
+				"marks": [
+					{"kind": "plate", "pts": [Vector2(17, 0), Vector2(13, 1.2), Vector2(8, 1.7), Vector2(8, -1.7), Vector2(13, -1.2)]},
+					{"kind": "plate", "pts": [Vector2(6.5, -1.9), Vector2(6.5, 1.9), Vector2(2.5, 2.2), Vector2(2.5, -2.2)]},
+					{"kind": "plate", "pts": [Vector2(-3.5, -1.9), Vector2(-3.5, 1.9), Vector2(-13.8, 2.4), Vector2(-13.8, -2.4)]},
+					{"kind": "glass", "pts": [Vector2(-6.8, -1.2), Vector2(-6.8, 1.2), Vector2(-9.4, 1.5), Vector2(-9.4, -1.5)]},
+					{"kind": "line", "pts": [Vector2(8, -2.9), Vector2(8, 2.9)]},
+					{"kind": "line", "pts": [Vector2(-1.5, -3.4), Vector2(-1.5, 3.4)]},
+				],
+			},
 			{"id": "engine", "kind": "engine", "shade": 0, "attach": Vector2(-16.4, 0), "mirror": false,
 				"pts": [
 					Vector2(2.4, -4.2), Vector2(-2.4, -3.6), Vector2(-2.4, 3.6), Vector2(2.4, 4.2),
 				],
 				"nozzles": [Vector3(-2.4, 1.3, 0.95), Vector3(-2.4, -1.3, 0.95), Vector3(-2.4, 3.4, 0.8), Vector3(-2.4, -3.4, 0.8)],
 			},
-			{"id": "mount_heavy_fore", "kind": "mount", "shade": 0, "attach": Vector2(10.29, 0), "mirror": false,
+			{"id": "mount_heavy_fore", "kind": "mount", "shade": 0, "attach": Vector2(6.286, 5.486), "mirror": true,
 				"weapon": "heavy_cannon",
 				"pts": [
 					Vector2(1.663, 0.689), Vector2(0.689, 1.663), Vector2(-0.689, 1.663), Vector2(-1.663, 0.689), Vector2(-1.663, -0.689), Vector2(-0.689, -1.663),
@@ -525,7 +554,7 @@ const HULLS := {
 					{"kind": "dark", "pts": [Vector2(1.297, 0.537), Vector2(0.537, 1.297), Vector2(-0.537, 1.297), Vector2(-1.297, 0.537), Vector2(-1.297, -0.537), Vector2(-0.537, -1.297), Vector2(0.537, -1.297), Vector2(1.297, -0.537)]},
 				],
 			},
-			{"id": "mount_heavy_aft", "kind": "mount", "shade": 0, "attach": Vector2(-5.14, 0), "mirror": false,
+			{"id": "mount_heavy_aft", "kind": "mount", "shade": 0, "attach": Vector2(-4, 5.486), "mirror": true,
 				"weapon": "heavy_cannon",
 				"pts": [
 					Vector2(1.663, 0.689), Vector2(0.689, 1.663), Vector2(-0.689, 1.663), Vector2(-1.663, 0.689), Vector2(-1.663, -0.689), Vector2(-0.689, -1.663),
@@ -535,7 +564,7 @@ const HULLS := {
 					{"kind": "dark", "pts": [Vector2(1.297, 0.537), Vector2(0.537, 1.297), Vector2(-0.537, 1.297), Vector2(-1.297, 0.537), Vector2(-1.297, -0.537), Vector2(-0.537, -1.297), Vector2(0.537, -1.297), Vector2(1.297, -0.537)]},
 				],
 			},
-			{"id": "mount_flak", "kind": "mount", "shade": 0, "attach": Vector2(0, 0), "mirror": false,
+			{"id": "mount_flak", "kind": "mount", "shade": 0, "attach": Vector2(0.571, 5.714), "mirror": true,
 				"weapon": "flak_auto",
 				"pts": [
 					Vector2(1.414, 0.586), Vector2(0.586, 1.414), Vector2(-0.586, 1.414), Vector2(-1.414, 0.586), Vector2(-1.414, -0.586), Vector2(-0.586, -1.414),
@@ -543,6 +572,26 @@ const HULLS := {
 				],
 				"marks": [
 					{"kind": "dark", "pts": [Vector2(1.103, 0.457), Vector2(0.457, 1.103), Vector2(-0.457, 1.103), Vector2(-1.103, 0.457), Vector2(-1.103, -0.457), Vector2(-0.457, -1.103), Vector2(0.457, -1.103), Vector2(1.103, -0.457)]},
+				],
+			},
+			{"id": "mount_chaser_fore", "kind": "mount", "shade": 0, "attach": Vector2(10.857, 0), "mirror": false,
+				"weapon": "light_turret",
+				"pts": [
+					Vector2(1.103, 0.457), Vector2(0.457, 1.103), Vector2(-0.457, 1.103), Vector2(-1.103, 0.457), Vector2(-1.103, -0.457), Vector2(-0.457, -1.103),
+					Vector2(0.457, -1.103), Vector2(1.103, -0.457),
+				],
+				"marks": [
+					{"kind": "dark", "pts": [Vector2(0.86, 0.356), Vector2(0.356, 0.86), Vector2(-0.356, 0.86), Vector2(-0.86, 0.356), Vector2(-0.86, -0.356), Vector2(-0.356, -0.86), Vector2(0.356, -0.86), Vector2(0.86, -0.356)]},
+				],
+			},
+			{"id": "mount_chaser_aft", "kind": "mount", "shade": 0, "attach": Vector2(-13.143, 0), "mirror": false,
+				"weapon": "light_turret",
+				"pts": [
+					Vector2(1.103, 0.457), Vector2(0.457, 1.103), Vector2(-0.457, 1.103), Vector2(-1.103, 0.457), Vector2(-1.103, -0.457), Vector2(-0.457, -1.103),
+					Vector2(0.457, -1.103), Vector2(1.103, -0.457),
+				],
+				"marks": [
+					{"kind": "dark", "pts": [Vector2(0.86, 0.356), Vector2(0.356, 0.86), Vector2(-0.356, 0.86), Vector2(-0.86, 0.356), Vector2(-0.86, -0.356), Vector2(-0.356, -0.86), Vector2(0.356, -0.86), Vector2(0.86, -0.356)]},
 				],
 			},
 			{"id": "mount_pd_fore", "kind": "mount", "shade": 0, "attach": Vector2(5.14, 6), "mirror": true,
@@ -570,6 +619,39 @@ const HULLS := {
 	},
 	"battlecruiser": {
 		"pieces": [
+			{"id": "waist_deck", "kind": "wing", "shade": 1, "attach": Vector2(-0.6, 5), "mirror": true,
+				"pts": [
+					Vector2(11.4, -3.2), Vector2(9.6, 1.4), Vector2(8.6, 2.3), Vector2(-9.2, 2.3), Vector2(-10.2, 1.4), Vector2(-11.2, -0.6),
+					Vector2(-11.2, -3.2),
+				],
+				"marks": [
+					{"kind": "line", "pts": [Vector2(10, -0.6), Vector2(-10.6, -0.6)]},
+					{"kind": "dark", "pts": [Vector2(5.6, -0.4), Vector2(5.6, 2.3), Vector2(9.2, 2.3), Vector2(9.2, -0.4)]},
+					{"kind": "dark", "pts": [Vector2(2.4, -0.1), Vector2(2.4, 2.3), Vector2(5, 2.3), Vector2(5, -0.1)]},
+					{"kind": "dark", "pts": [Vector2(-2, -0.6), Vector2(-2, 2.3), Vector2(2, 2.3), Vector2(2, -0.6)]},
+					{"kind": "dark", "pts": [Vector2(-9, -0.4), Vector2(-9, 2.3), Vector2(-5.4, 2.3), Vector2(-5.4, -0.4)]},
+					{"kind": "glass", "pts": [Vector2(-4.7, 1.4), Vector2(-4.7, 1.8), Vector2(-2.7, 1.8), Vector2(-2.7, 1.4)]},
+					{"kind": "stripe", "pts": [Vector2(-8.6, 2.02), Vector2(-8.6, 2.14), Vector2(8.2, 2.14), Vector2(8.2, 2.02)]},
+				],
+			},
+			{"id": "quarter", "kind": "wing", "shade": 2, "attach": Vector2(-14.6, 3.6), "mirror": true,
+				"pts": [
+					Vector2(3.2, -1.8), Vector2(2, 1.8), Vector2(-3, 1.8), Vector2(-3, -1.8),
+				],
+				"marks": [
+					{"kind": "line", "pts": [Vector2(0, 0.4), Vector2(0, 1.6)]},
+					{"kind": "light", "pts": [Vector2(-2.6, 1.2), Vector2(-2.6, 1.6), Vector2(-2.2, 1.6), Vector2(-2.2, 1.2)]},
+				],
+			},
+			{"id": "pd_pod", "kind": "wing", "shade": 2, "attach": Vector2(-11.6, 5.1), "mirror": true,
+				"pts": [
+					Vector2(0.8, -1), Vector2(0.8, 1), Vector2(-0.9, 1), Vector2(-0.9, -1),
+				],
+				"marks": [
+					{"kind": "line", "pts": [Vector2(0.62, -0.7), Vector2(0.62, 0.7)]},
+					{"kind": "light", "pts": [Vector2(-0.88, 0.55), Vector2(-0.52, 0.55), Vector2(-0.52, 0.95), Vector2(-0.88, 0.95)]},
+				],
+			},
 			{"id": "core", "kind": "core", "shade": 1, "attach": Vector2(0, 0), "mirror": false,
 				"pts": [
 					Vector2(18, 0), Vector2(15.5, 1.4), Vector2(11, 2.8), Vector2(6, 3.4), Vector2(0, 3.6), Vector2(-8, 3.8),
@@ -578,43 +660,10 @@ const HULLS := {
 				],
 				"marks": [
 					{"kind": "plate", "pts": [Vector2(16.5, 0), Vector2(13, 1.3), Vector2(9, 2), Vector2(9, -2), Vector2(13, -1.3)]},
-					{"kind": "plate", "pts": [Vector2(-3, -2), Vector2(-3, 2), Vector2(-12.5, 2.6), Vector2(-12.5, -2.6)]},
-					{"kind": "glass", "pts": [Vector2(-5.4, -1.3), Vector2(-5.4, 1.3), Vector2(-9.8, 1.6), Vector2(-9.8, -1.6)]},
+					{"kind": "plate", "pts": [Vector2(-3, -2), Vector2(-3, 2), Vector2(-13.6, 2.6), Vector2(-13.6, -2.6)]},
+					{"kind": "glass", "pts": [Vector2(-5.4, -1.3), Vector2(-5.4, 1.3), Vector2(-9.4, 1.6), Vector2(-9.4, -1.6)]},
 					{"kind": "line", "pts": [Vector2(8, -3.2), Vector2(8, 3.2)]},
 					{"kind": "line", "pts": [Vector2(-1.5, -3.6), Vector2(-1.5, 3.6)]},
-					{"kind": "line", "pts": [Vector2(-12.8, 0), Vector2(-17.4, 0)]},
-				],
-			},
-			{"id": "shoulder", "kind": "wing", "shade": 2, "attach": Vector2(6.6, 5), "mirror": true,
-				"pts": [
-					Vector2(2.9, -2.2), Vector2(2.4, 1), Vector2(1.2, 2.3), Vector2(-1.4, 2.3), Vector2(-2.8, 1), Vector2(-2.8, -2.2),
-				],
-				"marks": [
-					{"kind": "stripe", "pts": [Vector2(2.2, -1.6), Vector2(1.8, 1), Vector2(0.8, 1.9), Vector2(0.2, 1.7), Vector2(1.2, 0.9), Vector2(1.6, -1.6)]},
-					{"kind": "light", "pts": [Vector2(-1.22, 1.88), Vector2(-0.78, 1.88), Vector2(-0.78, 2.32), Vector2(-1.22, 2.32)]},
-				],
-			},
-			{"id": "deck", "kind": "wing", "shade": 1, "attach": Vector2(-1.3, 4.4), "mirror": true,
-				"pts": [
-					Vector2(4.3, -1.4), Vector2(4.3, 0.8), Vector2(2.5, 1.4), Vector2(-2.7, 1.4), Vector2(-4.3, 0.4), Vector2(-4.3, -1.4),
-				],
-				"marks": [
-					{"kind": "dark", "pts": [Vector2(2.7, -0.4), Vector2(3.5, -0.4), Vector2(3.5, 0.05), Vector2(2.7, 0.05)]},
-					{"kind": "dark", "pts": [Vector2(1.6, -0.4), Vector2(2.4, -0.4), Vector2(2.4, 0.05), Vector2(1.6, 0.05)]},
-					{"kind": "dark", "pts": [Vector2(0.5, -0.4), Vector2(1.3, -0.4), Vector2(1.3, 0.05), Vector2(0.5, 0.05)]},
-					{"kind": "dark", "pts": [Vector2(-0.6, -0.4), Vector2(0.2, -0.4), Vector2(0.2, 0.05), Vector2(-0.6, 0.05)]},
-					{"kind": "dark", "pts": [Vector2(0.8, 0.6), Vector2(-3.5, 0.6), Vector2(-3.5, 1.2), Vector2(0.8, 1.2)]},
-				],
-			},
-			{"id": "aft", "kind": "wing", "shade": 2, "attach": Vector2(-12, 5), "mirror": true,
-				"pts": [
-					Vector2(7, -1.6), Vector2(5, 1.2), Vector2(1, 2), Vector2(-3, 1.8), Vector2(-6, 0.4), Vector2(-6, -1.6),
-				],
-				"marks": [
-					{"kind": "line", "pts": [Vector2(3, -1.2), Vector2(3, 1.8)]},
-					{"kind": "line", "pts": [Vector2(-1.5, -1.2), Vector2(-1.5, 1.6)]},
-					{"kind": "light", "pts": [Vector2(-5.82, 0.08), Vector2(-5.38, 0.08), Vector2(-5.38, 0.52), Vector2(-5.82, 0.52)]},
-					{"kind": "light", "pts": [Vector2(3.38, 1.58), Vector2(3.82, 1.58), Vector2(3.82, 2.02), Vector2(3.38, 2.02)]},
 				],
 			},
 			{"id": "engine", "kind": "engine", "shade": 0, "attach": Vector2(-16.4, 0), "mirror": false,
@@ -623,7 +672,7 @@ const HULLS := {
 				],
 				"nozzles": [Vector3(-2.4, 0, 1.05), Vector3(-2.4, 2.3, 0.95), Vector3(-2.4, -2.3, 0.95), Vector3(-2.4, 4.2, 0.6), Vector3(-2.4, -4.2, 0.6)],
 			},
-			{"id": "mount_ion_fore", "kind": "mount", "shade": 0, "attach": Vector2(10.93, 0), "mirror": false,
+			{"id": "mount_ion", "kind": "mount", "shade": 0, "attach": Vector2(6.429, 5.786), "mirror": true,
 				"weapon": "ion_turret",
 				"pts": [
 					Vector2(1.053, 0.436), Vector2(0.436, 1.053), Vector2(-0.436, 1.053), Vector2(-1.053, 0.436), Vector2(-1.053, -0.436), Vector2(-0.436, -1.053),
@@ -633,17 +682,7 @@ const HULLS := {
 					{"kind": "dark", "pts": [Vector2(0.822, 0.34), Vector2(0.34, 0.822), Vector2(-0.34, 0.822), Vector2(-0.822, 0.34), Vector2(-0.822, -0.34), Vector2(-0.34, -0.822), Vector2(0.34, -0.822), Vector2(0.822, -0.34)]},
 				],
 			},
-			{"id": "mount_ion_aft", "kind": "mount", "shade": 0, "attach": Vector2(-8.36, 0), "mirror": false,
-				"weapon": "ion_turret",
-				"pts": [
-					Vector2(1.053, 0.436), Vector2(0.436, 1.053), Vector2(-0.436, 1.053), Vector2(-1.053, 0.436), Vector2(-1.053, -0.436), Vector2(-0.436, -1.053),
-					Vector2(0.436, -1.053), Vector2(1.053, -0.436),
-				],
-				"marks": [
-					{"kind": "dark", "pts": [Vector2(0.822, 0.34), Vector2(0.34, 0.822), Vector2(-0.34, 0.822), Vector2(-0.822, 0.34), Vector2(-0.822, -0.34), Vector2(-0.34, -0.822), Vector2(0.34, -0.822), Vector2(0.822, -0.34)]},
-				],
-			},
-			{"id": "mount_heavy", "kind": "mount", "shade": 0, "attach": Vector2(1.93, 0), "mirror": false,
+			{"id": "mount_heavy_fore", "kind": "mount", "shade": 0, "attach": Vector2(1.286, 5.786), "mirror": true,
 				"weapon": "heavy_cannon",
 				"pts": [
 					Vector2(1.053, 0.436), Vector2(0.436, 1.053), Vector2(-0.436, 1.053), Vector2(-1.053, 0.436), Vector2(-1.053, -0.436), Vector2(-0.436, -1.053),
@@ -653,7 +692,17 @@ const HULLS := {
 					{"kind": "dark", "pts": [Vector2(0.822, 0.34), Vector2(0.34, 0.822), Vector2(-0.34, 0.822), Vector2(-0.822, 0.34), Vector2(-0.822, -0.34), Vector2(-0.34, -0.822), Vector2(0.34, -0.822), Vector2(0.822, -0.34)]},
 				],
 			},
-			{"id": "mount_flak_fore", "kind": "mount", "shade": 0, "attach": Vector2(3.86, 0), "mirror": false,
+			{"id": "mount_heavy_aft", "kind": "mount", "shade": 0, "attach": Vector2(-4.714, 5.786), "mirror": true,
+				"weapon": "heavy_cannon",
+				"pts": [
+					Vector2(1.053, 0.436), Vector2(0.436, 1.053), Vector2(-0.436, 1.053), Vector2(-1.053, 0.436), Vector2(-1.053, -0.436), Vector2(-0.436, -1.053),
+					Vector2(0.436, -1.053), Vector2(1.053, -0.436),
+				],
+				"marks": [
+					{"kind": "dark", "pts": [Vector2(0.822, 0.34), Vector2(0.34, 0.822), Vector2(-0.34, 0.822), Vector2(-0.822, 0.34), Vector2(-0.822, -0.34), Vector2(-0.34, -0.822), Vector2(0.34, -0.822), Vector2(0.822, -0.34)]},
+				],
+			},
+			{"id": "mount_flak", "kind": "mount", "shade": 0, "attach": Vector2(3.429, 5.571), "mirror": true,
 				"weapon": "flak_auto",
 				"pts": [
 					Vector2(0.783, 0.324), Vector2(0.324, 0.783), Vector2(-0.324, 0.783), Vector2(-0.783, 0.324), Vector2(-0.783, -0.324), Vector2(-0.324, -0.783),
@@ -663,8 +712,18 @@ const HULLS := {
 					{"kind": "dark", "pts": [Vector2(0.611, 0.253), Vector2(0.253, 0.611), Vector2(-0.253, 0.611), Vector2(-0.611, 0.253), Vector2(-0.611, -0.253), Vector2(-0.253, -0.611), Vector2(0.253, -0.611), Vector2(0.611, -0.253)]},
 				],
 			},
-			{"id": "mount_flak_aft", "kind": "mount", "shade": 0, "attach": Vector2(-5.14, 0), "mirror": false,
-				"weapon": "flak_auto",
+			{"id": "mount_chaser_fore", "kind": "mount", "shade": 0, "attach": Vector2(13.714, 0), "mirror": false,
+				"weapon": "light_turret",
+				"pts": [
+					Vector2(0.783, 0.324), Vector2(0.324, 0.783), Vector2(-0.324, 0.783), Vector2(-0.783, 0.324), Vector2(-0.783, -0.324), Vector2(-0.324, -0.783),
+					Vector2(0.324, -0.783), Vector2(0.783, -0.324),
+				],
+				"marks": [
+					{"kind": "dark", "pts": [Vector2(0.611, 0.253), Vector2(0.253, 0.611), Vector2(-0.253, 0.611), Vector2(-0.611, 0.253), Vector2(-0.611, -0.253), Vector2(-0.253, -0.611), Vector2(0.253, -0.611), Vector2(0.611, -0.253)]},
+				],
+			},
+			{"id": "mount_chaser_aft", "kind": "mount", "shade": 0, "attach": Vector2(-12.857, 0), "mirror": false,
+				"weapon": "light_turret",
 				"pts": [
 					Vector2(0.783, 0.324), Vector2(0.324, 0.783), Vector2(-0.324, 0.783), Vector2(-0.783, 0.324), Vector2(-0.783, -0.324), Vector2(-0.324, -0.783),
 					Vector2(0.324, -0.783), Vector2(0.783, -0.324),

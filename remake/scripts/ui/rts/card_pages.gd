@@ -2,15 +2,18 @@ class_name CardPages
 extends RefCounted
 ## WHAT THIS IS: the command card's contents as data: the three pages (Orders, Build, Base), every cell with its name,
 ## the key row it uses and its words, and where each cell sits for the home layout in force (B and C a 3x3 grid, A a 4x3
-## grid), in the grid, the fixed extra row of three keyless buttons, the More pop-out (up to 8 entries) and the
-## Capitals pop-out. It is the table of DESIGN 5.6.
+## grid), in the grid, the fixed extra row of three keyless buttons, the More pop-out (up to 8 entries) and the pick
+## list of the page (Build's Capitals, Orders' Position). It is the table of DESIGN 5.6.
 ##
 ## HOW IT WORKS: only constants and small static functions. A cell is CELLS["<page>/<id>"] = {name, row, kind, tip}:
 ## `row` is the id of its key row in KeyMapData (mode "home"), "" for a cell with no key; `kind` is the order word of an
 ## Orders cell (it lights only when OrderKinds.BOUGHT_KINDS holds it). LAYOUT_B and LAYOUT_A say, per page, the grid
-## (row by row, "" for a blank place), the extra row, the More list and the Capitals list. Layout C draws layout B's
+## (row by row, "" for a blank place), the extra row, the More list and the pick list ("pop": the Capitals on Build, the three
+## Position entries on Orders; those entries have no key row). Layout C draws layout B's
 ## cells with its own letters (the keys are read from the key map, never written here). `rows_without_cell()` lists any
-## key row of a page that has no cell, for the tour's check that every row has a place in every layout.
+## key row of a page that has no cell, for the tour's check that every row has a place in every layout. A cell may carry the kind of
+## the order its click ends in, shared with another cell (Stance and Position were both SET_STANCE; Goal carries DEFEND, the word its
+## default click ends in, and its click routes by what is clicked); a cell whose kind is "" never lights.
 ##
 ## WHO USES IT: CommandCard (builds its buttons from it), tests/rts_tour.gd.
 
@@ -20,6 +23,8 @@ const PAGES := ["orders", "build", "base"]
 const LABELS := {"orders": "Orders", "build": "Build", "base": "Base"}
 ## How many ships the Capitals pop-out opens: destroyer and battlecruiser.
 const CAPITALS := ["destroyer", "battlecruiser"]
+## The three entries of the Position pick, in the order of the move stance value (0 hold, 1 manoeuvre, 2 roam).
+const POSITIONS := ["pos_hold", "pos_manoeuvre", "pos_roam"]
 
 ## Every cell: "<page>/<id>" -> {name, row, kind, tip}.
 const CELLS := {
@@ -30,10 +35,13 @@ const CELLS := {
 	"orders/patrol": {"name": "Patrol", "row": "order_patrol", "kind": OrderKinds.PATROL, "tip": "Patrol between two spots."},
 	"orders/retreat": {"name": "Retreat", "row": "order_retreat", "kind": OrderKinds.RETREAT, "tip": "Retreat to the mothership and dock."},
 	"orders/defend": {"name": "Defend", "row": "order_defend", "kind": OrderKinds.DEFEND, "tip": "Defend a point or one of your structures."},
-	"orders/goal": {"name": "Goal", "row": "order_goal", "kind": "", "tip": "Goal: give the squadrons a job to work towards, then click the target."},
+	"orders/goal": {"name": "Goal", "row": "order_goal", "kind": OrderKinds.DEFEND, "tip": "Goal: give the squadrons a job to work towards, then click the target."},
 	"orders/escort": {"name": "Escort", "row": "order_escort", "kind": OrderKinds.ESCORT, "tip": "Escort one of your pilots."},
 	"orders/stance": {"name": "Stance", "row": "order_stance", "kind": OrderKinds.SET_STANCE, "tip": "Stance: how the squadrons fire and move."},
-	"orders/position": {"name": "Position", "row": "order_position", "kind": OrderKinds.SET_STANCE, "tip": "Position stance: hold, manoeuvre or roam."},
+	"orders/position": {"name": "Position", "row": "order_position", "kind": OrderKinds.SET_STANCE, "tip": "Position: how far the squadrons chase. Click, then pick hold, manoeuvre or roam."},
+	"orders/pos_hold": {"name": "Hold", "row": "", "kind": OrderKinds.SET_STANCE, "tip": "Position hold: the squadrons chase only a short way from their spot. This is the chase setting, not the Hold order."},
+	"orders/pos_manoeuvre": {"name": "Manoeuvre", "row": "", "kind": OrderKinds.SET_STANCE, "tip": "Position manoeuvre: the squadrons chase a little way from their spot."},
+	"orders/pos_roam": {"name": "Roam", "row": "", "kind": OrderKinds.SET_STANCE, "tip": "Position roam: the squadrons chase far from their spot."},
 	"orders/formation": {"name": "Formation", "row": "order_formation", "kind": OrderKinds.SET_FORMATION, "tip": "Formation: the shape the squadrons fly in."},
 	"orders/push_lane": {"name": "Push lane", "row": "order_push_lane", "kind": OrderKinds.PUSH_LANE, "tip": "Push a lane with the selected squadrons."},
 	"orders/merge": {"name": "Merge", "row": "order_merge", "kind": OrderKinds.MERGE, "tip": "Merge short squadrons into one."},
@@ -55,8 +63,8 @@ const CELLS := {
 	"build/repeat": {"name": "Repeat", "row": "", "kind": "", "tip": "Repeat: when a build of the hull you buy is done, the same item is queued again if the list and the fleet have room."},
 	"base/research": {"name": "Research", "row": "base_research", "kind": "", "tip": "Open the research board."},
 	"base/drone": {"name": "Drone", "row": "base_drone", "kind": "", "tip": "Build a mining drone."},
-	"base/deputy": {"name": "Deputy", "row": "base_deputy", "kind": "", "tip": "The deputy comes with a later stage."},
-	"base/deputy_preset": {"name": "Dep. mode", "row": "base_deputy_preset", "kind": "", "tip": "The deputy's preset comes with a later stage."},
+	"base/deputy": {"name": "Deputy", "row": "base_deputy", "kind": "", "tip": "The deputy: a computer Admiral that helps you."},
+	"base/deputy_preset": {"name": "Dep. mode", "row": "base_deputy_preset", "kind": "", "tip": "The deputy's preset: Balanced, Attack, Defend or Economy."},
 	"base/turret": {"name": "Turret", "row": "base_turret", "kind": "", "tip": "Build a turret: click it, then click a resource node."},
 	"base/torpedo": {"name": "Torpedo", "row": "base_torpedo", "kind": "", "tip": "Build a torpedo turret: click it, then click one of your inner turret sites."},
 	"base/repair": {"name": "Repair bay", "row": "base_repair", "kind": "", "tip": "Send out a repair bay: click it, then click a spot."},
@@ -76,7 +84,7 @@ const CELLS := {
 ## Layout B (and C): a 3x3 grid R T Y / F G H / V B N.
 const LAYOUT_B := {
 	"orders": {"cols": 3, "grid": ["attack_move", "patrol", "goal", "hold", "stop", "retreat", "stance", "formation", "merge"],
-		"extra": ["move", "defend", "escort"], "more": ["position", "push_lane", "full_assault", "full_retreat"], "pop": []},
+		"extra": ["move", "defend", "escort"], "more": ["position", "push_lane", "full_assault", "full_retreat"], "pop": POSITIONS},
 	"build": {"cols": 3, "grid": ["fighter", "lance", "bomber", "scout", "logistics", "support", "flak", "ion", "capitals"],
 		"extra": ["drone", "size", "repeat"], "more": [], "pop": ["destroyer", "battlecruiser"]},
 	"base": {"cols": 3, "grid": ["research", "drone", "deputy", "turret", "repair", "ward", "waypoint", "hangar", "move"],
@@ -85,7 +93,7 @@ const LAYOUT_B := {
 ## Layout A: the classic 4x3 grid Q W E R / A S D F / Z X C V (X is the pilot's order wheel: a blank place here).
 const LAYOUT_A := {
 	"orders": {"cols": 4, "grid": ["move", "hold", "patrol", "retreat", "attack_move", "stop", "defend", "escort", "stance", "", "push_lane", "merge"],
-		"extra": ["goal", "formation", "position"], "more": ["full_assault", "full_retreat"], "pop": []},
+		"extra": ["goal", "formation", "position"], "more": ["full_assault", "full_retreat"], "pop": POSITIONS},
 	"build": {"cols": 4, "grid": ["scout", "fighter", "lance", "bomber", "logistics", "support", "flak", "ion", "destroyer", "", "battlecruiser", "drone"],
 		"extra": ["capitals", "size", "repeat"], "more": [], "pop": ["destroyer", "battlecruiser"]},
 	"base": {"cols": 4, "grid": ["turret", "torpedo", "repair", "ward", "move", "rally", "waypoint", "deputy", "deputy_preset", "", "cancel", "production"],
@@ -108,7 +116,7 @@ static func cell(page_id: String, id: String) -> Dictionary:
 	return CELLS.get("%s/%s" % [page_id, id], {})
 
 
-## Every local id the page shows for `preset`, in the order grid, extra, More, Capitals pop-out (blank places left out).
+## Every local id the page shows for `preset`, in the order grid, extra, More, pick list (blank places left out).
 static func all_ids(preset: String, page_id: String) -> Array:
 	var p := page(preset, page_id)
 	var out: Array = []

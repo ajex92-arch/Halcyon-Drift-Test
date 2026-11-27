@@ -1,8 +1,8 @@
 class_name WorldSpawner
 extends RefCounted
 ## WHAT THIS IS: the factory for new units. Every new pilot ship, minion,
-## drone, turret, repair bay, ward, derelict and snub fighter in the match
-## is made here.
+## drone, turret, repair bay, ward, derelict, snub fighter and practice
+## range target drone in the match is made here.
 ##
 ## HOW IT WORKS: each spawn function makes the unit's node from its scene
 ## file, then follows WorldRegistry's recipe: attach() (id, world link,
@@ -135,6 +135,18 @@ func spawn_ward(team: int, target: Vector2) -> Ward:
 	w.setup(world, team, ms.launch_point(1), target)
 	world.registry.index(w)
 	return w
+
+
+## Make a practice range's target drone of kind `kind_id` (a key of PracticeDrones.ROWS)
+## at `at`. It belongs to no team. Its painter is made by its own setup(), so it has no
+## scene file.
+func spawn_practice_drone(kind_id: String, at: Vector2) -> PracticeDrone:
+	var d := PracticeDrone.new()
+	d.name = "PracticeDrone"
+	world.registry.attach(d)
+	d.setup(world, kind_id, at)
+	world.registry.index(d)
+	return d
 
 
 ## Make the derelict of jungle camp `camp_id` (type `type_id`, a key of

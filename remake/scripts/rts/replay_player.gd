@@ -3,8 +3,9 @@ extends RefCounted
 ## WHAT THIS IS: the part of the order queue that plays a match log back. Two kinds:
 ## replay 1 (--replay=<file>) plays back what a human did (the "h" order lines, the "c" flight
 ## controls of the human pilot and the "b" hangar commands) in place of the human, and replay 2
-## (--admiral-replay=<file>) plays back the computer Admirals' orders (the "a" lines) in place of
-## their thinking. Either way the match is run again with the same seed and options, and at every
+## (--admiral-replay=<file>) plays back the computer Admirals' orders (the "a" lines) and their
+## decisions about their own ships (the `f` lines: launch, recall, resume, end) and the fleet layer's
+## goal lane (the `f` line "goal") in place of their thinking. Either way the match is run again with the same seed and options, and at every
 ## fingerprint line of the log the live fingerprint must be the same: it prints "replay: ok
 ## t=<tick>" or "replay: MISMATCH t=<tick> log=<hash> run=<hash>", and at the end "replay: end ..."
 ## and a last "replay: ok" or "replay: MISMATCH".
@@ -69,15 +70,32 @@ func start(file_path: String, computer: bool) -> bool:
 		print("replay: cannot read a match log from the file given")
 		return false
 	var want := "a" if computer else "h"
-	for o: Dictionary in data["orders"]:
+	# Replay 2 also plays the computer Admirals' decisions about their own ships (the `f` lines,
+	# AdmiralField), each where the file has it among the orders.
+	var field: Array = data["field"] if computer else []
+	var f_next := 0
+	var orders: Array = data["orders"]
+	for i in orders.size() + 1:
+		while f_next < field.size() and int((field[f_next] as Dictionary)["after"]) <= i:
+			_file(field[f_next])
+			f_next += 1
+		if i == orders.size():
+			break
+		var o: Dictionary = orders[i]
 		if Order.marker(o) != want or str(o["kind"]) == OrderKinds.GAME_SPEED:
 			continue
-		var tick := int(o["apply_tick"])
-		if not _by_tick.has(tick):
-			_by_tick[tick] = []
-		(_by_tick[tick] as Array).append(o)
+		_file(o)
 	stop_tick = int(data["last_tick"])
 	return true
+
+
+## File record `o` (an order, or an `f` line's record) under the tick it is played on: the apply tick, but a computer order read
+## with a d word (o["decided"], a delayed fleet order) under its decision tick, where the queue takes it in to carry it out later.
+func _file(o: Dictionary) -> void:
+	var tick := int(o["tick"]) if o.has("decided") else int(o["apply_tick"])
+	if not _by_tick.has(tick):
+		_by_tick[tick] = []
+	(_by_tick[tick] as Array).append(o)
 
 
 ## Do the log's header and the live match agree (seed, preset, rule variants, seat, map

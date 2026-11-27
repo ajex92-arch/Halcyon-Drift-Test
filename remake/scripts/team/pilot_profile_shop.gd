@@ -25,7 +25,9 @@ extends RefCounted
 ## For a pilot who is unlocked (UnlockAll: the test option "Unlock everything",
 ## the human's own record only) every price counts as 0 (pay_price()), so the
 ## credits never go down, and a hull is never locked (hull_unlocked()); what
-## selling and trading in give back is not changed.
+## selling and trading in give back is not changed. In a practice range the human's
+## record has every ship class open too (PracticeRange.locks_open()), but pays the
+## list price: pay_price() is not touched.
 ##
 ## WHO USES IT: PilotProfile makes one (PilotProfile.shop) and forwards
 ## gear_blocker(), buy_gear(), kit_blocker(), buy_kit(), sell_slot(),
@@ -63,10 +65,11 @@ func pay_price(list_price: float) -> float:
 
 
 ## May this pilot buy hull `id` as far as the locks go? True when the team has
-## unlocked it (`ts.ship_unlocked()`), or the pilot is unlocked (UnlockAll). The
-## price is not checked here.
+## unlocked it (`ts.ship_unlocked()`), or the pilot is unlocked (UnlockAll), or the
+## class is open in the practice range (PracticeRange.locks_open(): the human's own
+## record in a practice match). The price is not checked here.
 func hull_unlocked(id: String, ts: TeamState) -> bool:
-	return ts.ship_unlocked(id) or UnlockAll.is_unlocked(profile)
+	return ts.ship_unlocked(id) or UnlockAll.is_unlocked(profile) or PracticeRange.locks_open(profile)
 
 
 # --- gear ---------------------------------------------------------------------------

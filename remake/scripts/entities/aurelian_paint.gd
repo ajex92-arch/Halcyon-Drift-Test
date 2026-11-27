@@ -27,7 +27,7 @@ extends RefCounted
 ##     drawn from the same triangles in the same order (still one command), with the
 ##     points of the guns slid back along the nose (kicked_points()), plus one more line
 ##     command for the outlines of the guns.
-##   - The size of every hull is the size of its plain outline in ShipVisual.HULLS
+##   - The size of every hull is the size of its plain outline in HullTables.OUTLINES
 ##     to within about a tenth, so hits and ranges read the same; only the
 ##     picture changes. A hull is drawn longer or wider where a gun mount sits outside the
 ##     plain outline (see AurelianShapes).
@@ -85,7 +85,7 @@ static var _structs := {}
 ## nozzle, scaled and moved into place by prepare().
 static var _hex := PackedVector2Array()
 ## 1 = Aurelian is drawn with the steel look (always, in play), 0 = drawn with
-## the plain outlines of ShipVisual.HULLS (only while the gallery test compares).
+## the plain outlines of HullTables.OUTLINES (only while the gallery test compares).
 static var _mode := 1
 
 
@@ -122,7 +122,7 @@ static func set_on(is_on: bool) -> void:
 static func hull(id: String) -> Dictionary:
 	var rec = _hulls.get(id)
 	if rec == null:
-		rec = prepare(AurelianShapes.HULLS.get(id, AurelianShapes.HULLS["fighter"]))
+		rec = prepare(AurelianShapes.HULLS.get(id, AurelianShapes.HULLS[Ships.DEFAULT_HULL]))
 		_hulls[id] = rec
 	return rec
 

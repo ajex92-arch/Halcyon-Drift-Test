@@ -1,7 +1,8 @@
 class_name RtsTourCard
 extends RefCounted
 ## WHAT THIS IS: the command card's checks of the RTS tour: that every key row of a page has a cell in every home layout and no
-## key does two things on a page, that the page follows the selection, that the Orders cells light only for Move, Hold and Stop,
+## key does two things on a page, that the page follows the selection, that the Orders cells light for the orders a bought squadron takes (Position and its three pick entries included) and the goal cells arm their tools,
+## the Position pick (it opens only with a squadron selected, a click on an entry sends the move-only stance order and closes it, Esc and a selection change close it),
 ## the four looks of a Build cell (ready, cannot pay with the wash, locked, full), what a click and a key send, and Cancel
 ## while a tool is armed.
 ##
@@ -62,7 +63,8 @@ static func table(tour: Node) -> void:
 	KeyMap.set_preset("home_layout", before)
 
 
-## The page follows the selection, and the Orders cells light for Move, Hold and Stop only.
+## The page follows the selection, and the Orders cells light for the kinds a bought squadron takes (Move, Hold, Stop, Defend, Escort,
+## Push lane, Merge, Stance, Formation, Position with its three pick entries, and the Goal cell); then the Position pick.
 static func pages_and_orders(tour: Node) -> void:
 	var view: CommandView = tour.hud.command_view
 	var card := view.card
@@ -95,13 +97,137 @@ static func pages_and_orders(tour: Node) -> void:
 		if not want_live and str(d["sub"]) != "later stage":
 			locked_ok = false
 	live.sort()
-	tour.check("card: only Move, Hold and Stop are lit on the Orders page", live == ["hold", "move", "stop"] and locked_ok, str(live))
+	tour.check("card: the cells of the orders a bought squadron takes are lit on the Orders page, the rest locked", live == ["defend", "escort", "formation", "goal", "hold", "merge", "move", "pos_hold", "pos_manoeuvre", "pos_roam", "position", "push_lane", "stance", "stop"] and locked_ok, str(live))
+	var pos_d := CardState.snapshot(card, "orders", "position")
+	tour.check("card: the Position cell is lit with a squadron selected and says its current setting", str(pos_d["state"]) == "ready" and str(pos_d["sub"]) != "", str(pos_d))
+	ov.set_selection([recs[0].id], false)
+	var arm_ok := true
+	for pair: Array in [["defend", "verb_defend"], ["escort", "verb_escort"], ["push_lane", "verb_push"], ["merge", "verb_merge"], ["goal", "verb_goal"]]:
+		ov.disarm()
+		CardActions.run(card, "orders", str(pair[0]))
+		arm_ok = arm_ok and ov.tool == str(pair[1])
+	ov.disarm()
+	tour.check("card: the Defend, Escort, Push lane, Merge and Goal cells arm their click tools", arm_ok)
 	ov.clear_selection()
 	var none_live := true
 	for pg_id: String in ["move", "hold", "stop"]:
 		none_live = none_live and str(CardState.snapshot(card, "orders", pg_id)["state"]) == "locked"
 	tour.check("card: with no squadron selected the Orders cells are locked ('select first')", none_live)
+	position_pick(tour)
 	card.set_page("build")
+
+
+## Open the Position pick for the first squadron under layout `preset` ("A": the extra cell; "B" and "C": the More list) and return
+## the ids of the list that is open ([] when no pick opened). The selection comes first and the list is closed after it, since a
+## selection change closes an open pick and the same selection again emits nothing.
+static func _open_pick(tour: Node, preset: String) -> Array:
+	var view: CommandView = tour.hud.command_view
+	var card := view.card
+	var recs := RtsSelect.our_squads(tour.world, tour.world.human_team)
+	KeyMap.set_preset("home_layout", preset)
+	view.overlay.set_selection([recs[0].id], false)
+	card.close_list()
+	card.set_page("orders")
+	card.refresh()
+	if preset == "A":
+		var xi := card._extra_ids.find("position")
+		if xi >= 0:
+			card._extra[xi].pressed.emit()
+	else:
+		card._more.pressed.emit()
+		var pi := card._list_ids().find("position")
+		if pi >= 0:
+			card._entries[pi].pressed.emit()
+	return card._list_ids() if card._open == "pop" else []
+
+
+## The Position pick: the cell opens a pick of three entries, an entry sends the move-only stance order and closes it, Esc and a
+## selection change close it, the second line says the current setting, a click with nothing selected opens nothing, the key opens
+## it, and the Capitals pick of the Build page still opens (a control). The order is read from the queue's last record (no tick
+## passes inside a tour step), the first squadron is put back to manoeuvre at the end and the layout preset as it was.
+static func position_pick(tour: Node) -> void:
+	var view: CommandView = tour.hud.command_view
+	var card := view.card
+	var ov := view.overlay
+	var recs := RtsSelect.our_squads(tour.world, tour.world.human_team)
+	var kept := KeyMap.preset_choice("home_layout")
+	var words := ["Hold", "Manoeuvre", "Roam"]
+	var p1_ok := true
+	var p1_detail := ""
+	for preset: String in ["B", "A", "C"]:
+		var ids := _open_pick(tour, preset)
+		var ok := card._open == "pop" and ids == ["pos_hold", "pos_manoeuvre", "pos_roam"]
+		if ok:
+			for i in 3:
+				ok = ok and card._entries[i].visible and card._entries[i].text.begins_with(str(words[i]))
+			ok = ok and not card._entries[3].visible
+		p1_ok = p1_ok and ok
+		p1_detail += "%s: open '%s' ids %s; " % [preset, card._open, str(ids)]
+		card.close_list()
+	tour.check("card position: the Position cell opens a pick of three entries (Hold, Manoeuvre, Roam) in layouts B, A and C", p1_ok, p1_detail)
+	# P2: a click on an entry sends the move-only stance order for the selection and closes the pick.
+	var ids2 := _open_pick(tour, "B")
+	var p2_ok := card._open == "pop" and ids2.size() == 3
+	var sent: Dictionary = {}
+	if p2_ok:
+		card._entries[2].pressed.emit()
+		sent = tour.world.orders.last_submitted
+		var settings: Dictionary = sent.get("settings", {})
+		var subjects: Array = sent.get("subjects", [])
+		p2_ok = str(sent.get("kind", "")) == OrderKinds.SET_STANCE and settings.keys() == ["move"] and int(settings.get("move", -1)) == 2 \
+			and subjects.size() == 1 and int(subjects[0]) == recs[0].id and card._open == "" and ov.result_text.begins_with("Position roam")
+		# Put the first squadron back to manoeuvre through the same pick, so the tour's squadron is not left roaming.
+		var back := _open_pick(tour, "B")
+		if back.size() == 3:
+			card._entries[1].pressed.emit()
+	tour.check("card position: a click on an entry sends the move-only stance order for the selection and closes the pick", p2_ok, "ids %s order %s result '%s'" % [str(ids2), str(sent), ov.result_text])
+	# P3: Esc closes the pick and keeps the selection.
+	var ids3 := _open_pick(tour, "B")
+	var p3_open: bool = card._open == "pop" and ids3.size() == 3
+	var esc := view.cancel_key()
+	tour.check("card position: Esc closes the pick and keeps the selection", p3_open and esc and card._open == "" and ov.sel_squads.has(recs[0].id), "open %s, esc %s, now '%s', selected %s" % [str(p3_open), str(esc), card._open, str(ov.sel_squads)])
+	# P4: a selection change closes the pick.
+	var ids4 := _open_pick(tour, "B")
+	var p4_open: bool = card._open == "pop" and ids4.size() == 3
+	ov.set_selection([], false)
+	tour.check("card position: a selection change closes the pick", p4_open and card._open == "", "open before %s, now '%s'" % [str(p4_open), card._open])
+	# P5: the second line says the current setting, and mixed.
+	if recs.size() < 2:
+		tour.check("card position: the Position cell's second line says the current setting and mixed", false, "two squadrons exist: %d" % recs.size())
+	else:
+		var m0: int = recs[0].move_stance
+		var m1: int = recs[1].move_stance
+		recs[0].move_stance = 2
+		ov.set_selection([recs[0].id], false)
+		var one := CardState.snapshot(card, "orders", "position")
+		recs[1].move_stance = 0
+		ov.set_selection([recs[0].id, recs[1].id], false)
+		var two := CardState.snapshot(card, "orders", "position")
+		recs[0].move_stance = m0
+		recs[1].move_stance = m1
+		tour.check("card position: the Position cell's second line says the current setting and mixed", str(one["sub"]) == "roam" and str(one["tip"]).contains("Now roam") and str(two["sub"]) == "mixed", "one '%s', two '%s'" % [str(one["sub"]), str(two["sub"])])
+	# P6: with none selected the click answers and opens no pick.
+	ov.clear_selection()
+	card.close_list()
+	CardActions.run(card, "orders", "position")
+	tour.check("card position: with none selected the click answers Select squadrons first and opens no pick", card._open == "" and ov.result_text == "Select squadrons first", "open '%s', result '%s'" % [card._open, ov.result_text])
+	# P7: the Position key (layout B, Shift+V) opens the pick.
+	KeyMap.set_preset("home_layout", "B")
+	ov.set_selection([recs[0].id], false)
+	card.close_list()
+	card.set_page("orders")
+	var took := view.key(_key(KEY_V, true))
+	tour.check("card position: the Position key (layout B, Shift+V) opens the pick", took and card._open == "pop", "took %s, open '%s'" % [str(took), card._open])
+	card.close_list()
+	# P8, a control: the Build page's Capitals pick still opens and lists the two capital hulls.
+	ov.clear_selection()
+	card.close_list()
+	card.set_page("build")
+	CardActions.run(card, "build", "capitals")
+	tour.check("card position: the Capitals pop-out still opens on the Build page and lists destroyer then battlecruiser", card._open == "pop" and card._list_ids() == ["destroyer", "battlecruiser"], "open '%s', ids %s" % [card._open, str(card._list_ids())])
+	card.close_list()
+	KeyMap.set_preset("home_layout", kept)
+	card.refresh()
 
 
 ## The four looks of a Build cell, the wash, and what a click and a key send.

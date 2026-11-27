@@ -183,10 +183,10 @@ func _nearest_enemy_pilot(pos: Vector2, team: int) -> float:
 ## else a Fighter on the same terms; else the free Scout. Normal prices
 ## (PilotProfile.buy_hull). No modules, kits or gear.
 func provide_hull(p: PilotProfile, ts: TeamState) -> void:
-	var want: String = _last_hull.get(p, "fighter")
+	var want: String = _last_hull.get(p, Ships.DEFAULT_HULL)
 	if not ts.ship_unlocked(want) or p.credits < float(Ships.HULLS[want]["price"]) + RESERVE:
-		want = "fighter" if p.credits >= float(Ships.HULLS["fighter"]["price"]) + RESERVE else "scout"
+		want = Ships.DEFAULT_HULL if p.credits >= float(Ships.HULLS[Ships.DEFAULT_HULL]["price"]) + RESERVE else Ships.FREE_HULL
 	if p.hull_id != want:
 		p.buy_hull(want, ts)
 	if p.hull_id == "":
-		p.buy_hull("scout", ts)
+		p.buy_hull(Ships.FREE_HULL, ts)

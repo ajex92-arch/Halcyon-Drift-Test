@@ -147,8 +147,9 @@ func _close() -> void:
 	_line.release_focus()
 	get_tree().paused = _was_paused
 	if world != null:
-		world.mouse_fire = Input.is_mouse_button_pressed(MOUSE_BUTTON_LEFT)
-		world.mouse_special = Input.is_mouse_button_pressed(MOUSE_BUTTON_RIGHT)
+		# Not in mode 3: a button still held when the pause or note closes fires nothing there (the view works the mouse).
+		world.mouse_fire = Input.is_mouse_button_pressed(MOUSE_BUTTON_LEFT) and not CoastController.holding(world)
+		world.mouse_special = Input.is_mouse_button_pressed(MOUSE_BUTTON_RIGHT) and not CoastController.holding(world)
 
 
 ## A picture of the screen as it is now (the last frame drawn), or null in a

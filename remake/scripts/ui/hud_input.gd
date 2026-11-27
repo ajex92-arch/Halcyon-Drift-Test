@@ -4,7 +4,8 @@ extends RefCounted
 ## P pause menu, the backquote key (slower world speeds) and Shift plus it (faster ones),
 ## Tab (Admiral board or scoreboard), B hangar, H help, Esc cancel / close / pause menu
 ## (Esc closes the order wheel first), C camera, F launch, F9 the note box, X the order
-## key (tap or hold) and the wing keys (preset B: Y U I O K L N Shift+N).
+## key (tap or hold: the pilot's wing wheel, the flying Admiral's fleet wheel) and the wing keys (preset B: Y U I O K L N
+## Shift+N).
 ##
 ## HOW IT WORKS: Godot gives the HUD every key press the game didn't use
 ## (Hud._unhandled_input) and the HUD passes it to handle(). Keys only work
@@ -48,6 +49,10 @@ var _wheel_down := -1
 var _wheel_pos := Vector2.ZERO
 ## The world point under the reticle when the order key went down.
 var _wheel_aim := Vector2.ZERO
+## True from the target button going down (the middle click) while a press would count, until it goes up.
+var _target_down := false
+## Where the target button went down (screen pixels).
+var _target_pos := Vector2.ZERO
 
 ## Released within this many milliseconds, with the mouse moved less than TAP_PX, the order key is a tap.
 const TAP_MS := 250
@@ -55,6 +60,9 @@ const TAP_MS := 250
 const TAP_PX := 12.0
 ## The order wheel is drawn this many milliseconds after the key goes down.
 const WHEEL_OPEN_MS := 130
+## The target button (the middle click) released less than this many pixels from where it went down is a target click; a longer
+## move is a drag, which still pans the free camera.
+const TARGET_CLICK_PX := 6.0
 ## The wing preset's keys: [action, gesture, value]. Shift+N is listed first (an exact match, so N never takes it).
 const WING_KEYS := [
 	["wing_fire", "next_fire", 0], ["wing_formation", "next_formation", 0], ["wing_follow", "follow", 0],
@@ -90,10 +98,20 @@ func handle(event: InputEvent) -> void:
 	var world := hud.world
 	if world == null:
 		return
-	# Step 0: the order key (X, or the mouse's fifth button) for the pilot's wing. It comes before the key-only
+	# Step 0: the order key (X, or the mouse's fifth button): the pilot's wing wheel, or the flying Admiral's fleet wheel. It comes before the key-only
 	# test below because its second binding is a mouse button, and before the "only when pressed" test, which
 	# would drop the release: a tap or a hold is told apart by the release.
 	if event.is_action("wheel") and _wing_key(event):
+		return
+	# Step 0b: the target's mouse button (the middle click). It never marks the event used, so the camera still gets the press and the
+	# release and a drag still pans; a release near the press (a click, not a drag) marks a target.
+	if event is InputEventMouseButton and event.is_action("target", true):
+		_target_mouse(event as InputEventMouseButton)
+		return
+	# Step 0c: while the fleet wheel is open, the build strip's digits (the "wheel" rows of the key map) queue a hull
+	# and are used up (the wheel stays open); every other key goes on as usual.
+	if event is InputEventKey and hud.order_wheel.is_open and hud.order_wheel.strip_key(event as InputEventKey):
+		_handled()
 		return
 	# Step 1: only real key presses during play.
 	if not (event is InputEventKey):
@@ -140,21 +158,26 @@ func handle(event: InputEvent) -> void:
 			hud._toggle_help()
 			_handled()
 		elif k.pressed and event.is_action("cancel"):
-			if hud.wing_wheel.is_open or _wheel_down >= 0:
-				# The order wheel closes first, giving no order (also over the pause menu and in Look around).
+			if hud.wing_wheel.is_open or hud.order_wheel.is_open or _wheel_down >= 0:
+				# The order wheel (the fleet wheel or the wing wheel) closes first, giving no order (also over the pause
+				# menu and in Look around).
 				_wheel_down = -1
 				hud.wing_wheel.close()
+				hud.order_wheel.close()
 			else:
 				hud.pause_menu.back()
 			_handled()
 		return
-	# Step 3: Tab. The Admiral toggles their board on each press; a pilot
-	# sees the scoreboard only while Tab is held down (press shows it,
-	# release hides it).
+	# Step 3: Tab. The Admiral docked toggles their board on each press; an Admiral flying toggles the command
+	# view (mode 3: the ship coasts, the camera is free, map clicks select) and Tab closes the board too; a pilot
+	# sees the scoreboard only while Tab is held down (press shows it, release hides it).
 	if event.is_action("admiral_board"):
 		if world.human_role == "admiral":
 			if k.pressed:
-				hud._toggle_board()
+				if world.teams[world.human_team].admiral_docked:
+					hud._toggle_board()
+				else:
+					hud.panels.toggle_view()
 		else:
 			hud._show_scoreboard(k.pressed)
 		_handled()
@@ -162,12 +185,22 @@ func handle(event: InputEvent) -> void:
 	# Every other key only reacts when pressed, not when let go.
 	if not k.pressed:
 		return
+	# Step 3a: the target key (Caps Lock): mark the enemy nearest the pointer, or the last attacker when that one is marked already.
+	# It is used up only when the pilot flies (TargetKeys.my_ship); the pause menu and the note box were handled above.
+	if event.is_action("target", true) and TargetKeys.my_ship(world) != null:
+		TargetKeys.press(world, hud)
+		_handled()
+		return
 	# Step 3b: the wing's key preset (flying; the actions have keys only while that preset is chosen).
 	if _wing_preset_key(event):
 		return
 	# Step 3c: the Admiral's command view: M selects every squadron, and the card's keys of the page in force (the grid, the digits)
 	# are taken before B, F and H below mean the hangar, dock or help.
 	if hud.command_view != null and hud.command_view.key(event):
+		_handled()
+		return
+	# Step 3d: the selection keys (F1 to F8) also work with the board open, when the view itself is hidden under the board.
+	if hud.command_view != null and not hud.command_view.is_showing() and hud.command_view.select_key(event):
 		_handled()
 		return
 	# Step 4: B opens the hangar, or closes it if it is showing.
@@ -181,22 +214,30 @@ func handle(event: InputEvent) -> void:
 	# Step 6: Esc cancels an armed map tool first; otherwise it closes
 	# every panel; with nothing to cancel or close it opens the pause menu.
 	elif event.is_action("cancel"):
-		if hud.wing_wheel.is_open or _wheel_down >= 0:
-			# The order wheel closes first, giving no order.
+		if hud.wing_wheel.is_open or hud.order_wheel.is_open or _wheel_down >= 0:
+			# The order wheel (the fleet wheel or the wing wheel) closes first, giving no order.
 			_wheel_down = -1
 			hud.wing_wheel.close()
+			hud.order_wheel.close()
 		elif hud.overlay.tool != "":
 			hud.overlay.disarm()
 		elif hud._any_panel_open():
 			hud._close_others(null)
 		elif hud.command_view != null and hud.command_view.cancel_key():
 			pass
+		elif world.view_open:
+			# Mode 3 closes: the Admiral flies again.
+			world.view_open = false
+		elif TargetKeys.clear(world):
+			# The target is let go (the panels and the command view closed first, above).
+			pass
 		else:
 			hud._toggle_pause_menu()
 		_handled()
-	# Step 7: C switches the Admiral's camera between free and following
-	# their ship (a pilot's camera is always free: Space centers it, see
-	# CameraRig, so C does nothing for a pilot).
+	# Step 7: C switches the camera between free and following your ship, for
+	# the Admiral and for a pilot (the pilot's follow camera leans toward the
+	# mouse, see CameraRig; Space centers either one while it is held). The
+	# pilot's mouse route is the pause menu's Camera row.
 	elif event.is_action("center_camera"):
 		_camera_key()
 		_handled()
@@ -219,12 +260,23 @@ func _hangar_key() -> void:
 		hud._open_hangar()
 
 
-## C: an Admiral's camera goes between free and following their ship (a pilot's camera is always free,
-## so for a pilot nothing happens).
+## C: the Admiral's or a pilot's camera goes between free and following their ship (a spectator has no ship: nothing happens).
+## The toast names the new mode; a pilot's follow camera also leans toward the mouse. A pilot who has no ship after a death (the
+## death card is up) gets the teammate watch from C instead: the next living teammate, or the pop-up "No teammate in flight".
 func _camera_key() -> void:
-	if hud.world.human_role == "admiral":
+	var role := hud.world.human_role
+	# A pilot with no ship after a death: C watches the next living teammate (and says so when there is none).
+	if hud.death_card != null and hud.death_card.watch_allowed():
+		if not hud.world.camera.watch_next():
+			hud.toast("No teammate in flight")
+		return
+	if role == "admiral" or role == "pilot":
 		hud.world.camera.toggle_free()
-		hud.toast("Camera: %s" % ("free (WASD / edges / minimap)" if hud.world.camera.free else "following your ship"))
+		var now_free := hud.world.camera.free
+		if role == "admiral":
+			hud.toast("Camera: %s" % ("free (WASD / edges / minimap)" if now_free else "following your ship"))
+		else:
+			hud.toast("Camera: %s" % ("free (%s centres it on your ship)" % KeyMapText.key_of("center_on_ship") if now_free else "following your ship, leaning toward the mouse"))
 
 
 ## F while docked: launch. A pilot can always do this; an Admiral only while the hangar is open. The
@@ -284,21 +336,23 @@ func click(action: String) -> void:
 # --- the pilot's wing ----------------------------------------------------------------------------
 
 ## The order key (the "wheel" action: X, or the mouse's fifth button) went down or up. Pressed, in a pilot
-## seat with a wing, it starts the timing: released within TAP_MS with the mouse moved under TAP_PX it is a tap
-## (the order for what the mouse is on); otherwise the order wheel is drawn from WHEEL_OPEN_MS after the press
-## and the release gives the order under the mouse. The times are real milliseconds, so it works while the
-## game is paused or slowed. Returns true when the event was used.
+## seat with a wing (Hud.wing_ready) or in the seat of an Admiral who is flying (Hud.field_ready), it starts the
+## timing: released within TAP_MS with the mouse moved under TAP_PX it is a tap (the pilot's order for what the mouse
+## is on, the Admiral's smart order); otherwise the wheel (the wing wheel or the fleet wheel) is drawn from
+## WHEEL_OPEN_MS after the press and the release gives the order under the mouse. The times are real milliseconds,
+## so it works while the game is paused or slowed. Returns true when the event was used.
 func _wing_key(event: InputEvent) -> bool:
 	if event is InputEventKey and (event as InputEventKey).echo:
 		return _wheel_down >= 0
+	var admiral := hud.world.human_role == "admiral"
 	if event.is_pressed():
 		if _wheel_down >= 0:
 			return true
-		if hud.world.phase != "play" or hud._note_is_open() or not hud.wing_ready():
+		if hud.world.phase != "play" or hud._note_is_open() or not (hud.field_ready() if admiral else hud.wing_ready()):
 			return false
 		_wheel_down = Time.get_ticks_msec()
 		_wheel_pos = hud.get_viewport().get_mouse_position()
-		_wheel_aim = hud.wing_aim()
+		_wheel_aim = hud.field_aim() if admiral else hud.wing_aim()
 		_handled()
 		return true
 	if _wheel_down < 0:
@@ -307,21 +361,87 @@ func _wing_key(event: InputEvent) -> bool:
 	var moved := hud.get_viewport().get_mouse_position().distance_to(_wheel_pos)
 	_wheel_down = -1
 	if held < TAP_MS and moved < TAP_PX:
-		hud.wing_wheel.close()
-		hud.wing_command("tap", 0, _wheel_aim)
+		if admiral:
+			hud.order_wheel.close()
+			hud.field_tap(_wheel_aim)
+		else:
+			hud.wing_wheel.close()
+			hud.wing_command("tap", 0, _wheel_aim)
+	elif admiral and hud.order_wheel.is_open:
+		hud.order_wheel.close_and_apply()
 	elif hud.wing_wheel.is_open:
 		hud.wing_wheel.close_and_apply()
 	_handled()
 	return true
 
 
-## Once a frame (Hud._process): draw the order wheel when the key has been down for WHEEL_OPEN_MS.
+## Once a frame (Hud._process): draw the order wheel (the Admiral's fleet wheel, or the pilot's wing wheel) when the key
+## has been down for WHEEL_OPEN_MS.
 func wing_tick() -> void:
-	if _wheel_down >= 0 and not hud.wing_wheel.is_open and Time.get_ticks_msec() - _wheel_down >= WHEEL_OPEN_MS:
+	if _wheel_down < 0 or Time.get_ticks_msec() - _wheel_down < WHEEL_OPEN_MS:
+		return
+	if hud.world.human_role == "admiral":
+		if hud.order_wheel.is_open:
+			return
+		if hud.field_ready():
+			hud.order_wheel.open_at(_wheel_pos, _wheel_aim)
+		else:
+			_wheel_down = -1
+	elif not hud.wing_wheel.is_open:
 		if hud.wing_ready():
 			hud.wing_wheel.open_at(_wheel_pos, _wheel_aim)
 		else:
 			_wheel_down = -1
+
+
+## The target button (the "target" action's mouse button, the middle one) went down or up. Down: remember where, when a press
+## would count. Up: a click (released less than TARGET_CLICK_PX from where it went down) marks the target; a longer move was a drag
+## and marks nothing. The event is never used up here: the camera reads the same button for its drag.
+func _target_mouse(mb: InputEventMouseButton) -> void:
+	if mb.pressed:
+		_target_down = _target_may_act()
+		_target_pos = mb.position
+		return
+	if not _target_down:
+		return
+	_target_down = false
+	if mb.position.distance_to(_target_pos) < TARGET_CLICK_PX and _target_may_act():
+		TargetKeys.press(hud.world, hud)
+
+
+## An open order wheel (the fleet wheel or the wing wheel) covers the HUD and takes every mouse press itself, so the middle click
+## never reaches handle(). The wheel hands the event here instead. A target-button press marks the enemy under the pointer on the
+## press itself (the same pick and the same rules as a click above: TargetKeys.press, only while the human flies a ship and the
+## game is being played); no order is filed and the wheel is left as it is. The release marks nothing, and no camera drag can start
+## or end, because the camera never sees either event. Returns true when `mb` is the target button (press or release), so the
+## wheel uses it up; false for any other button, which the wheel treats as before.
+func wheel_target(mb: InputEventMouseButton) -> bool:
+	if not mb.is_action("target", true):
+		return false
+	if mb.pressed:
+		_target_down = false
+		if _target_may_act():
+			TargetKeys.press(hud.world, hud)
+	return true
+
+
+## May the target's key or click act now? The match is being played, the note box is closed, the pause menu does not hold the game
+## and the human flies a ship.
+func _target_may_act() -> bool:
+	var world := hud.world
+	return world != null and world.phase == "play" and not hud._note_is_open() and not hud._pause_menu_active() and TargetKeys.my_ship(world) != null
+
+
+## Once a frame (Hud._process): a target that died is replaced by the next enemy nearest the pointer (TargetKeys.tick).
+func target_tick() -> void:
+	if hud.world != null and hud.world.phase == "play":
+		TargetKeys.tick(hud.world)
+
+
+## The order key's hold is over without its release (a click on the open fleet wheel used it, or the wheel closed
+## because a field order can no longer be given): forget it, so the wheel does not open again while the key is down.
+func end_hold() -> void:
+	_wheel_down = -1
 
 
 ## A key of the wing preset (Y U I O K L N and Shift+N when preset B is chosen, or any key the player gave the

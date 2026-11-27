@@ -154,7 +154,7 @@ func _tick(dt: float) -> void:
 		hulls.append(ms.hull_frac() if ms != null else 0.0)
 		if hulls.size() > int(AI_WINDOW) + 1:
 			hulls.pop_front()
-		if AdmiralWeak.ai_acts(world, t):
+		if AdmiralWeak.ai_acts_seat(world, t):
 			_ai_think(t)
 
 

@@ -184,7 +184,7 @@ func _check_gather(t: int) -> void:
 		var is_big := s.size_class >= Rules.SIZE_LARGE
 		if is_big:
 			bigs += 1
-		if not is_big and s.hull_id != "bomber":
+		if not is_big and not Ships.has_role(s.hull_id, "siege"):
 			continue
 		if s.global_position.distance_to(stage) < radius:
 			if is_big:
@@ -214,7 +214,7 @@ func _check_gather(t: int) -> void:
 
 ## Is `s` one of its team's siege ships (a big ship or a bomber)?
 static func _is_siege_ship(s: Ship) -> bool:
-	return s.alive and (s.size_class >= Rules.SIZE_LARGE or s.hull_id == "bomber")
+	return s.alive and (s.size_class >= Rules.SIZE_LARGE or Ships.has_role(s.hull_id, "siege"))
 
 
 ## Work out team `t`'s speed cap and group centre (see the header). INF means

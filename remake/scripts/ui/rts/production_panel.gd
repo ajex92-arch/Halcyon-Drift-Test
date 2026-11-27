@@ -2,7 +2,8 @@ class_name ProductionPanel
 extends Control
 ## WHAT THIS IS: the production panel at the top right of the command view (C1, the list): the build list as one row per item in
 ## the order ore is paid (ships, research, modules and drones together), each with its state in words, a bar and buttons, and below it
-## the choices for new ships (squadron size, repeat, rally). It folds to its 26 px header. It replaces the Yard tab.
+## the choices for new ships (squadron size, repeat, rally; and in a second footer row "New <hull> join <none or F1-F8>", the group a
+## newly built squadron of that hull joins, kept in the settings file by Groups). It folds to its 26 px header. It replaces the Yard tab.
 ##
 ## HOW IT WORKS: a Control of 280 x 280 with a header (the count and the list's need, the filters All, Ships, Research and Drones, and
 ## Fold), a clipped area of 16 pooled ProductionRows of which 8 show (the list scrolls with the wheel; the picked row stays in view) and a
@@ -26,6 +27,10 @@ const SHOWN := 8  # SHOWN (pixels or a count)
 const POOL := 16  # POOL (pixels or a count)
 ## Where the footer starts.
 const FOOT_Y := HEAD_H + 2.0 + float(SHOWN) * ROW_H + 4.0
+## The footer's second row (the auto-join choice): its height, which the panel grows by, and where it starts.
+const JOIN_ROW_H := 26.0
+## Where the footer's second row (the auto-join choice) starts.
+const JOIN_Y := FOOT_Y + 26.0
 
 ## The command view (set by setup()).
 var view: CommandView
@@ -50,6 +55,16 @@ var _entries: Array = []
 var _sizes: Array[Button] = []
 var _repeat: Button  # the repeat
 var _rally := {}  # the rally
+## The auto-join row: the words, the hull button, the group button, and the hull the row is showing now.
+var _join_new: Label
+## The word "join" in the auto-join row.
+var _join_word: Label
+## The button that picks the hull whose new squadrons join a group.
+var _join_hull: Button
+## The button that picks the group those squadrons join.
+var _join_group: Button
+## The id of the hull the auto-join row is showing now.
+var _join_hull_id := Ships.DEFAULT_HULL
 ## The item whose started Cancel is asked again, and until when (real milliseconds).
 var _confirm_id := ""
 var _confirm_until := 0  # the confirm until
@@ -95,6 +110,13 @@ func setup(v: CommandView) -> void:
 	for kind: String in ["mothership", "lane", "point"]:
 		var k := kind
 		_rally[kind] = _small({"mothership": "Base", "lane": "Lane", "point": "Spot"}[kind], "Where new ships gather: %s." % {"mothership": "ahead of the mothership", "lane": "on the lane you push", "point": "at a spot you pick on the map"}[kind], func() -> void: _pick_rally(k))
+	# The second footer row: New <hull> join <group>. Two buttons that step through their choices (a left click each).
+	_join_new = UiKit.label("New", 10, Palette.MIST)
+	add_child(_join_new)
+	_join_word = UiKit.label("join", 10, Palette.MIST)
+	add_child(_join_word)
+	_join_hull = _small("", "The hull whose new squadrons join a group. Click for the next hull.", func() -> void: _step_join_hull())
+	_join_group = _small("", "", func() -> void: _step_join_group())
 
 
 ## A small panel button (the plain cell look, 10 px words).
@@ -149,6 +171,14 @@ func relayout() -> void:
 		b.position = Vector2(fx + 4.0, FOOT_Y + 2.0)
 		b.size = Vector2(38.0, 22.0)
 		fx += 40.0
+	_join_new.position = Vector2(6.0, JOIN_Y + 6.0)
+	_join_new.size = Vector2(26.0, 14.0)
+	_join_hull.position = Vector2(32.0, JOIN_Y + 2.0)
+	_join_hull.size = Vector2(104.0, 22.0)
+	_join_word.position = Vector2(142.0, JOIN_Y + 6.0)
+	_join_word.size = Vector2(26.0, 14.0)
+	_join_group.position = Vector2(170.0, JOIN_Y + 2.0)
+	_join_group.size = Vector2(58.0, 22.0)
 	queue_redraw()
 
 
@@ -197,7 +227,7 @@ func _prod() -> Production:
 func refresh() -> void:
 	var p := _prod()
 	var shown := not folded
-	for c: Control in [_area, _repeat]:
+	for c: Control in [_area, _repeat, _join_new, _join_word, _join_hull, _join_group]:
 		c.visible = shown
 	for b in _sizes:
 		b.visible = shown
@@ -205,6 +235,7 @@ func refresh() -> void:
 		(_rally[k] as Button).visible = shown
 	for f: String in _filters:
 		(_filters[f] as Button).theme_type_variation = &"RtsRowPicked" if f == filter else &"RtsCell"
+	_refresh_join()
 	RtsBeat.set_if_changed(_fold, "+" if folded else "-")
 	_fold.tooltip_text = "Open the production panel." if folded else "Fold the production panel to its header."
 	# The header: how many items and what the list still needs.
@@ -274,7 +305,7 @@ func _pending_ids() -> Dictionary:
 	return out
 
 
-## The snapshot of the row for `e`.
+## The snapshot of the row for `e`. Its "seat" is the seat that bought the item (the row's "deputy" mark reads it).
 func _snapshot(p: Production, e: Dictionary, pending: Dictionary) -> Dictionary:
 	var it: Dictionary = e["it"]
 	var ids: Array = e["ids"]
@@ -292,7 +323,8 @@ func _snapshot(p: Production, e: Dictionary, pending: Dictionary) -> Dictionary:
 		"frac": float(p.percent(it)) / 100.0 if bool(it["started"]) else 0.0,
 		"color": str(_kind_color(kind).to_html()), "held": bool(it["held"]), "started": bool(it["started"]), "picked": ids.has(_picked),
 		"can_repeat": kind == Production.SHIP, "repeat": bool(p.repeat.get(str(it["what"]), false)),
-		"up_ok": int(e["index"]) > 0, "down_ok": int(e["index"]) < p.items.size() - 1, "pending": pending.has(id), "sure": sure}
+		"up_ok": int(e["index"]) > 0, "down_ok": int(e["index"]) < p.items.size() - 1, "pending": pending.has(id), "sure": sure,
+		"seat": int(it.get("seat", Rules.ADMIRAL_SEAT))}
 
 
 ## The colour of the kind mark.
@@ -327,6 +359,42 @@ func _state_text(p: Production, it: Dictionary) -> String:
 		"unlock":
 			return "needs %s" % str(it["need_text"])
 	return p.state_text(it)
+
+
+# --- the auto-join row ----------------------------------------------------------------------------
+
+## The hulls the row steps through: the ones that can be bought (every hull but the scout).
+static func join_hulls() -> Array[String]:
+	var out: Array[String] = []
+	for h: String in Ships.ORDER:
+		if h != Ships.FREE_HULL:
+			out.append(h)
+	return out
+
+
+## Write the row from the groups' choices: the hull's name, and the group (the key label from the key map) or "none".
+func _refresh_join() -> void:
+	var n := view.groups.join_of(_join_hull_id)
+	RtsBeat.set_if_changed(_join_hull, Formations.short_hull(_join_hull_id))
+	var word := KeyMap.first_key("shared", "group_%d" % n) if n > 0 else "none"
+	RtsBeat.set_if_changed(_join_group, word)
+	_join_group.theme_type_variation = &"RtsRowPicked" if n > 0 else &"RtsCell"
+	_join_group.tooltip_text = "A new %s squadron joins %s when it leaves the yard (click for the next choice: none, then each group). Kept for your next match." % [str(Ships.HULLS[_join_hull_id]["label"]), "group %d" % n if n > 0 else "no group"]
+
+
+## The hull button: the next hull of the row.
+func _step_join_hull() -> void:
+	var list := join_hulls()
+	var i := list.find(_join_hull_id)
+	_join_hull_id = list[(i + 1) % list.size()]
+	_refresh_join()
+
+
+## The group button: the next choice for the shown hull (none, then group 1 to 8, then none again); the choice is saved.
+func _step_join_group() -> void:
+	var n := (view.groups.join_of(_join_hull_id) + 1) % (Groups.COUNT + 1)
+	view.groups.set_join(_join_hull_id, n)
+	_refresh_join()
 
 
 # --- the clicks ------------------------------------------------------------------------------------

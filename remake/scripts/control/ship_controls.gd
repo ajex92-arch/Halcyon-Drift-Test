@@ -12,7 +12,7 @@ extends RefCounted
 ##
 ## Some fields are "edge" fields: one-off requests for a single moment, like
 ## a button press (special, cancel_run, focus_request, energy_request, use_kit,
-## dock).
+## vent, dock).
 ## The ship clears them with clear_edges() after reading them, so each
 ## press acts once. The other fields are held: they keep their value until
 ## the controller changes them.
@@ -50,21 +50,30 @@ var focus_request := -1
 var energy_request := -1
 ## Edge: true for one tick to use a repair kit.
 var use_kit := false
+## Edge: true for one tick to start a Vent (the battery clears faster while the ship
+## can only move). Nothing happens in a lockout, in a Vent already running, or with
+## nothing to clear.
+var vent := false
 ## Edge: true for one tick to dock at the mothership.
 var dock := false
 ## Flight assist on (true) or off. When on, the ship damps its sideways
 ## drift while it isn't strafing or boosting, so it travels the way its
 ## nose points instead of sliding sideways (Ship._flight).
 var assist := true
+## The uid of the enemy the human has marked as their target (Caps Lock or a middle click: TargetKeys), or -1 for none. A held field,
+## not an edge: clear_edges() leaves it. Only the human's HUD writes it and only the HUD reads it (the match log's controls line does
+## not carry it), so no simulation code depends on it.
+var target_id := -1
 
 
 ## Reset the edge fields after the ship has read them, so each one-off
 ## request (special, run cancel, shield focus, energy routing, repair kit,
-## dock) acts only once. Called by Ship.sim_update().
+## vent, dock) acts only once. Called by Ship.sim_update().
 func clear_edges() -> void:
 	special = false
 	cancel_run = false
 	focus_request = -1
 	energy_request = -1
 	use_kit = false
+	vent = false
 	dock = false

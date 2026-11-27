@@ -19,13 +19,21 @@ extends Node
 ##      (MIN_GAP), so a 30-ship brawl doesn't turn into noise.
 ##   4. The voices take turns; when all 14 are busy, the sound that started
 ##      longest ago is cut off to play the new one.
+##   5. Spoken team calls arrive as Events.callout(line, team). _on_callout()
+##      plays a line only when the team on screen is the team that said it
+##      (CalloutData.hears). A call ignores position and fog, so it is heard
+##      wherever the speaker is on the map. Each line is a short placeholder
+##      tone pattern baked from CalloutData until recorded voices exist.
 ##
 ## WHO USES IT: main.gd makes one only when there is a window (and the HUD
 ## scene exists) and calls setup(world). It listens to Events.cue, which
-## weapons, combat, effects, ships, the mothership and the hangar send.
+## weapons, combat, effects, ships, the mothership and the hangar send, and
+## to Events.callout, which CalloutData.say sends.
 ##
 ## To add a sound: bake it in _ready() under the cue name the simulation
-## sends.
+## sends. The pilot's ring sends two warning beeps: "torp_warn" (a torpedo is
+## coming, TORP_WARN_HZ) and "energy_empty" (the battery cannot pay a gun,
+## ENERGY_EMPTY_HZ, a lower tone so the two are told apart by ear).
 ##
 ## Note: the hiss sounds and the small random pitch changes use Sfx's own
 ## random numbers (_rng), never the game's shared random sequence. So
@@ -39,7 +47,11 @@ const VOICES := 14
 ## The smallest gap (seconds of real time) between two plays of the same
 ## cue. Cues not listed here have no gap.
 const MIN_GAP := {"fire": 0.06, "pd": 0.08, "flak": 0.08, "shell": 0.1, "torp": 0.12, "hit": 0.05,
-	"shield_hit": 0.05, "boom": 0.08, "bump": 0.2, "alarm": 0.6}
+	"shield_hit": 0.05, "boom": 0.08, "bump": 0.2, "alarm": 0.6, "torp_warn": 0.34, "energy_empty": 0.4}
+## The pitch (Hz) of the torpedo warning's beep.
+const TORP_WARN_HZ := 1040.0
+## The pitch (Hz) of the empty-energy beep: an octave under the torpedo warning's, so the two sound different.
+const ENERGY_EMPTY_HZ := 520.0
 
 ## The running match (for the camera, the fog and the viewing team). Set
 ## by setup().
@@ -56,6 +68,12 @@ var _last := {}
 ## Sfx's own random numbers (hiss and pitch changes). _ready() seeds it, so
 ## the sounds are the same every run.
 var _rng := RandomNumberGenerator.new()
+## How many times each spoken line was started: line id -> count. Kept so a
+## check can read what played.
+var callouts_heard := {}
+## When each spoken line last played: line id -> seconds since the game
+## started (real time, not match time).
+var _last_callout := {}
 
 
 ## Godot calls this when Sfx is added to the game. Make the voices, bake
@@ -101,14 +119,65 @@ func _ready() -> void:
 	var alarm := SfxSynth.tone(880.0, 0.08, "square", 0.07, 0.0)
 	alarm.append_array(SfxSynth.tone(660.0, 0.1, "square", 0.07, 0.0))
 	_streams["alarm"] = SfxSynth.bake(0.3, [alarm])
-	# Step 3: listen for cues from the simulation.
+	# The beep of the pilot's torpedo warning (ShipRing): one short high tone, sent faster as the nearest torpedo gets closer.
+	_streams["torp_warn"] = SfxSynth.bake(0.07, [SfxSynth.tone(TORP_WARN_HZ, 0.05, "square", 0.06, 0.0)])
+	# The beep of the pilot's empty-energy warning (ShipRing): one short low tone with no hiss layer, so it draws no random number.
+	_streams["energy_empty"] = SfxSynth.bake(0.1, [SfxSynth.tone(ENERGY_EMPTY_HZ, 0.08, "square", 0.06, 0.0)])
+	# The Battlecruiser's Broadside charge: the explosion's own sound (nothing new is baked, so the
+	# random numbers above stay in order), played lower and longer in _on_cue().
+	_streams["broadside_charge"] = _streams["boom"]
+	# The spoken callout lines: one placeholder stream per line of CalloutData.
+	# They take no random numbers, so every sound above keeps its own.
+	for id: String in CalloutData.ORDER:
+		_streams["callout_" + id] = _bake_callout(CalloutData.LINES[id]["notes"])
+	# Step 3: listen for cues and spoken calls from the simulation.
 	Events.cue.connect(_on_cue)
+	Events.callout.connect(_on_callout)
 
 
 ## Remember the running match `w`. main.gd calls this right after adding
 ## Sfx to the game.
 func setup(w: World) -> void:
 	world = w
+
+
+## Bake one spoken line's placeholder sound from its `notes` (CalloutData.LINES: each note is
+## [pitch in Hz, length in seconds, wave shape]). The notes are joined one after the other, the way
+## the alarm's two tones are. Takes no random numbers.
+func _bake_callout(notes: Array) -> AudioStreamWAV:
+	# Step 1: one tone per note, its samples added to the end of the line.
+	var samples := PackedFloat32Array()
+	var total := 0.0
+	for n: Array in notes:
+		samples.append_array(SfxSynth.tone(float(n[0]), float(n[1]), str(n[2]), 0.07, 0.0))
+		total += float(n[1])
+	# Step 2: mix the line into one sound.
+	return SfxSynth.bake(total, [samples])
+
+
+## A spoken team call arrived (Events.callout): play line `line` if the team on screen is the team
+## `team` that said it. Position, camera and fog play no part: a call is heard wherever the speaker is.
+func _on_callout(line: String, team: int) -> void:
+	# Step 1: an id with no baked stream is ignored.
+	if not _streams.has("callout_" + line):
+		return
+	# Step 2: only the sender's team hears it (a spectator as CalloutData.SPECTATOR_HEARS says).
+	var viewer := world.viewer_team if world != null else -1
+	if not CalloutData.hears(viewer, team):
+		return
+	# Step 3: too soon after the same line? Skip it (Danger has no gap).
+	var now := Time.get_ticks_msec() / 1000.0
+	if now - float(_last_callout.get(line, -1.0)) < CalloutData.gap_of(line):
+		return
+	# Step 4: play it on the next voice in turn, at its own loudness and the normal pitch.
+	_last_callout[line] = now
+	var p := _players[_next]
+	_next = (_next + 1) % _players.size()
+	p.stream = _streams["callout_" + line]
+	p.volume_db = linear_to_db(MASTER * CalloutData.VOICE_GAIN)
+	p.pitch_scale = 1.0
+	p.play()
+	callouts_heard[line] = int(callouts_heard.get(line, 0)) + 1
 
 
 ## A sound cue arrived (Events.cue): play sound `cue` for world position
@@ -139,6 +208,9 @@ func _on_cue(cue: String, pos: Vector2) -> void:
 	# Shots and hits get a small random pitch change, so a burst of the
 	# same sound doesn't sound robotic.
 	p.pitch_scale = _rng.randf_range(0.93, 1.07) if cue in ["fire", "pd", "hit", "flak"] else 1.0
+	# The Broadside charge is the explosion sound pitched well down: low and long.
+	if cue == "broadside_charge":
+		p.pitch_scale = 0.6
 	p.play()
 
 

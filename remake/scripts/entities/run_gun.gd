@@ -25,7 +25,8 @@ extends RefCounted
 ##               not before the fire button has been let go and pressed again.
 ## A run can also be cancelled at any moment of the hold and READY, free: by
 ## the cancel input (ShipControls.cancel_run: the human's right click, the
-## computer pilots' own cancel) or by touching a rock (ShipFlight.move()).
+## computer pilots' own cancel), by touching a rock (ShipFlight.move()) or when the ship's
+## systems go off in a lockout or a Vent (Ship._quiet_guns(); its own reason, overload).
 ## Nothing is fired and nothing has to reload after a cancel.
 ## Ship calls pre() before the ship flies (the reload, the cancel input and the
 ## start of a hold, so the heading is locked from the very first tick of the
@@ -155,12 +156,15 @@ func tick(m: WeaponMount, trigger: bool, fire_mult: float, dmg_mult: float, rang
 ## End the run now with nothing fired and no reload, because the ship touched
 ## something solid (a rock, a structure or a wall). `trigger` is whether the
 ## fire button is still down, which then has to be let go before the next run.
-## Does nothing when no run is on. Called by ShipFlight.move().
-func cancel(trigger: bool) -> void:
+## `reason` names why, for the usage count: "rock" (the default: the ship touched something solid,
+## counted as torpedo_runs_cancel_rock) or "overload" (the ship's systems went off in a lockout or
+## a Vent, counted as torpedo_runs_cancel_overload). Does nothing when no run is on. Called by
+## ShipFlight.move() (rock) and Ship._quiet_guns() (overload).
+func cancel(trigger: bool, reason: String = "rock") -> void:
 	if not on:
 		return
 	Game.count_usage("torpedo_runs_cancelled")
-	Game.count_usage("torpedo_runs_cancel_rock")
+	Game.count_usage("torpedo_runs_cancel_" + reason)
 	_end(trigger)
 
 

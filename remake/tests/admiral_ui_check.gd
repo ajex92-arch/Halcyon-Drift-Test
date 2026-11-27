@@ -34,12 +34,12 @@ const BOX_MAX_W := 580.0
 ## nothing is armed), "prod" (the production panel changed its fold), "hangar" (the hangar is open), "pop" (the pop-out is open),
 ## "hull" (queued, or locked and the research board opens).
 const TARGETS := {
-	"base/research": "board:Research", "base/drone": "say", "base/deputy": "locked", "base/deputy_preset": "locked",
+	"base/research": "board:Research", "base/drone": "say", "base/deputy": "say", "base/deputy_preset": "say",
 	"base/turret": "tool:turret", "base/torpedo": "tool_or_locked:torpedo", "base/repair": "tool_or_locked:bay", "base/ward": "tool:ward",
 	"base/waypoint": "tool:waypoint", "base/rally": "tool:rally", "base/move": "tool_or_locked:move", "base/cancel": "say",
 	"base/production": "prod", "base/hangar": "hangar", "base/defenses": "board:Build:post:", "base/turret_list": "board:Build:node:",
 	"base/ms_status": "board:Mothership:ms_status", "base/doctrine": "board:Mothership:doctrine_btn",
-	"build/capitals": "pop", "build/drone": "say", "build/size": "say", "build/repeat": "say",
+	"build/capitals": "pop", "orders/position": "pop", "build/drone": "say", "build/size": "say", "build/repeat": "say",
 }
 
 ## The running match (set by setup()).
@@ -180,7 +180,7 @@ func _press_one(page_id: String, where: String, idx: int, id: String) -> void:
 	await _reset()
 	card.set_page(page_id)
 	card.refresh()
-	var epage := "build" if where == "pop" else page_id
+	var epage := page_id
 	var before := CardState.snapshot(card, epage, id)
 	var items_before: int = (world.teams[view.team] as TeamState).production.items.size()
 	var fold_before := view.prod.folded

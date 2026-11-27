@@ -186,6 +186,18 @@ func toggle_board() -> void:
 		hud.layout.apply()
 
 
+## Tab for an Admiral who is flying: open the command view (mode 3) if both it and the board are closed, else close
+## whichever is open (the board through toggle_board(), the view by its World flag), so one Tab always leaves mode 3.
+func toggle_view() -> void:
+	var w := hud.world
+	if not w.mode3():
+		w.view_open = true
+		return
+	if hud.board != null and hud.board.visible:
+		toggle_board()
+	w.view_open = false
+
+
 ## Open the Admiral board on tab `tab` ("Research", "Build", "Mothership", "Fleet" or "Pilots"), making it first if needed
 ## (the command card sends the player here for the facts it has no cell for). A board that is open already just
 ## changes tab. With `card` (a key of the board's cards) the tab's list is scrolled to that card.
@@ -268,8 +280,9 @@ func end_command_pause() -> void:
 	hud.get_tree().paused = false
 	var w := hud.world
 	if w != null:
-		w.mouse_fire = Input.is_mouse_button_pressed(MOUSE_BUTTON_LEFT)
-		w.mouse_special = Input.is_mouse_button_pressed(MOUSE_BUTTON_RIGHT)
+		# Not in mode 3: a button still held when the pause or note closes fires nothing there (the view works the mouse).
+		w.mouse_fire = Input.is_mouse_button_pressed(MOUSE_BUTTON_LEFT) and not CoastController.holding(w)
+		w.mouse_special = Input.is_mouse_button_pressed(MOUSE_BUTTON_RIGHT) and not CoastController.holding(w)
 	if hud.command_view != null:
 		hud.command_view.strip.paused = false
 		hud.command_view.refresh()

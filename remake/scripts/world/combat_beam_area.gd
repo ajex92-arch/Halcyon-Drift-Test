@@ -46,8 +46,9 @@ func _init(owner: Combat) -> void:
 ## `length` world units long, fired by unit `src`, with raw damage `dmg` of
 ## weapon kind `kind`. It hurts the first enemy unit on its line; when an
 ## asteroid comes first and `cuts` is true, it chips the asteroid instead.
-## Returns the point where the beam stops.
-func beam(src: Unit, from: Vector2, dir: Vector2, length: float, dmg: float, kind: int, cuts: bool) -> Vector2:
+## Returns the point where the beam stops. `strength` is the beam's strength against
+## armour (half its damage per second); 0 = not set, and the tick's damage counts.
+func beam(src: Unit, from: Vector2, dir: Vector2, length: float, dmg: float, kind: int, cuts: bool, strength: float = 0.0) -> Vector2:
 	# Step 1: the beam's line, and the first asteroid on it. best_t says
 	# where along the line the first hit is (0 = start, 1 = full length).
 	var to := from + dir * length
@@ -79,6 +80,11 @@ func beam(src: Unit, from: Vector2, dir: Vector2, length: float, dmg: float, kin
 	var end := from.lerp(to, best_t)
 	if best != null:
 		var info := DamageInfo.from_unit(src, dmg, kind, from)
+		info.strength = strength
+		# A capsule hull is hit at the point the beam touched it (the bolt does the
+		# same), not by the bearing from the muzzle.
+		if best.hit_r > 0.0:
+			info.impact = end
 		combat.apply_damage(best, info)
 	elif not hit.is_empty() and cuts:
 		# A rock takes the beam's damage times Rules.ASTEROID_MULT, or all of
@@ -103,9 +109,9 @@ func area(src_info: DamageInfo, pos: Vector2, r: float, exclude_team: int) -> vo
 			continue
 		if exclude_team == Rules.NEUTRAL and u.team == Rules.NEUTRAL:
 			continue
-		# How far the blast centre is from the unit's edge (the size shots see,
-		# Unit.hit_radius()).
-		var d := pos.distance_to(u.global_position) - u.hit_radius()
+		# How far the blast centre is from the unit's edge (the shape shots see:
+		# the circle of Unit.hit_radius(), or a capsule hull's capsule).
+		var d := u.edge_dist(pos)
 		if d > r:
 			continue
 		# Full damage (k = 1) up to half the radius, then sliding down to
@@ -123,6 +129,7 @@ func area(src_info: DamageInfo, pos: Vector2, r: float, exclude_team: int) -> vo
 		info.source_is_pilot = src_info.source_is_pilot
 		info.source_profile = src_info.source_profile
 		info.from_pos = pos
+		info.impact = pos
 		info.small_bonus = src_info.small_bonus
 		info.pierce = src_info.pierce
 		# Flak: this victim takes the share that fits its size and speed.
@@ -154,6 +161,7 @@ func area(src_info: DamageInfo, pos: Vector2, r: float, exclude_team: int) -> vo
 			info.source_profile = src_info.source_profile
 			info.source_uid = src_info.source_uid
 			info.from_pos = pos
+			info.impact = pos
 			info.pierce = src_info.pierce
 			info.blast_size = src_info.blast_size
 			info.blast_speed = src_info.blast_speed

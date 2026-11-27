@@ -13,8 +13,8 @@ extends Node
 ## combination of the key presets (every layout of every group together, so 6 now (three
 ## home layouts x two wing command presets)): in each mode (the
 ## shared keys included) no key does two things on the same page; the flying rows are today's keys, the team wheel
-## and the eight wing rows; Z is unbound in the flying modes (and at home under layout B) until the Vent row binds
-## it, and Shift+Z, the key the Vent row takes in layout C, is free in the flying modes; no default
+## and the eight wing rows; Z is the Vent row's key in the flying mode (Shift+Z in layout C, which spends Z at
+## home) and nothing else uses it there; no default
 ## uses Alt with an F-key, Alt+Tab or Alt+F4, only full screen uses Alt+Enter, and Esc is cancel only; the keys other
 ## items own (F9, P, the backquote, Ctrl+F12) are where their owners read them and used by nobody else; a
 ## key a rule variant reads straight from the keyboard clashes only as a warning while that variant is off in
@@ -51,13 +51,18 @@ static func _oracle() -> Dictionary:
 	return o
 
 ## The actions the key list adds on purpose, with their events: pause, the faster speed, the debug launch,
-## the order wheel, and the wing's eight order actions, which have no key under the standard wing preset (A).
+## the order wheel, every squadron, the vent key (Z), the eight groups (F1 to F8, shared rows, so they are
+## actions; the alert and idle rows are home and board rows, which are data only), and the wing's eight order
+## actions, which have no key under the standard wing preset (A).
 static func _new_actions() -> Dictionary:
 	return {
 		"pause": [_k(KEY_P)], "fast_motion": [_k(KEY_QUOTELEFT, "s")], "debug_launch": [_k(KEY_F12, "c")],
-		"wheel": [_k(KEY_X), _m(MOUSE_BUTTON_XBUTTON2)], "all_squadrons": [_k(KEY_M)],
+		"wheel": [_k(KEY_X), _m(MOUSE_BUTTON_XBUTTON2)], "all_squadrons": [_k(KEY_M)], "vent": [_k(KEY_Z)],
+		"group_1": [_k(KEY_F1)], "group_2": [_k(KEY_F2)], "group_3": [_k(KEY_F3)], "group_4": [_k(KEY_F4)],
+		"group_5": [_k(KEY_F5)], "group_6": [_k(KEY_F6)], "group_7": [_k(KEY_F7)], "group_8": [_k(KEY_F8)],
 		"wing_follow": [], "wing_cover": [], "wing_attack": [], "wing_guard": [], "wing_hold": [], "wing_regroup": [],
-		"wing_formation": [], "wing_fire": [],
+		"wing_formation": [], "wing_fire": [], "target": [_k(KEY_CAPSLOCK), _m(MOUSE_BUTTON_MIDDLE)],
+		"practice_panel": [_k(KEY_O)],
 	}
 
 ## How many checks failed.
@@ -89,6 +94,7 @@ func setup(_w: World) -> void:
 	for w in _variant_warnings:
 		print("key_map_check: warning: ", w)
 	_texts()
+	_wheel_mode()
 	_sources()
 	_file_round_trip()
 	print("key_map_check: %d failures" % _fails)
@@ -167,7 +173,9 @@ func _rows_sane() -> void:
 			for k in String(r["keys"]).split("|", false):
 				_check("rows: %s/%s key '%s' reads" % [m, id, k], KeyCodes.canonical(String(k)) != "")
 			if String(r["link"]) != "":
-				_check("rows: %s/%s follows a flying action" % [m, id], not KeyMap.row("flying", String(r["link"])).is_empty())
+				# The camera rows follow a flying action; the build strip's digit rows (mode "wheel") follow the home row of the same name.
+				var followed := "home" if m == "wheel" else "flying"
+				_check("rows: %s/%s follows a %s action" % [m, id, followed], not KeyMap.row(followed, String(r["link"])).is_empty())
 
 ## The fields, pages and stages of every row, and the key sets (presets).
 func _presets_sane() -> void:
@@ -224,7 +232,7 @@ const FLYING_KEYS := {
 	"fire": ["Mouse1"], "special": ["G", "Mouse2"], "face_lock": ["Ctrl"], "shield_front": ["Up"], "shield_rear": ["Down"],
 	"shield_left": ["Left"], "shield_right": ["Right"], "energy_weapons": ["1"], "energy_shields": ["2"], "energy_thrusters": ["3"],
 	"energy_balanced": ["4"], "use_kit": ["R"], "assist_toggle": ["V"], "hangar": ["B"], "dock": ["F"], "help": ["H", "F12"],
-	"center_camera": ["C"], "team_wheel": ["T", "Mouse4"],
+	"center_camera": ["C"], "team_wheel": ["T", "Mouse4"], "target": ["CapsLock", "Mouse3"],
 }
 ## The keys of the wing's eight order actions under preset B of the wing_commands group (under preset A they have none).
 const WING_KEYS_B := {
@@ -357,13 +365,62 @@ func _texts() -> void:
 	hp.queue_free()
 
 
+## Rule 9: the "wheel" mode (the build strip's digits while X is held). In force it is its ten rows plus the shared rows and
+## no flying row (digits 1 to 4 are energy there); nothing clashes in it; each row reads, has a mouse route and its own
+## id; and the digits are the home hull rows' keys: change home hull_2 and the strip's key follows, with still no clash,
+## and the reset gives "2" back.
+func _wheel_mode() -> void:
+	KeyMap.reset_to_defaults()
+	var own := KeyMap.visible_rows("wheel")
+	_check("wheel: the mode has ten rows", own.size() == 10, str(own.size()))
+	var force := KeyMap.rows_in_force("wheel")
+	var shared := KeyMap.visible_rows("shared")
+	_check("wheel: in force are the ten rows plus the shared rows", force.size() == 10 + shared.size(), "%d rows in force" % force.size())
+	var flying_in_force := 0
+	for r: Dictionary in force:
+		if String(r["mode"]) == "flying" or String(r["mode"]) == "flying_board":
+			flying_in_force += 1
+	_check("wheel: no flying row is in force (the digits would clash with energy)", flying_in_force == 0, str(flying_in_force))
+	_check("wheel: nothing clashes in the mode", KeyMap.mode_clashes("wheel").is_empty(), str(KeyMap.mode_clashes("wheel")))
+	var ids := {}
+	for i in 10:
+		var id := "hull_%d" % (i + 1)
+		var r := KeyMap.row("wheel", id)
+		_check("wheel: %s exists once" % id, not r.is_empty() and not ids.has(id))
+		ids[id] = true
+		var keys := KeyMap.effective_keys("wheel", id)
+		_check("wheel: %s has a key that reads" % id, keys.size() == 1 and bool(KeyCodes.parse(String(keys[0]))["ok"]), str(keys))
+		_check("wheel: %s is the same key as home %s" % [id, id], keys == KeyMap.effective_keys("home", id))
+		_check("wheel: %s has a mouse route" % id, String(r.get("route", "")) != "")
+	# The digits are the home rows' keys: a change at home carries over.
+	var free := ""
+	for cand: String in ["K", "Shift+K", "Ctrl+K", "L", "O", "E"]:
+		if KeyMap.conflicts("home", "hull_2", [cand, ""], "").is_empty():
+			free = cand
+			break
+	_check("wheel: a key that is free at home was found for the change", free != "")
+	if free != "":
+		_check("wheel: home hull_2 takes the free key", KeyMap.try_set("home", "hull_2", [free, ""]))
+		_check("wheel: the strip's hull_2 follows (%s)" % free, KeyMap.effective_keys("wheel", "hull_2") == [free], str(KeyMap.effective_keys("wheel", "hull_2")))
+		_check("wheel: still no clash in the mode after the change", KeyMap.mode_clashes("wheel").is_empty(), str(KeyMap.mode_clashes("wheel")))
+		KeyMap.reset_row("home", "hull_2")
+		_check("wheel: the reset gives 2 back", KeyMap.effective_keys("wheel", "hull_2") == ["2"], str(KeyMap.effective_keys("wheel", "hull_2")))
+	# A shared key that equals a digit clashes: F1 (a shared group key) given the key 2 clashes with the strip's hull_2 as well as home's.
+	var hit := KeyMap.conflicts("shared", "group_1", ["2", ""], "")
+	var named := PackedStringArray()
+	for c: Dictionary in hit:
+		named.append("%s/%s" % [c["mode"], c["action"]])
+	_check("wheel: a shared key set to 2 clashes with the digit rows", named.has("home/hull_2") and named.has("flying/energy_shields"), ",".join(named))
+	KeyMap.reset_to_defaults()
+
+
 ## The owners read the actions the check names (a file that stops reading one would make the check true for nothing).
 func _sources() -> void:
 	var need := {
 		"res://scripts/main.gd": ["is_action(\"debug_launch\", true)"],
 		"res://scripts/ui/hud_input.gd": ["is_action(\"pause\", true)", "is_action(\"fast_motion\", true)", "is_action(\"slow_motion\", true)", "is_action(\"note\")"],
 		"res://scripts/features/recall.gd": ["KEY_T"], "res://scripts/features/mutiny.gd": ["KEY_M"],
-		"res://scripts/features/surrender.gd": ["KEY_F10", "KEY_F11"],
+		"res://scripts/features/surrender.gd": ["KEY_F10", "KEY_DELETE"],
 	}
 	for path: String in need:
 		var src := FileAccess.get_file_as_string(path)

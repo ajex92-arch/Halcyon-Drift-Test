@@ -18,9 +18,13 @@ extends RefCounted
 ##     the brain has chosen its job. For a crew's brain whose squad is not ordered to retreat,
 ##     "retreat" and "home" become "lane" again, its goal the hold point, and the dock control
 ##     is cleared (WorldHangar.try_dock refuses a crew anyway). The brain re-decides a retreat
-##     at every think, so the hook runs at every think. One thing it cannot stop: a turret
-##     hunting a small or medium ship makes the brain step away for 2.5 seconds, and then it
-##     comes back.
+##     at every think, so the hook runs at every think.
+##   - Holds under fire: a turret hunting a small or medium ship makes the pilot brain step away for
+##     2.5 seconds (PilotAI step 3 and 5), and then it comes back. That step comes before the think
+##     hooks run, so the hook cannot stop it; PilotAI step 3 asks holds_position() instead. A crew
+##     whose squadron stands under a Move or a Hold order does not step away (it stays on its point,
+##     under fire); a crew with no order, a Stop, an Attack or a Retreat order still does, as does
+##     every pilot.
 ##   - Attack: a squadron whose standing order is Attack makes the order's unit its target at
 ##     every think, wherever the unit is (the enemy mothership too, which the rule ms:nosmall
 ##     keeps the brain from picking by itself), and its goal the unit's gun-reach point
@@ -74,6 +78,19 @@ static func hold_point_of(squad: Squad, ship: Ship) -> Vector2:
 		if t is Vector2 or t is Vector2i:
 			return Vector2(t)
 	return Vector2(squad.rally)
+
+
+## Does p fly a crew whose squadron stands under a Move or a Hold order? Then PilotAI does not step
+## away from a turret that targets it (see the top). False for a pilot, for a crew with no order and for a
+## Stop, Attack or Retreat order.
+static func holds_position(w: World, p: PilotProfile) -> bool:
+	if p == null or not p.is_crew:
+		return false
+	var squad: Squad = w.squads.get(p.squad_id) as Squad
+	if squad == null:
+		return false
+	var kind := str(squad.order.get("kind", ""))
+	return kind == OrderKinds.MOVE or kind == OrderKinds.HOLD
 
 
 ## The think hook: for a crew's brain, keep the hold point and turn a retreat into the lane job

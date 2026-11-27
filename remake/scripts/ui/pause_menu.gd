@@ -38,6 +38,21 @@ extends Control
 ## they close, panel_closed() leaves the look-around as it was (the card does not
 ## come back by itself while `looking`).
 ##
+## SETTINGS (T-125): two rows of the menu change a setting of the HUD and keep it in the settings file (Game): "Flash my ship when
+## the camera returns" (an On / Off button, Game.return_flash) and "Minimap size" (a slider from 80% to 140% with a minus and a plus
+## button and the value; Game.minimap_pct). The minimap size applies at once (Minimap.apply_size()), and the minimap, which the HUD
+## hides under every big panel, stays visible while that row is in use (`minimap_peek`, see HudLayout.apply()). An Admiral's menu has one
+## more button, "Win odds on the army cards" (On / Off, Game.win_odds, off by default; WinOdds): it is for the army row, so a pilot's and
+## a spectator's menu has none.
+##
+## FLIGHT ROW (S1, pilots only): one row holds the pilot's camera switch ("Camera: Free" / "Camera: Follow": CameraRig.toggle_free(), remembered by
+## Game.choose_pilot_follow()), the mouse route of the C key, and the speed zoom switch ("Speed zoom: On" / "Off": Game.speed_zoom, remembered).
+##
+## RING AND CARD (pilots and Admirals): a third button in the How to play row opens the parts view (VIEW_PARTS, asked for like a
+## question): "Ring: Full / Compact / Minimal" and "Card: Full / Compact / Minimal" buttons (Game.choose_ring_preset(),
+## Game.choose_card_preset(), remembered), one On / Off switch for each of the nine ring parts in three rows of three
+## (Game.choose_ring_part(), remembered) and Back. It adds no row to the menu, whose card has no spare height.
+##
 ## WHO USES IT: HudPanels makes it from scenes/ui/pause_menu.tscn the first time
 ## it is needed (Hud.pause_menu), HudInput opens and closes it with P and Esc,
 ## and tests/ui_tour.gd, tests/wheel_check.gd and tests/pause_menu_check.gd
@@ -51,6 +66,8 @@ const VIEW_RESTART := "restart"
 const VIEW_START := "start"
 ## The question before closing the game.
 const VIEW_QUIT := "quit"
+## The view of the ring and the target card: their presets and one switch for each part.
+const VIEW_PARTS := "parts"
 
 ## Each question's title: view -> text.
 const QUESTION_TITLES := {
@@ -77,10 +94,34 @@ var active := false
 ## True from the Look around button until the card comes back or the session ends: the
 ## card is hidden, the game stays paused and `active` stays true (so P still resumes).
 var looking := false
+## T-125: true from the first touch of the Minimap size row until the card is built again or closes: the minimap then stays
+## visible under the card, so the player sees the result (HudLayout.apply() reads it).
+var minimap_peek := false
 ## The view being shown (one of the VIEW_ words).
 var _view := VIEW_MENU
 ## The Full screen / Windowed button of the menu view (null in a question view).
 var _screen_button: Button = null
+## T-125: the "Flash my ship ..." button (null in a question view).
+var _flash_button: Button = null
+## T-125: the Minimap size slider (null in a question view).
+var _map_slider: HSlider = null
+## S1: the pilot's Camera button (null in a question view and for an Admiral).
+var _camera_button: Button = null
+## S1: the pilot's Speed zoom button (null in a question view and for an Admiral).
+var _speed_button: Button = null
+## T-125: the Minimap size value in words, "100%" (null in a question view).
+var _map_value: Label = null
+## RT6: the Minimap orders button, and the value of the icon line's row (made by _orders_row()).
+var _orders_button: Button = null
+var _icon_value: Label = null
+## The win-odds button ("Win odds on the army cards: Off/On"; null in a question view, and for a pilot or a spectator, who have no army row).
+var _odds_button: Button = null
+## The parts view's "Ring: Full" and "Card: Full" buttons (null in the other views).
+var _ring_button: Button = null
+## The parts view's Card preset button (null in the other views).
+var _card_button: Button = null
+## The parts view's nine switches, by ShipRingParts id (empty in the other views).
+var _part_buttons := {}
 ## The dim cover over the game.
 @onready var _cover: ColorRect = $Cover
 ## The container that centres the card in the room the HUD leaves free.
@@ -131,6 +172,7 @@ func show_card() -> void:
 ## would place it, and this button is for looking, not for giving orders.
 func look_around() -> void:
 	hud.overlay.disarm()
+	minimap_peek = false
 	looking = true
 	visible = false
 	hud.layout.apply()
@@ -143,12 +185,14 @@ func look_around() -> void:
 func resume() -> void:
 	active = false
 	looking = false
+	minimap_peek = false
 	visible = false
 	get_tree().paused = false
 	var w := hud.world
 	if w != null:
-		w.mouse_fire = Input.is_mouse_button_pressed(MOUSE_BUTTON_LEFT)
-		w.mouse_special = Input.is_mouse_button_pressed(MOUSE_BUTTON_RIGHT)
+		# Not in mode 3: a button still held when the pause or note closes fires nothing there (the view works the mouse).
+		w.mouse_fire = Input.is_mouse_button_pressed(MOUSE_BUTTON_LEFT) and not CoastController.holding(w)
+		w.mouse_special = Input.is_mouse_button_pressed(MOUSE_BUTTON_RIGHT) and not CoastController.holding(w)
 	hud.panels.close_others(null)
 
 
@@ -225,10 +269,26 @@ func _build() -> void:
 		_items.remove_child(c)
 		c.queue_free()
 	_screen_button = null
+	_flash_button = null
+	_camera_button = null
+	_speed_button = null
+	_map_slider = null
+	_map_value = null
+	_orders_button = null
+	_icon_value = null
+	_odds_button = null
+	_ring_button = null
+	_card_button = null
+	_part_buttons = {}
+	minimap_peek = false
 	if _view == VIEW_MENU:
 		_title.text = "Paused"
 		_hint.text = "%s or %s resumes the match." % [KeyMapText.key_of("cancel"), KeyMapText.key_of("pause")]
 		_build_buttons()
+	elif _view == VIEW_PARTS:
+		_title.text = "Ring and card"
+		_hint.text = "What your ship's ring and the target card show: step each between Full, Compact and Minimal, then switch single parts on or off."
+		_build_parts()
 	else:
 		_title.text = QUESTION_TITLES[_view]
 		_hint.text = _question_text()
@@ -243,12 +303,34 @@ func _build_buttons() -> void:
 	go.theme_type_variation = &"PrimaryButton"
 	_items.add_child(go)
 	# Look around hides this card and keeps the pause (see look_around()).
-	_items.add_child(UiKit.button("Look around", look_around))
+	# An Admiral's menu shares that row with the win-odds button (its own row made the card taller than its room).
+	var look := UiKit.button("Look around", look_around)
+	if hud.world.human_role == "admiral":
+		var look_row := UiKit.hbox(8)
+		look_row.add_child(look)
+		_odds_button = UiKit.button(_odds_text(), _on_odds)
+		_odds_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		look_row.add_child(_odds_button)
+		_items.add_child(look_row)
+	elif hud.world.human_role == "pilot":
+		# A pilot's menu shares it with the two flight settings (S1: Camera, Speed zoom): one row, not two (the card was 30 px too tall).
+		var fly_row := UiKit.hbox(8)
+		fly_row.add_child(look)
+		for b: Button in _flight_buttons():
+			b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+			fly_row.add_child(b)
+		_items.add_child(fly_row)
+	else:
+		_items.add_child(look)
 	# How to play and Controls share a row: one more row would make the card taller than the room the HUD
 	# leaves it at 1280 x 720 (a flying pilot's room is exactly the card's old height). The help and the
 	# Controls page (the key settings) open over the menu.
 	var pages := UiKit.hbox(8)
-	for b: Button in [UiKit.button("How to play", _on_help), UiKit.button("Controls", hud._toggle_controls)]:
+	var page_buttons: Array[Button] = [UiKit.button("How to play", _on_help), UiKit.button("Controls", hud._toggle_controls)]
+	# The third button opens the ring and card view (the same row: a row of its own would make the card too tall). A spectator has no ship.
+	if hud.world.human_role != "spectator":
+		page_buttons.append(UiKit.button("Ring and card", ask.bind(VIEW_PARTS)))
+	for b: Button in page_buttons:
 		b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		pages.add_child(b)
 	_items.add_child(pages)
@@ -257,16 +339,267 @@ func _build_buttons() -> void:
 	var speed_row := SpeedRow.new()
 	_items.add_child(speed_row)
 	speed_row.setup(hud.world)
+	# T-125: the two settings of the HUD: the size of the minimap, and the flash of your ship when the camera returns.
+	_items.add_child(_minimap_row())
+	_flash_button = UiKit.button(_flash_text(), _on_flash, 30.0)
+	_items.add_child(_flash_button)
+	_items.add_child(_orders_row())
 	_items.add_child(_gap())
-	# Step 2: the two that end the match.
-	_items.add_child(UiKit.button("Restart match", ask.bind(VIEW_RESTART)))
-	_items.add_child(UiKit.button("Quit to start", ask.bind(VIEW_START)))
+	# Step 2: the two that end the match (one row: the card must fit the room at 1280 x 720 with the two new rows).
+	var ends := UiKit.hbox(8)
+	for b: Button in [UiKit.button("Restart match", ask.bind(VIEW_RESTART)), UiKit.button("Quit to start", ask.bind(VIEW_START))]:
+		b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		ends.add_child(b)
+	_items.add_child(ends)
 	_items.add_child(_gap())
-	# Step 3: the window, and leaving the game (a web page cannot close itself).
+	# Step 3: the window, and leaving the game (a web page cannot close itself); one row when both are there.
 	_screen_button = UiKit.button(_screen_text(), _on_screen)
-	_items.add_child(_screen_button)
+	_screen_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	var window := UiKit.hbox(8)
+	window.add_child(_screen_button)
 	if not OS.has_feature("web"):
-		_items.add_child(UiKit.button("Quit game", ask.bind(VIEW_QUIT)))
+		var quit := UiKit.button("Quit game", ask.bind(VIEW_QUIT))
+		quit.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		window.add_child(quit)
+	_items.add_child(window)
+
+
+## T-125: the "Minimap size" row: the words, a minus button, the slider (80% to 140% in steps of 10%), a plus button and the value.
+## Mouse only: the slider and the buttons take no keyboard focus, so the arrow keys never change the size.
+func _minimap_row() -> Control:
+	var row := UiKit.hbox(6)
+	row.add_child(UiKit.label("Minimap size", 15, Palette.MIST))
+	var minus := UiKit.button("-", _step_minimap.bind(-1), 30.0)
+	minus.custom_minimum_size.x = 34.0
+	row.add_child(minus)
+	_map_slider = HSlider.new()
+	_map_slider.min_value = float(Game.MINIMAP_PCT_MIN)
+	_map_slider.max_value = float(Game.MINIMAP_PCT_MAX)
+	_map_slider.step = float(Game.MINIMAP_PCT_STEP)
+	_map_slider.set_value_no_signal(float(Game.minimap_pct))
+	_map_slider.custom_minimum_size = Vector2(110.0, 24.0)
+	_map_slider.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_map_slider.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	_map_slider.value_changed.connect(_on_map_slider)
+	row.add_child(_map_slider)
+	var plus := UiKit.button("+", _step_minimap.bind(1), 30.0)
+	plus.custom_minimum_size.x = 34.0
+	row.add_child(plus)
+	_map_value = UiKit.label("%d%%" % Game.minimap_pct, 15, Palette.ICE)
+	_map_value.custom_minimum_size.x = 46.0
+	_map_value.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	row.add_child(_map_value)
+	for c: Control in [minus, _map_slider, plus]:
+		c.focus_mode = Control.FOCUS_NONE
+		c.mouse_entered.connect(_peek_minimap)
+	return row
+
+
+## T-125: the minimap stays visible while its row is in use.
+func _peek_minimap() -> void:
+	if minimap_peek:
+		return
+	minimap_peek = true
+	hud.layout.apply()
+
+
+## T-125: the minus or plus button: one step (10%) smaller or bigger.
+func _step_minimap(dir: int) -> void:
+	_set_minimap(Game.minimap_pct + dir * Game.MINIMAP_PCT_STEP)
+
+
+## T-125: the slider moved.
+func _on_map_slider(v: float) -> void:
+	_set_minimap(int(round(v)))
+
+
+## T-125: use minimap size `pct` now and remember it; the slider and the value follow.
+func _set_minimap(pct: int) -> void:
+	Game.choose_minimap_pct(pct)
+	if _map_slider != null:
+		_map_slider.set_value_no_signal(float(Game.minimap_pct))
+	if _map_value != null:
+		_map_value.text = "%d%%" % Game.minimap_pct
+	hud.minimap.apply_size()
+	_peek_minimap()
+	hud.layout.apply()
+
+
+## RT6: one row with the two settings of the awareness screens: the "Minimap orders" button (On <-> Off: a right click on the minimap
+## gives Move to the selection; Minimap.orders_on) and the icon line (the view width in world units past which the ships are
+## drawn as icons: a minus button, the value, a plus button; IconLayer.line_w, 11,000 to 30,000 in steps of 1,000). Both are
+## saved in the settings file's [game] section.
+func _orders_row() -> Control:
+	var row := UiKit.hbox(6)
+	_orders_button = UiKit.button(_orders_text(), _on_orders, 30.0)
+	_orders_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	row.add_child(_orders_button)
+	row.add_child(UiKit.label("Icons from", 15, Palette.MIST))
+	var minus := UiKit.button("-", _step_icon_line.bind(-1), 30.0)
+	minus.custom_minimum_size.x = 34.0
+	row.add_child(minus)
+	_icon_value = UiKit.label(_icon_text(), 15, Palette.ICE)
+	_icon_value.custom_minimum_size.x = 52.0
+	_icon_value.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	row.add_child(_icon_value)
+	var plus := UiKit.button("+", _step_icon_line.bind(1), 30.0)
+	plus.custom_minimum_size.x = 34.0
+	row.add_child(plus)
+	return row
+
+
+## RT6: the Minimap orders button: On <-> Off.
+func _on_orders() -> void:
+	Minimap.set_orders(not Minimap.orders_on)
+	UiKit.set_text(_orders_button, _orders_text())
+
+
+## RT6: the Minimap orders button's words.
+func _orders_text() -> String:
+	return "Minimap orders: %s" % ("On" if Minimap.orders_on else "Off")
+
+
+## RT6: the minus or plus button of the icon line: one step (1,000 units) less or more.
+func _step_icon_line(dir: int) -> void:
+	IconLayer.set_line(IconLayer.line_w + dir * IconLayer.LINE_STEP)
+	if _icon_value != null:
+		_icon_value.text = _icon_text()
+
+
+## RT6: the icon line's value, in thousands with a separator ("16,000").
+func _icon_text() -> String:
+	var n := IconLayer.line_w
+	return "%d,%03d" % [n / 1000, n % 1000]
+
+
+## S1: the pilot's flight buttons: the Camera button (free <-> follow) and the Speed zoom button (On <-> Off); they share the Look around row.
+func _flight_buttons() -> Array[Button]:
+	_camera_button = UiKit.button(_camera_text(), _on_camera)
+	_speed_button = UiKit.button(_speed_text(), _on_speed)
+	return [_camera_button, _speed_button]
+
+
+## S1: the Camera button: the pilot's camera goes between free and following the ship, and the choice is remembered for the next match.
+func _on_camera() -> void:
+	var cam := hud.world.camera
+	cam.toggle_free()
+	Game.choose_pilot_follow(not cam.free)
+	UiKit.set_text(_camera_button, _camera_text())
+
+
+## S1: the Speed zoom button: On <-> Off, remembered.
+func _on_speed() -> void:
+	Game.choose_speed_zoom(not Game.speed_zoom)
+	UiKit.set_text(_speed_button, _speed_text())
+
+
+## S1: the Speed zoom button's words.
+func _speed_text() -> String:
+	return "Speed zoom: %s" % ("On" if Game.speed_zoom else "Off")
+
+
+## S1: the Camera button's words.
+func _camera_text() -> String:
+	return "Camera: %s" % ("Free" if hud.world.camera.free else "Follow")
+
+
+## The win-odds button: On <-> Off (remembered; the army cards show or hide their mark on the next beat).
+func _on_odds() -> void:
+	Game.choose_win_odds(not Game.win_odds)
+	UiKit.set_text(_odds_button, _odds_text())
+
+
+## The win-odds button's words.
+func _odds_text() -> String:
+	return "Win odds on the army cards: %s" % ("On" if Game.win_odds else "Off")
+
+
+## T-125: the flash button: On <-> Off.
+func _on_flash() -> void:
+	Game.choose_return_flash(not Game.return_flash)
+	UiKit.set_text(_flash_button, _flash_text())
+
+
+## T-125: the flash button's words.
+func _flash_text() -> String:
+	return "Flash my ship when the camera returns: %s" % ("On" if Game.return_flash else "Off")
+
+
+## The buttons of the parts view: the ring preset and the card preset (each button steps to the next of Full, Compact, Minimal), the
+## nine ring parts in three rows of three (each a switch, remembered), and Back. A part the chosen preset leaves out shows Off and cannot
+## be switched on here (the preset decides what is on offer).
+func _build_parts() -> void:
+	var presets := UiKit.hbox(8)
+	_ring_button = UiKit.button(_ring_text(), _on_ring_preset)
+	_card_button = UiKit.button(_card_text(), _on_card_preset)
+	for b: Button in [_ring_button, _card_button]:
+		b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		presets.add_child(b)
+	_items.add_child(presets)
+	_items.add_child(_gap())
+	var ids := ShipRingParts.ids()
+	for row in 3:
+		var line := UiKit.hbox(8)
+		for col in 3:
+			var id := String(ids[row * 3 + col])
+			var b := UiKit.button(_part_text(id), _on_part.bind(id), 32.0)
+			b.add_theme_font_size_override("font_size", 13)
+			b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+			b.disabled = not ShipRingParts.preset_has(Game.ring_preset, id)
+			_part_buttons[id] = b
+			line.add_child(b)
+		_items.add_child(line)
+	_items.add_child(_gap())
+	_items.add_child(UiKit.button("Back", back))
+
+
+## The ring preset button: the next preset, remembered.
+func _on_ring_preset() -> void:
+	Game.choose_ring_preset((Game.ring_preset + 1) % ShipRingParts.PRESETS.size())
+	_refresh_parts()
+
+
+## The card preset button: the next preset, remembered.
+func _on_card_preset() -> void:
+	Game.choose_card_preset((Game.card_preset + 1) % Game.CARD_PRESETS.size())
+	_refresh_parts()
+
+
+## Switch ring part `id` on or off, remembered.
+func _on_part(id: String) -> void:
+	Game.choose_ring_part(id, Game.ring_parts_off.has(id))
+	_refresh_parts()
+
+
+## The words and the state of every button of the parts view, after a change.
+func _refresh_parts() -> void:
+	if _ring_button != null:
+		UiKit.set_text(_ring_button, _ring_text())
+	if _card_button != null:
+		UiKit.set_text(_card_button, _card_text())
+	for id: String in _part_buttons:
+		var b: Button = _part_buttons[id]
+		UiKit.set_text(b, _part_text(id))
+		b.disabled = not ShipRingParts.preset_has(Game.ring_preset, id)
+
+
+## The ring preset button's words.
+func _ring_text() -> String:
+	return "Ring: %s" % ShipRingParts.preset_name(Game.ring_preset)
+
+
+## The card preset button's words.
+func _card_text() -> String:
+	return "Card: %s" % String(Game.CARD_PRESETS[Game.card_preset])
+
+
+## The words of part `id`'s switch: its name and On or Off.
+func _part_text(id: String) -> String:
+	var label := id
+	for p: Dictionary in ShipRingParts.PARTS:
+		if String(p["id"]) == id:
+			label = String(p["label"])
+	return "%s: %s" % [label, "On" if ShipRingParts.shown(id) else "Off"]
 
 
 ## The two buttons of a question view.

@@ -12,7 +12,8 @@ extends Control
 ## Ore, Research, Hull), TopHeading, Buttons (NewMatch, Quit). setup() is
 ## called before the screen joins the scene, so _ready() can fill it all
 ## in at once. If we watch as a team the title is "Victory" (amber) or
-## "Defeat" (red); a spectator sees "<team> wins". The top 5 pilots are
+## "Defeat" (red); a spectator sees "<team> wins"; a practice range (World.practice) is titled
+## "Practice range" and the reason line still says who won. The top 5 pilots are
 ## ranked by damage done; if you are not among them, your own line is added
 ## under them. Those lines are made in code and go between TopHeading and
 ## Buttons. "New match" reloads the main scene, which goes back to the seat
@@ -78,6 +79,9 @@ func _ready() -> void:
 		# not the team's or the interface's colour.
 		title = "Victory" if winner == us else "Defeat"
 		tint = Palette.AMBER if winner == us else Palette.CINDER
+	# A practice range is named as such: the title says so, the reason line below still says who won.
+	if world.practice:
+		title = "Practice range"
 	$Center/Card/Col/Title.text = title
 	$Center/Card/Col/Title.add_theme_color_override("font_color", tint)
 	$Center/Card/Col/Reason.text = "%s  Match time %s." % [Rules.display_label(reason), Util.clock(world.time)]

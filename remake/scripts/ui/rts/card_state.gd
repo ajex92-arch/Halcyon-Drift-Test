@@ -5,7 +5,9 @@ extends RefCounted
 ##
 ## HOW IT WORKS: static functions that read the match through the card's view. snapshot() builds the Dictionary
 ## CardCell.show_data() writes. Orders cells light only when their kind is in OrderKinds.BOUGHT_KINDS and a squadron
-## is selected (else they are drawn locked, with "later stage" or "select first"); the Build cells follow the
+## is selected (else they are drawn locked, with "later stage" or "select first"); a lit Position cell says the chase
+## setting of the selection on its second line (its name in lower case, or "mixed" when the squadrons differ) and the
+## three entries of its pick say their short words (no "now" mark on them); the Build cells follow the
 ## looks: ready, cannot pay (the treasury is short: the cell stays live, "short N" with the look of
 ## RtsUiCalls.CANNOT_PAY_LOOK), locked (the hull's research or module is missing: the words come from
 ## Tech.ship_unlock_label()) and full (the fleet is full: it still takes the order and waits for room). Money never
@@ -46,6 +48,31 @@ static func _orders(card: CommandCard, id: String, rec: Dictionary, d: Dictionar
 		d["sub"] = "select first"
 		d["tip"] = "%s Select squadrons first." % rec["tip"]
 	d["picked"] = id == "move" and ov.tool == "verb_move"
+	if d["state"] != "ready":
+		return
+	if id == "position":
+		var word := _position_word(ov)
+		d["sub"] = word
+		if word != "":
+			d["tip"] = "%s Now %s." % [d["tip"], word]
+	elif CardPages.POSITIONS.has(id):
+		d["sub"] = str(Formations.MOVE_SUBS[CardPages.POSITIONS.find(id)])
+
+
+## The chase setting of the selected squadrons in words: the move stance's name in lower case when every selected squadron
+## has the same one, "mixed" when they differ. It reads the records and never edits the selection (a snapshot writes nothing).
+static func _position_word(ov: CommandOverlay) -> String:
+	var seen := -1
+	for id: int in ov.sel_squads:
+		var rec: Squad = ov.world.squads.get(id)
+		if rec == null:
+			continue
+		if seen >= 0 and rec.move_stance != seen:
+			return "mixed"
+		seen = rec.move_stance
+	if seen < 0:
+		return ""
+	return str(Formations.MOVE_NAMES[clampi(seen, 0, 2)]).to_lower()
 
 
 ## A Build cell: a hull (one of the ten), the Capitals opener, the drone, the squadron size or Repeat.
@@ -141,9 +168,7 @@ static func _base(card: CommandCard, id: String, d: Dictionary) -> void:
 		"drone":
 			_drone(card, d)
 		"deputy", "deputy_preset":
-			d["state"] = "locked"
-			d["sub"] = "later stage"
-			d["tip"] = "Comes with the deputy stage."
+			DeputyToggle.cell(DeputyToggle.deputy_of(view), id, d)
 		"turret":
 			d["picked"] = ov.tool == "turret"
 		"torpedo":

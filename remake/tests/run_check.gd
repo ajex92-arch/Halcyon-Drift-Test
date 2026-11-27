@@ -586,16 +586,21 @@ func _check_pierce() -> void:
 	# A full pierce: shields and their wait untouched, the hull takes it all.
 	f.shields.since_hit = 5.0
 	info.pierce = 1.0
+	# What reaches the hull goes through the armour section it lands on: a whole
+	# section lets W / (W + A) of a hit of strength W through (the hit's own size).
+	var armour_a := float(f.armour.armour_value)
+	var keep := hit / (hit + armour_a)
 	f.take_hit(info, hit)
 	_expect(f.shields.total() == shield0, "pierce 1: the shields lost points (%s of %s)" % [f.shields.total(), shield0])
 	_expect(f.shields.since_hit == 5.0, "pierce 1: the shields' refill wait was restarted")
-	_expect(absf(f.hull - (hull0 - hit * (1.0 - f.hull_resist))) < 0.001, "pierce 1: the hull took %s" % (hull0 - f.hull))
+	_expect(absf(f.hull - (hull0 - hit * keep * (1.0 - f.hull_resist))) < 0.05, "pierce 1: the hull took %s" % (hull0 - f.hull))
 	# Half: half soaked, half through.
 	f.hull = hull0
+	f.armour.a_hp = f.armour.a_max.duplicate()
 	info.pierce = 0.5
 	f.take_hit(info, hit)
 	_expect(absf(f.shields.total() - (shield0 - hit * 0.5)) < 0.001, "pierce 0.5: the shields lost %s, wanted %s" % [shield0 - f.shields.total(), hit * 0.5])
-	_expect(absf(f.hull - (hull0 - hit * 0.5 * (1.0 - f.hull_resist))) < 0.001, "pierce 0.5: the hull took %s" % (hull0 - f.hull))
+	_expect(absf(f.hull - (hull0 - hit * 0.5 * keep * (1.0 - f.hull_resist))) < 0.05, "pierce 0.5: the hull took %s" % (hull0 - f.hull))
 	# None: the shield soaks it.
 	f.hull = hull0
 	var shield1 := f.shields.total()
