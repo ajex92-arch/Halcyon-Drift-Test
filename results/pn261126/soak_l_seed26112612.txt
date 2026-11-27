@@ -1,0 +1,225 @@
+Godot Engine v4.7.2.stable.official.ed1daf0bf - https://godotengine.org
+preset: pick = minion_cap:on,lance_role:on,bomber_role:both,admiral_sinks:fleet,redeploy:on,gear_mk2:on,node_persist:on,ms:nosmall,surrender:vote
+difficulty: none (no human seat), both teams earn x1.00
+features: surrender, ms, minion_cap, lance_role, bomber_role, redeploy, gear_mk2, node_persist, admiral_sinks
+match: role=spectator variants={ "retreat": "systems_failure", "escort_wing": "extra", "siege_fix": "off", "breach": "off", "ms_cap": "off", "attrition": "off", "surrender": "vote", "breach_extra": "off", "ms_soft": "off", "waves_late": "off", "lanespawn": "off", "eff": "off", "ms": "nosmall", "minion_cap": "on", "escort_pd": "off", "lance_role": "on", "routing_payoff": "off", "jungle_big": "off", "zoom_max": "off", "bomber_role": "both", "slipstream": "off", "redeploy": "on", "recall": "off", "respawn": "off", "respawn_site": "off", "bay_shop": "off", "respawn_curve": "off", "bayA": "off", "econ": "off", "bounties": "off", "gear_mk2": "on", "buyback": "off", "doctrine": "off", "catchup": "off", "pilot_mining": "off", "ms_spend_weak": "off", "morale": "off", "group_late": "off", "salvage_core": "off", "jungle_scale": "off", "node_persist": "on", "epic": "off", "beacons": "off", "camp4": "off", "feats": "off", "assets": "off", "orders": "off", "fortify": "off", "admiral_smart": "off", "ms_move": "off", "home_vision": "off", "mutiny": "off", "admiral_sinks": "fleet", "fleet_cap": "30", "ai_calib": "off", "ail_c4_flak": "off" } rocks=3749 nodes=26 camps=14 route_nodes=611
+build: unknown
+YARD t=1500 team=0 saves for a Destroyer (2200): the treasury 5551
+YARD t=1500 team=0 buys a Destroyer (2200): the treasury 5551 and the income 0 a second pay it within 20 seconds
+YARD t=1500 team=0 buys Fighter x3 (450): the fleet is 1 of 57 wanted by 25:00, the treasury 5551, 5801 to spare, the income 0 a second
+YARD t=1500 team=1 saves for a Destroyer (2200): the treasury 4203
+YARD t=1500 team=1 buys a Destroyer (2200): the treasury 4203 and the income 0 a second pay it within 20 seconds
+YARD t=1500 team=1 buys Fighter x3 (450): the fleet is 1 of 57 wanted by 25:00, the treasury 4203, 4453 to spare, the income 0 a second
+YARD t=1501 team=0 buys Fighter x3 (450): the fleet is 4 of 57 wanted by 25:01, the treasury 2704, 2504 to spare, the income 0 a second
+YARD t=1521 team=0 repeats Fighter x3 (450): Fighter squadrons are on repeat while the fleet is below its target
+YARD t=1521 team=1 repeats Fighter x3 (450): Fighter squadrons are on repeat while the fleet is below its target
+YARD t=1522 team=0 repeats Fighter x3 (450): Fighter squadrons are on repeat while the fleet is below its target
+YARD t=1539 team=1 holds Mining drone (200): the treasury 19 and the income 2 a second do not pay it within 20 seconds, so the next item may start
+YARD t=1540 team=1 holds Mining drone (200): the treasury 22 and the income 2 a second do not pay it within 20 seconds, so the next item may start
+YARD t=1541 team=0 repeats Fighter x3 (450): Fighter squadrons are on repeat while the fleet is below its target
+YARD t=1541 team=0 holds Fighter x3 (450): the treasury 199 and the income 2 a second do not pay it within 20 seconds, so the next item may start
+YARD t=1541 team=1 repeats Fighter x3 (450): Fighter squadrons are on repeat while the fleet is below its target
+YARD t=1541 team=1 holds Mining drone (200): the treasury 25 and the income 2 a second do not pay it within 20 seconds, so the next item may start
+YARD t=1542 team=0 repeats Fighter x3 (450): Fighter squadrons are on repeat while the fleet is below its target
+YARD t=1542 team=0 holds Fighter x3 (450): the treasury 202 and the income 2 a second do not pay it within 20 seconds, so the next item may start
+YARD t=1549 team=0 holds Mining drone (200): the treasury 23 and the income 2 a second do not pay it within 20 seconds, so the next item may start
+YARD t=1566 team=1 goes on with Mining drone (200): the treasury 385 pays it now or nothing else waits
+YARD t=1566 team=1 goes on with Mining drone (200): the treasury 385 pays it now or nothing else waits
+YARD t=1566 team=1 goes on with Mining drone (200): the treasury 385 pays it now or nothing else waits
+YARD t=1567 team=0 goes on with Fighter x3 (450): the treasury 57 pays it now or nothing else waits
+YARD t=1567 team=0 goes on with Fighter x3 (450): the treasury 57 pays it now or nothing else waits
+YARD t=1567 team=0 goes on with Mining drone (200): the treasury 57 pays it now or nothing else waits
+YARD t=1567 team=1 holds Fighter x3 (450): the treasury 188 and the income 9 a second do not pay it within 20 seconds, so the next item may start
+YARD t=1568 team=0 holds Fighter x3 (450): the treasury 60 and the income 6 a second do not pay it within 20 seconds, so the next item may start
+YARD t=1569 team=0 holds Fighter x3 (450): the treasury 63 and the income 6 a second do not pay it within 20 seconds, so the next item may start
+YARD t=1576 team=0 saves for a Destroyer (2200): the treasury 174
+YARD t=1576 team=1 saves for a Destroyer (2200): the treasury 195
+YARD t=1582 team=0 goes on with Fighter x3 (450): the treasury 208 pays it now or nothing else waits
+YARD t=1582 team=0 goes on with Fighter x3 (450): the treasury 208 pays it now or nothing else waits
+YARD t=1585 team=1 goes on with Fighter x3 (450): the treasury 218 pays it now or nothing else waits
+YARD t=1610 team=1 repeats Fighter x3 (450): Fighter squadrons are on repeat while the fleet is below its target
+YARD t=1612 team=0 repeats Fighter x3 (450): Fighter squadrons are on repeat while the fleet is below its target
+YARD t=1630 team=0 repeats Fighter x3 (450): Fighter squadrons are on repeat while the fleet is below its target
+YARD t=1632 team=1 repeats Fighter x3 (450): Fighter squadrons are on repeat while the fleet is below its target
+YARD t=1634 team=0 repeats Fighter x3 (450): Fighter squadrons are on repeat while the fleet is below its target
+FIELD_TRIP t=1594.5 team=0 reason=pilots_down dur=43.0 result=docked hull=battlecruiser resupplies=0
+YARD t=1655 team=1 repeats Fighter x3 (450): Fighter squadrons are on repeat while the fleet is below its target
+YARD t=1656 team=0 repeats Fighter x3 (450): Fighter squadrons are on repeat while the fleet is below its target
+YARD t=1657 team=0 repeats Fighter x3 (450): Fighter squadrons are on repeat while the fleet is below its target
+YARD t=1663 team=0 buys a Destroyer (2200): the treasury 1063 and the income 65 a second pay it within 20 seconds
+YARD t=1670 team=1 buys a Destroyer (2200): the treasury 1226 and the income 55 a second pay it within 20 seconds
+YARD t=1675 team=1 repeats Fighter x3 (450): Fighter squadrons are on repeat while the fleet is below its target
+YARD t=1676 team=0 repeats Fighter x3 (450): Fighter squadrons are on repeat while the fleet is below its target
+YARD t=1677 team=0 repeats Fighter x3 (450): Fighter squadrons are on repeat while the fleet is below its target
+YARD t=1695 team=1 buys Fighter x3 (450): the fleet is 20 of 57 wanted by 28:15, the treasury 214, 214 to spare, the income 58 a second
+YARD t=1707 team=0 buys Ion Frigate x1 (1250): the fleet is 37 of 57 wanted by 28:27, the treasury 292, 292 to spare, the income 67 a second
+YARD t=1709 team=1 buys Ion Frigate x1 (1250): the fleet is 23 of 57 wanted by 28:29, the treasury 400, 400 to spare, the income 69 a second
+YARD t=1716 team=0 repeats Fighter x3 (450): Fighter squadrons are on repeat while the fleet is below its target
+FIELD_TRIP t=1654.0 team=1 reason=defend dur=68.0 result=docked hull=battlecruiser resupplies=0
+YARD t=1722 team=1 repeats Fighter x3 (450): Fighter squadrons are on repeat while the fleet is below its target
+YARD t=1723 team=1 holds Ion Frigate (1250): the treasury 208 and the income 51 a second do not pay it within 20 seconds, so the next item may start
+YARD t=1725 team=0 repeats Fighter x3 (450): Fighter squadrons are on repeat while the fleet is below its target
+YARD t=1729 team=1 repeats Fighter x3 (450): Fighter squadrons are on repeat while the fleet is below its target
+YARD t=1733 team=0 buys Lance Fighter x3 (900): the fleet is 43 of 57 wanted by 28:53, the treasury 435, 435 to spare, the income 61 a second
+YARD t=1741 team=1 goes on with Ion Frigate (1250): the treasury 79 pays it now or nothing else waits
+FIELD_TRIP t=1687.5 team=0 reason=pilots_down dur=58.0 result=docked hull=battlecruiser resupplies=0
+YARD t=1752 team=0 repeats Fighter x3 (450): Fighter squadrons are on repeat while the fleet is below its target
+YARD t=1755 team=1 repeats Fighter x3 (450): Fighter squadrons are on repeat while the fleet is below its target
+YARD t=1761 team=1 repeats Fighter x3 (450): Fighter squadrons are on repeat while the fleet is below its target
+YARD t=1765 team=0 saves for a Destroyer (2200): the treasury 2137
+YARD t=1765 team=0 buys a Destroyer (2200): the treasury 2137 and the income 71 a second pay it within 20 seconds
+YARD t=1770 team=1 saves for a Destroyer (2200): the treasury 338
+YARD t=1772 team=0 repeats Fighter x3 (450): Fighter squadrons are on repeat while the fleet is below its target
+YARD t=1780 team=0 buys Logistics Corvette x1 (500): the fleet is 51 of 57 wanted by 29:40, the treasury 265, 265 to spare, the income 82 a second
+YARD t=1785 team=1 repeats Fighter x3 (450): Fighter squadrons are on repeat while the fleet is below its target
+YARD t=1797 team=0 buys Fighter x3 (450): the fleet is 46 of 57 wanted by 29:57, the treasury 244, 244 to spare, the income 72 a second
+YARD t=1806 team=0 repeats Fighter x3 (450): Fighter squadrons are on repeat while the fleet is below its target
+YARD t=1807 team=1 repeats Fighter x3 (450): Fighter squadrons are on repeat while the fleet is below its target
+FIELD_TRIP t=1760.0 team=1 reason=defend dur=50.0 result=docked hull=battlecruiser resupplies=0
+YARD t=1817 team=0 repeats Fighter x3 (450): Fighter squadrons are on repeat while the fleet is below its target
+YARD t=1824 team=1 buys a Destroyer (2200): the treasury 1059 and the income 58 a second pay it within 20 seconds
+YARD t=1827 team=1 repeats Fighter x3 (450): Fighter squadrons are on repeat while the fleet is below its target
+YARD t=1827 team=1 holds Destroyer (2200): the treasury 1068 and the income 51 a second do not pay it within 20 seconds, so the next item may start
+YARD t=1827 team=1 buys Lance Fighter x3 (900): the fleet is 44 of 57 wanted by 30:27, the treasury 1068, 1068 to spare, the income 51 a second
+YARD t=1831 team=1 repeats Fighter x3 (450): Fighter squadrons are on repeat while the fleet is below its target
+YARD t=1832 team=1 buys Logistics Corvette x1 (500): the fleet is 50 of 57 wanted by 30:32, the treasury 129, 129 to spare, the income 58 a second
+YARD t=1841 team=0 buys Flak Frigate x1 (1100): the fleet is 44 of 57 wanted by 30:41, the treasury 953, 953 to spare, the income 51 a second
+YARD t=1843 team=0 repeats Fighter x3 (450): Fighter squadrons are on repeat while the fleet is below its target
+FIELD_TRIP t=1764.5 team=0 reason=pilots_down dur=80.0 result=docked hull=battlecruiser resupplies=0
+YARD t=1846 team=0 saves for a Destroyer (2200): the treasury 950
+YARD t=1848 team=1 repeats Fighter x3 (450): Fighter squadrons are on repeat while the fleet is below its target
+YARD t=1852 team=1 buys Fighter x3 (450): the fleet is 54 of 57 wanted by 30:52, the treasury 388, 388 to spare, the income 61 a second
+YARD t=1861 team=0 repeats Fighter x3 (450): Fighter squadrons are on repeat while the fleet is below its target
+YARD t=1863 team=0 repeats Fighter x3 (450): Fighter squadrons are on repeat while the fleet is below its target
+YARD t=1877 team=1 goes on with Destroyer (2200): the treasury 1187 pays it now or nothing else waits
+YARD t=1883 team=0 repeats Fighter x3 (450): Fighter squadrons are on repeat while the fleet is below its target
+YARD t=1889 team=0 buys a Destroyer (2200): the treasury 1781 and the income 69 a second pay it within 20 seconds
+YARD t=1897 team=1 repeats Fighter x3 (450): Fighter squadrons are on repeat while the fleet is below its target
+YARD t=1903 team=0 repeats Fighter x3 (450): Fighter squadrons are on repeat while the fleet is below its target
+YARD t=1913 team=0 buys Fighter x3 (450): the fleet is 48 of 57 wanted by 31:53, the treasury 391, 391 to spare, the income 68 a second
+FIELD_TRIP t=1860.5 team=0 reason=pilots_down dur=55.0 result=destroyed hull=battlecruiser resupplies=0
+YARD t=1930 team=0 repeats Fighter x3 (450): Fighter squadrons are on repeat while the fleet is below its target
+YARD t=1935 team=0 repeats Fighter x3 (450): Fighter squadrons are on repeat while the fleet is below its target
+YARD t=1950 team=0 repeats Fighter x3 (450): Fighter squadrons are on repeat while the fleet is below its target
+YARD t=1955 team=0 repeats Fighter x3 (450): Fighter squadrons are on repeat while the fleet is below its target
+YARD t=1970 team=0 repeats Fighter x3 (450): Fighter squadrons are on repeat while the fleet is below its target
+YARD t=1970 team=1 buys Flak Frigate x1 (1100): the fleet is 56 of 57 wanted by 32:50, the treasury 3247, 3247 to spare, the income 64 a second
+YARD t=1973 team=0 saves for a Destroyer (2200): the treasury 876
+YARD t=1975 team=0 repeats Fighter x3 (450): Fighter squadrons are on repeat while the fleet is below its target
+YARD t=1988 team=1 saves for a Destroyer (2200): the treasury 3476
+YARD t=1988 team=1 buys a Destroyer (2200): the treasury 3476 and the income 64 a second pay it within 20 seconds
+YARD t=1990 team=0 repeats Fighter x3 (450): Fighter squadrons are on repeat while the fleet is below its target
+YARD t=1995 team=0 repeats Fighter x3 (450): Fighter squadrons are on repeat while the fleet is below its target
+FIELD_TRIP t=1839.0 team=1 reason=defend dur=159.0 result=docked hull=battlecruiser resupplies=0
+YARD t=2010 team=0 repeats Fighter x3 (450): Fighter squadrons are on repeat while the fleet is below its target
+YARD t=2015 team=0 repeats Fighter x3 (450): Fighter squadrons are on repeat while the fleet is below its target
+YARD t=2030 team=0 repeats Fighter x3 (450): Fighter squadrons are on repeat while the fleet is below its target
+YARD t=2035 team=0 repeats Fighter x3 (450): Fighter squadrons are on repeat while the fleet is below its target
+YARD t=2044 team=1 buys Fighter x3 (450): the fleet is 56 of 57 wanted by 34:04, the treasury 2524, 2524 to spare, the income 58 a second
+YARD t=2047 team=0 buys a Destroyer (2200): the treasury 2013 and the income 76 a second pay it within 20 seconds
+YARD t=2050 team=0 repeats Fighter x3 (450): Fighter squadrons are on repeat while the fleet is below its target
+YARD t=2055 team=0 repeats Fighter x3 (450): Fighter squadrons are on repeat while the fleet is below its target
+YARD t=2064 team=1 saves for a Destroyer (2200): the treasury 2546
+YARD t=2064 team=1 buys a Destroyer (2200): the treasury 2546 and the income 47 a second pay it within 20 seconds
+YARD t=2070 team=0 repeats Fighter x3 (450): Fighter squadrons are on repeat while the fleet is below its target
+YARD t=2075 team=0 repeats Fighter x3 (450): Fighter squadrons are on repeat while the fleet is below its target
+YARD t=2090 team=0 repeats Fighter x3 (450): Fighter squadrons are on repeat while the fleet is below its target
+YARD t=2101 team=0 repeats Fighter x3 (450): Fighter squadrons are on repeat while the fleet is below its target
+YARD t=2105 team=1 buys Bomber x3 (1050): the fleet is 56 of 57 wanted by 35:05, the treasury 1618, 1618 to spare, the income 44 a second
+YARD t=2110 team=0 repeats Fighter x3 (450): Fighter squadrons are on repeat while the fleet is below its target
+YARD t=2121 team=0 repeats Fighter x3 (450): Fighter squadrons are on repeat while the fleet is below its target
+YARD t=2130 team=0 repeats Fighter x3 (450): Fighter squadrons are on repeat while the fleet is below its target
+FIELD_TRIP t=1949.5 team=0 reason=pilots_down dur=181.0 result=docked hull=destroyer resupplies=0
+FIELD_TRIP t=2065.0 team=1 reason=pilots_down dur=68.0 result=docked hull=battlecruiser resupplies=0
+YARD t=2139 team=0 saves for a Destroyer (2200): the treasury 1248
+YARD t=2141 team=1 saves for a Destroyer (2200): the treasury 2744
+YARD t=2141 team=1 buys a Destroyer (2200): the treasury 2744 and the income 62 a second pay it within 20 seconds
+YARD t=2141 team=0 repeats Fighter x3 (450): Fighter squadrons are on repeat while the fleet is below its target
+YARD t=2150 team=0 repeats Fighter x3 (450): Fighter squadrons are on repeat while the fleet is below its target
+YARD t=2158 team=0 buys a Destroyer (2200): the treasury 2061 and the income 74 a second pay it within 20 seconds
+YARD t=2161 team=0 repeats Fighter x3 (450): Fighter squadrons are on repeat while the fleet is below its target
+YARD t=2170 team=0 repeats Fighter x3 (450): Fighter squadrons are on repeat while the fleet is below its target
+YARD t=2177 team=1 buys Ion Frigate x1 (1250): the fleet is 56 of 57 wanted by 36:17, the treasury 2704, 2704 to spare, the income 62 a second
+YARD t=2200 team=0 repeats Fighter x3 (450): Fighter squadrons are on repeat while the fleet is below its target
+FIELD_TRIP t=2157.5 team=0 reason=pilots_down dur=47.0 result=docked hull=destroyer resupplies=0
+YARD t=2206 team=0 repeats Fighter x3 (450): Fighter squadrons are on repeat while the fleet is below its target
+YARD t=2217 team=1 saves for a Destroyer (2200): the treasury 2937
+YARD t=2217 team=1 buys a Destroyer (2200): the treasury 2937 and the income 70 a second pay it within 20 seconds
+YARD t=2220 team=0 repeats Fighter x3 (450): Fighter squadrons are on repeat while the fleet is below its target
+YARD t=2228 team=0 repeats Fighter x3 (450): Fighter squadrons are on repeat while the fleet is below its target
+YARD t=2234 team=0 saves for a Destroyer (2200): the treasury 806
+YARD t=2240 team=0 repeats Fighter x3 (450): Fighter squadrons are on repeat while the fleet is below its target
+YARD t=2248 team=0 repeats Fighter x3 (450): Fighter squadrons are on repeat while the fleet is below its target
+YARD t=2260 team=0 repeats Fighter x3 (450): Fighter squadrons are on repeat while the fleet is below its target
+YARD t=2261 team=1 buys Support Corvette x1 (550): the fleet is 56 of 57 wanted by 37:41, the treasury 2385, 2385 to spare, the income 61 a second
+YARD t=2268 team=0 repeats Fighter x3 (450): Fighter squadrons are on repeat while the fleet is below its target
+YARD t=2280 team=0 repeats Fighter x3 (450): Fighter squadrons are on repeat while the fleet is below its target
+FIELD_TRIP t=2219.5 team=0 reason=pilots_down dur=64.0 result=docked hull=destroyer resupplies=0
+FIELD_TRIP t=2210.0 team=1 reason=pilots_down dur=76.0 result=docked hull=battlecruiser resupplies=0
+YARD t=2288 team=0 repeats Fighter x3 (450): Fighter squadrons are on repeat while the fleet is below its target
+YARD t=2293 team=1 saves for a Destroyer (2200): the treasury 3658
+YARD t=2293 team=1 buys a Destroyer (2200): the treasury 3658 and the income 55 a second pay it within 20 seconds
+YARD t=2300 team=0 repeats Fighter x3 (450): Fighter squadrons are on repeat while the fleet is below its target
+YARD t=2308 team=0 repeats Fighter x3 (450): Fighter squadrons are on repeat while the fleet is below its target
+YARD t=2320 team=0 repeats Fighter x3 (450): Fighter squadrons are on repeat while the fleet is below its target
+YARD t=2328 team=0 repeats Fighter x3 (450): Fighter squadrons are on repeat while the fleet is below its target
+YARD t=2340 team=0 repeats Fighter x3 (450): Fighter squadrons are on repeat while the fleet is below its target
+YARD t=2348 team=0 repeats Fighter x3 (450): Fighter squadrons are on repeat while the fleet is below its target
+YARD t=2360 team=0 repeats Fighter x3 (450): Fighter squadrons are on repeat while the fleet is below its target
+YARD t=2368 team=0 repeats Fighter x3 (450): Fighter squadrons are on repeat while the fleet is below its target
+YARD t=2369 team=1 saves for a Destroyer (2200): the treasury 4995
+YARD t=2369 team=1 buys a Destroyer (2200): the treasury 4995 and the income 52 a second pay it within 20 seconds
+FIELD_TRIP t=2333.5 team=0 reason=defend dur=39.0 result=docked hull=destroyer resupplies=0
+YARD t=2380 team=0 repeats Fighter x3 (450): Fighter squadrons are on repeat while the fleet is below its target
+YARD t=2388 team=0 repeats Fighter x3 (450): Fighter squadrons are on repeat while the fleet is below its target
+YARD t=2390 team=0 buys a Destroyer (2200): the treasury 1851 and the income 65 a second pay it within 20 seconds
+YARD t=2400 team=0 repeats Fighter x3 (450): Fighter squadrons are on repeat while the fleet is below its target
+FIELD_TRIP t=2307.0 team=1 reason=pilots_down dur=98.0 result=docked hull=battlecruiser resupplies=0
+YARD t=2408 team=0 repeats Fighter x3 (450): Fighter squadrons are on repeat while the fleet is below its target
+YARD t=2420 team=0 repeats Fighter x3 (450): Fighter squadrons are on repeat while the fleet is below its target
+YARD t=2429 team=0 repeats Fighter x3 (450): Fighter squadrons are on repeat while the fleet is below its target
+FIELD_TRIP t=2394.5 team=0 reason=pilots_down dur=43.0 result=docked hull=destroyer resupplies=0
+YARD t=2443 team=0 repeats Fighter x3 (450): Fighter squadrons are on repeat while the fleet is below its target
+YARD t=2445 team=1 saves for a Destroyer (2200): the treasury 6849
+YARD t=2445 team=1 buys a Destroyer (2200): the treasury 6849 and the income 52 a second pay it within 20 seconds
+YARD t=2452 team=0 repeats Fighter x3 (450): Fighter squadrons are on repeat while the fleet is below its target
+YARD t=2463 team=0 repeats Fighter x3 (450): Fighter squadrons are on repeat while the fleet is below its target
+YARD t=2467 team=0 saves for a Destroyer (2200): the treasury 694
+YARD t=2474 team=0 repeats Fighter x3 (450): Fighter squadrons are on repeat while the fleet is below its target
+YARD t=2483 team=0 repeats Fighter x3 (450): Fighter squadrons are on repeat while the fleet is below its target
+YARD t=2491 team=0 buys a Destroyer (2200): the treasury 1631 and the income 73 a second pay it within 20 seconds
+YARD t=2494 team=0 repeats Fighter x3 (450): Fighter squadrons are on repeat while the fleet is below its target
+YARD t=2503 team=0 repeats Fighter x3 (450): Fighter squadrons are on repeat while the fleet is below its target
+YARD t=2503 team=0 holds Destroyer (2200): the treasury 749 and the income 60 a second do not pay it within 20 seconds, so the next item may start
+YARD t=2514 team=0 repeats Fighter x3 (450): Fighter squadrons are on repeat while the fleet is below its target
+YARD t=2521 team=1 saves for a Destroyer (2200): the treasury 9441
+YARD t=2521 team=1 buys a Destroyer (2200): the treasury 9441 and the income 74 a second pay it within 20 seconds
+YARD t=2523 team=0 repeats Fighter x3 (450): Fighter squadrons are on repeat while the fleet is below its target
+YARD t=2534 team=0 repeats Fighter x3 (450): Fighter squadrons are on repeat while the fleet is below its target
+YARD t=2549 team=0 repeats Fighter x3 (450): Fighter squadrons are on repeat while the fleet is below its target
+YARD t=2556 team=0 repeats Fighter x3 (450): Fighter squadrons are on repeat while the fleet is below its target
+YARD t=2570 team=0 repeats Fighter x3 (450): Fighter squadrons are on repeat while the fleet is below its target
+YARD t=2578 team=1 buys Fighter x3 (450): the fleet is 56 of 57 wanted by 42:58, the treasury 10492, 10492 to spare, the income 67 a second
+YARD t=2578 team=0 repeats Fighter x3 (450): Fighter squadrons are on repeat while the fleet is below its target
+YARD t=2590 team=0 repeats Fighter x3 (450): Fighter squadrons are on repeat while the fleet is below its target
+YARD t=2597 team=1 saves for a Destroyer (2200): the treasury 11143
+YARD t=2597 team=1 buys a Destroyer (2200): the treasury 11143 and the income 52 a second pay it within 20 seconds
+YARD t=2598 team=0 repeats Fighter x3 (450): Fighter squadrons are on repeat while the fleet is below its target
+YARD t=2610 team=0 repeats Fighter x3 (450): Fighter squadrons are on repeat while the fleet is below its target
+FIELD_TRIP t=2454.5 team=0 reason=pilots_down dur=159.0 result=docked hull=destroyer resupplies=1
+YARD t=2618 team=0 repeats Fighter x3 (450): Fighter squadrons are on repeat while the fleet is below its target
+FIELD_TRIP t=2468.0 team=1 reason=pilots_down dur=160.0 result=docked hull=battlecruiser resupplies=0
+YARD t=2634 team=0 repeats Fighter x3 (450): Fighter squadrons are on repeat while the fleet is below its target
+t=44:00  sim 694.0 ms/sim-s  worst tick 22.9 ms  units=262 ships=81 minions=91 drones=28 projectiles=198 fps=67
+  Halcyon tr=28 ore=87721 fac=8 tech=53 turrets=4 killed_turrets=14 K/D=3/40 avg_cr=2923 ms=74% sh=0% flying={ "fighter": 16, "lance": 2, "bomber": 1, "battlecruiser": 1, "flak": 1 }
+  Cinder tr=10707 ore=90902 fac=8 tech=53 turrets=7 killed_turrets=7 K/D=3/24 avg_cr=2368 ms=91% sh=98% flying={ "fighter": 50, "destroyer": 2, "ion": 2, "lance": 4, "bomber": 1, "battlecruiser": 1 }
+YARD t=2646 team=1 buys Fighter x3 (450): the fleet is 56 of 57 wanted by 44:06, the treasury 10866, 10866 to spare, the income 56 a second
+YARD t=2656 team=0 repeats Fighter x3 (450): Fighter squadrons are on repeat while the fleet is below its target
+YARD t=2661 team=0 repeats Fighter x3 (450): Fighter squadrons are on repeat while the fleet is below its target
+YARD t=2673 team=1 saves for a Destroyer (2200): the treasury 12441
+YARD t=2673 team=1 buys a Destroyer (2200): the treasury 12441 and the income 57 a second pay it within 20 seconds
+YARD t=2676 team=0 repeats Fighter x3 (450): Fighter squadrons are on repeat while the fleet is below its target
+YARD t=2682 team=0 repeats Fighter x3 (450): Fighter squadrons are on repeat while the fleet is below its target
+FIELD_TRIP t=2628.5 team=0 reason=defend dur=71.5 result=match_end hull=battlecruiser resupplies=0
+FIELD_TRIP t=2659.0 team=1 reason=pilots_down dur=41.0 result=match_end hull=battlecruiser resupplies=0
+FUN_JSON {"admiral_decisions_late":83,"admiral_decisions_per_min_late":2.767,"adv":[[1530,0.11],[1560,0.23],[1590,0.23],[1620,1.31],[1650,0.7],[1680,0.27],[1710,0.55],[1740,2.15],[1770,2.23],[1800,-0.35],[1830,1.24],[1860,-2.23],[1890,-3.2],[1920,-5.42],[1950,-4.79],[1980,-4.5],[2010,-4.05],[2040,-3.87],[2070,-4.87],[2100,-6.06],[2130,-4.39],[2160,-2.97],[2190,-2.73],[2220,-4.16],[2250,-4.25],[2280,-5.18],[2310,-5.78],[2340,-5.47],[2370,-6.92],[2400,-6.77],[2430,-5.48],[2460,-5.37],[2490,-6.11],[2520,-7.27],[2550,-6.53],[2580,-7.14],[2610,-9.06],[2640,-7.21],[2670,-6.19]],"adv_alt_at":{},"adv_at":{},"adv_l15":null,"adv_lead_changes":1,"asset_kill_share":0.793,"asset_kills":46,"assisted_kill_share":0.241,"assisted_kills":14,"avg_dead_secs_per_death":6.5,"big_flak_pd_kill_share":0.605,"big_flak_pd_kills":26,"big_pilot_kills":43,"big_pos_gap":2.039,"burst_death_share_small":0.043,"close_out_secs":-1,"comeback":false,"comeback15":null,"damage_hook":true,"dead_late":0.212,"deaths_by":{"minion":190,"mothership":93,"pilot":58,"repair_bay":3,"turret":32},"deaths_late":341,"deaths_per_pilot_per_10min":18.8,"decided_to_end_min":14.0,"earn_spread":1.202,"earned_by_reason":{"assist":3255,"derelict":6700,"drone":70,"escort":19278,"kill":1378,"minion":1610,"minion assist":118,"ore":60646,"ore stolen":360,"repair bay":200,"repair drone":60,"stipend":15750,"turret":3500,"ward":150},"earned_total":131077,"ended":false,"ended_by":"none","even15":null,"fight2":{"count":5,"max":76,"time_share":0.678},"fight_max_pilots":46,"fight_mean":{"early":null,"late":30.97,"mid":null},"fight_p90_late":64.0,"fight_ramp":null,"fight_samples":{"early":0,"late":407,"mid":0},"fight_time_share":0.732,"fights":3,"fights_per_10min":1.5,"final_push_secs":-1,"first_blood_min":27.19,"first_death_min":26.23,"hull_minutes":{"battlecruiser":41.0,"bomber":33.0,"destroyer":49.0,"fighter":1219.0,"flak":21.0,"ion":29.0,"lance":93.0,"logistics":1.0,"support":3.0},"hull_variety":0.342,"kills_per_min":18.8,"late_presence":12.075,"late_presence_windows":4,"late_spend_ratio":0.891,"late_start":true,"lead_changes":2,"leader_at":{},"low_kp_pilots":1.5,"max_worth_ratio":1.13,"minutes":45.0,"money_30":{"pilot_credits_avg":1577,"t":1800,"treasury_c":625,"treasury_h":252},"money_end":{"pilot_credits_avg":3128,"treasury_c":12157,"treasury_h":785},"monsters_killed":34,"ms_big_damage_share":null,"ms_first_hull_hit_min":[32.72,27.48],"ms_hull":[[1560,1.0,1.0],[1620,1.0,1.0],[1680,1.0,0.995],[1740,1.0,0.995],[1800,1.0,0.993],[1860,1.0,0.964],[1920,1.0,0.963],[1980,0.997,0.96],[2040,0.983,0.955],[2100,0.979,0.952],[2160,0.975,0.95],[2220,0.971,0.945],[2280,0.967,0.941],[2340,0.961,0.936],[2400,0.955,0.932],[2460,0.896,0.93],[2520,0.806,0.927],[2580,0.773,0.923],[2640,0.746,0.92]],"ms_hull_dmg":[{"big_pilot":1825,"minion":4862,"small_pilot":5},{"big_pilot":535,"minion":1380}],"ms_limbo_secs":0,"ms_loser_big_dmg":0,"ms_loser_hull_dmg":0,"ms_pressure_onset_min":36.17,"obs_minutes":20.0,"pilot_float_30":1577,"pilot_involved_death_share":0.431,"pilot_kill_share":0.154,"pilot_kill_share_late":0.15,"pilot_kills":58,"pilot_kills_late25":58,"pilot_table":[{"a":2,"cs":"Lancer","d":7,"earned":13923,"k":0,"sa":0,"sd":3,"sk":0,"skill":0.638,"slot":0,"t":0},{"a":4,"cs":"Wren","d":12,"earned":12320,"k":1,"sa":2,"sd":9,"sk":1,"skill":0.942,"slot":1,"t":0},{"a":1,"cs":"Kestrel","d":7,"earned":12394,"k":0,"sa":1,"sd":7,"sk":0,"skill":0.62,"slot":2,"t":0},{"a":0,"cs":"Marlin","d":1,"earned":16736,"k":0,"sa":0,"sd":1,"sk":0,"skill":0.316,"slot":3,"t":0},{"a":3,"cs":"Sable","d":12,"earned":11287,"k":1,"sa":3,"sd":8,"sk":2,"skill":0.976,"slot":4,"t":0},{"a":0,"cs":"Ash","d":9,"earned":10426,"k":0,"sa":0,"sd":3,"sk":0,"skill":0.638,"slot":0,"t":1},{"a":3,"cs":"Brand","d":1,"earned":13436,"k":1,"sa":0,"sd":0,"sk":0,"skill":0.942,"slot":1,"t":1},{"a":2,"cs":"Coil","d":6,"earned":13731,"k":0,"sa":3,"sd":6,"sk":0,"skill":0.62,"slot":2,"t":1},{"a":0,"cs":"Drake","d":1,"earned":15643,"k":0,"sa":0,"sd":1,"sk":0,"skill":0.316,"slot":3,"t":1},{"a":1,"cs":"Ember","d":9,"earned":11176,"k":1,"sa":7,"sd":2,"sk":2,"skill":0.976,"slot":4,"t":1}],"pilots":10,"pk_early":0,"pk_ramp":null,"play_income_share":0.13,"probe":"fun_probe","rta_all_s":44.7,"rta_dropped":2,"rta_late_dropped":2,"rta_late_n":46,"rta_late_s":45.1,"rta_n":63,"secs_cap":2700,"seed":26112612,"ship_deaths":376,"siege_assaults":6,"siege_assaults_short":0,"siege_bite_rate":0.167,"siege_bites":1,"siege_undecided":0,"size_impact":{"big":{"impact":121.2,"minutes":58.32},"medium":{"impact":0.0,"minutes":0.0},"small":{"impact":46.4,"minutes":99.43}},"size_minutes":[99.43,0.0,33.6,24.72],"size_parity":2.155,"skill_earned_rho":-0.739,"skill_jitter":true,"skill_rho_small":0.578,"small_kills_late25":15,"small_late_kill_share":0.259,"start_min":25.0,"strain_uptime":[0.335,0.114],"team_variants":[{},{}],"time_share":{"dead":0.205,"docked":0.006,"engaged":0.398,"near":0.151,"travel":0.24},"travel_split":{"commute":0.201,"idle":0.039},"treasury_all":{"income":[69320,68161],"spent":[74535,62004]},"treasury_float_late":2397.0,"treasury_late":{"income":111008,"spent":98943},"ttk_big_isolated":[32.1,32.3,41.9,20.3,8.4,67.9],"ttk_big_supported":[13.5,13.2,15.5,14.3,17.8,18.4,16.4,28.9,8.4,12.8,25.4,10.3,13.5,33.6,12.8,34.3,22.7,5.9,11.1,13.5,32.9,15.5,7.8,15.9,24.2,26.8,23.8,7.4,15.8,23.6,15.8,22.0,31.1,20.0,27.9,14.6,40.0,14.4,25.5,13.6,10.5],"ttk_small_med_s":6.25,"ttk_small_n":326,"turret_losses":23,"turrets_destroyed":[15,8],"unattended_turret_loss_share":0.391,"unattended_turret_losses":9,"usage":{"hyperspace_launches":17,"hyperspace_launches_team0":10,"hyperspace_launches_team1":7,"lance_prey_picks":56,"mk2_purchases":22,"persist_rebuilds":16,"redeploy_turret_landings":11,"sink_wards":12,"small_siege_skips":386,"torpedo_lane_hit_centre":10,"torpedo_lane_hit_centre_big":2,"torpedo_lane_hit_centre_structure":8,"torpedo_lane_hit_left":10,"torpedo_lane_hit_left_big":2,"torpedo_lane_hit_left_structure":8,"torpedo_lane_hit_right":9,"torpedo_lane_hit_right_big":2,"torpedo_lane_hit_right_medium":2,"torpedo_lane_hit_right_structure":5,"torpedo_runs_ai_cancel_dropped":1,"torpedo_runs_ai_cancel_dropped_big":1,"torpedo_runs_ai_cancel_lost":5,"torpedo_runs_ai_cancel_lost_big":2,"torpedo_runs_ai_cancel_lost_medium":2,"torpedo_runs_ai_cancel_lost_ms":1,"torpedo_runs_ai_cancel_off_line":3,"torpedo_runs_ai_cancel_off_line_big":1,"torpedo_runs_ai_cancel_off_line_small":2,"torpedo_runs_ai_cancel_target":1,"torpedo_runs_ai_cancel_target_medium":1,"torpedo_runs_ai_cancelled":10,"torpedo_runs_ai_commit":23,"torpedo_runs_ai_commit_big":7,"torpedo_runs_ai_commit_medium":5,"torpedo_runs_ai_commit_ms":1,"torpedo_runs_ai_commit_small":2,"torpedo_runs_ai_commit_structure":8,"torpedo_runs_ai_declined_cover":3,"torpedo_runs_ai_launched":13,"torpedo_runs_ai_launched_big":3,"torpedo_runs_ai_launched_medium":2,"torpedo_runs_ai_launched_structure":8,"torpedo_runs_cancel_input":9,"torpedo_runs_cancel_rock":1,"torpedo_runs_cancelled":10,"torpedo_runs_launched":13,"torpedo_runs_started":23,"torpedo_shot_down":7,"torpedo_shot_down_by_bolt":4,"torpedo_shot_down_by_flak":1,"torpedo_shot_down_by_pd":2},"variants":{"admiral_sinks":"fleet","admiral_smart":"off","ai_calib":"off","ail_c4_flak":"off","assets":"off","attrition":"off","bayA":"off","bay_shop":"off","beacons":"off","bomber_role":"both","bounties":"off","breach":"off","breach_extra":"off","buyback":"off","camp4":"off","catchup":"off","doctrine":"off","econ":"off","eff":"off","epic":"off","escort_pd":"off","escort_wing":"extra","feats":"off","fleet_cap":"30","fortify":"off","gear_mk2":"on","group_late":"off","home_vision":"off","jungle_big":"off","jungle_scale":"off","lance_role":"on","lanespawn":"off","minion_cap":"on","morale":"off","ms":"nosmall","ms_cap":"off","ms_move":"off","ms_soft":"off","ms_spend_weak":"off","mutiny":"off","node_persist":"on","orders":"off","pilot_mining":"off","recall":"off","redeploy":"on","respawn":"off","respawn_curve":"off","respawn_site":"off","retreat":"systems_failure","routing_payoff":"off","salvage_core":"off","siege_fix":"off","slipstream":"off","surrender":"vote","waves_late":"off","zoom_max":"off"},"version":2,"winner":-1,"worth":[[1530,270,270],[1560,677,677],[1590,3790,4269],[1620,6607,6079],[1650,9180,9438],[1680,16594,15207],[1710,20115,21373],[1740,24331,23444],[1770,28424,29755],[1800,34122,34378],[1830,38350,37803],[1860,42778,44308],[1890,47718,47391],[1920,52414,51041],[1950,56688,56822],[1980,62374,61849],[2010,65917,65741],[2040,71309,70988],[2070,76626,73738],[2100,79882,77566],[2130,85123,83866],[2160,91616,87424],[2190,94128,93108],[2220,99083,98292],[2250,103827,101872],[2280,108792,105994],[2310,113250,111318],[2340,117700,116190],[2370,121191,120530],[2400,129173,125326],[2430,130999,130286],[2460,136530,134960],[2490,142433,139594],[2520,146110,145198],[2550,149245,149254],[2580,154015,154015],[2610,158098,158875],[2640,162839,162554],[2670,169825,167751]]}
